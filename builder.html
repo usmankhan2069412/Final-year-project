@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Lume AI - Bot Builder</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Manrope:wght@500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "outline-variant": "#48474a",
+              "on-tertiary": "#47001d",
+              "tertiary-dim": "#e4006c",
+              "primary-fixed": "#ba88ff",
+              "on-secondary": "#005359",
+              "on-error": "#490013",
+              "surface-bright": "#2c2c2f",
+              "secondary-container": "#006970",
+              "on-error-container": "#ffb2b9",
+              "surface-container": "#19191c",
+              "primary-fixed-dim": "#b075ff",
+              "outline": "#767578",
+              "tertiary-fixed": "#ff8eac",
+              "surface-container-low": "#131316",
+              "surface-variant": "#262529",
+              "surface-tint": "#c59aff",
+              "on-tertiary-fixed": "#380015",
+              "on-secondary-container": "#e3fdff",
+              "inverse-on-surface": "#565457",
+              "secondary": "#00eefc",
+              "surface-container-lowest": "#000000",
+              "error-dim": "#d73357",
+              "on-tertiary-container": "#000000",
+              "on-primary": "#420082",
+              "on-primary-fixed-variant": "#3f007c",
+              "surface": "#0e0e10",
+              "on-tertiary-fixed-variant": "#760035",
+              "primary": "#c59aff",
+              "error-container": "#a70138",
+              "inverse-primary": "#7e29df",
+              "tertiary-fixed-dim": "#ff769e",
+              "tertiary-container": "#fc0078",
+              "on-secondary-fixed-variant": "#005e64",
+              "surface-dim": "#0e0e10",
+              "background": "#0e0e10",
+              "tertiary": "#ff6b98",
+              "secondary-dim": "#00deec",
+              "secondary-fixed-dim": "#00deec",
+              "surface-container-high": "#1f1f22",
+              "on-surface-variant": "#adaaad",
+              "on-secondary-fixed": "#003f43",
+              "primary-container": "#ba88ff",
+              "on-background": "#fffbfe",
+              "primary-dim": "#9547f7",
+              "surface-container-highest": "#262529",
+              "inverse-surface": "#fcf8fb",
+              "error": "#ff6e84",
+              "secondary-fixed": "#00eefc",
+              "on-primary-fixed": "#000000",
+              "on-surface": "#fffbfe",
+              "on-primary-container": "#330066"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .glass-card {
+        background: rgba(38, 37, 41, 0.4);
+        backdrop-filter: blur(12px);
+      }
+      .ai-glow {
+        position: relative;
+      }
+      .ai-glow::after {
+        content: '';
+        position: absolute;
+        inset: -1px;
+        background: linear-gradient(to right, #c59aff, #00eefc);
+        z-index: -1;
+        border-radius: inherit;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      }
+      .ai-glow:focus-within::after {
+        opacity: 0.4;
+      }
+      /* Custom focus ring */
+      input:focus, select:focus, textarea:focus {
+        outline: none;
+        box-shadow: 0 0 0 1px rgba(197, 154, 255, 0.3);
+      }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body selection:bg-primary/30 selection:text-primary-fixed">
+<!-- TopNavBar -->
+<nav class="fixed top-0 w-full z-50 bg-slate-900/60 backdrop-blur-xl shadow-[0_8px_32px_0_rgba(0,0,0,0.3)] bg-white/5 flex justify-between items-center px-8 h-16 w-full">
+<div class="flex items-center gap-8">
+<span class="text-2xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-fuchsia-600">Lume AI</span>
+<div class="hidden md:flex gap-6">
+<a class="font-manrope tracking-tight text-sm font-medium text-slate-400 hover:text-slate-100 transition-colors" href="#">Dashboard</a>
+<a class="font-manrope tracking-tight text-sm font-medium text-purple-400 font-bold border-b-2 border-purple-500 pb-1" href="#">Bots</a>
+<a class="font-manrope tracking-tight text-sm font-medium text-slate-400 hover:text-slate-100 transition-colors" href="#">Documents</a>
+<a class="font-manrope tracking-tight text-sm font-medium text-slate-400 hover:text-slate-100 transition-colors" href="#">Integrations</a>
+<a class="font-manrope tracking-tight text-sm font-medium text-slate-400 hover:text-slate-100 transition-colors" href="#">Analytics</a>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined text-slate-400 hover:bg-white/10 transition-all duration-300 p-2 rounded-full">notifications</button>
+<button class="material-symbols-outlined text-slate-400 hover:bg-white/10 transition-all duration-300 p-2 rounded-full">help</button>
+<div class="h-8 w-8 rounded-full overflow-hidden bg-surface-container-highest">
+<img alt="User avatar" data-alt="Portrait of a modern professional using high-end technology, minimalist digital avatar style" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB_NBS5wRVeBRlCt7PlmdBaPX7Orljmw9gEyeifarK5UGVVjGtjKci_1QEcD7bXSSpMiicEo2bVgjvPgZIB_MXdg4HqYXQr5alqmOVl-lM73PyPGtm5Guq5593rBhxt12OLgOzbjLXhrWl9qKI5e2sFS7izvNdp8-kh510t_lcfyFi__TYOA5uGTNmZDkacN20VbTo6xquohtEwZcbSgZ63Miz7wexhrW5vCxumcEu0UgxNe_WtosCaenRqoqnZYyF4KPCZ_CMF7FmQ"/>
+</div>
+</div>
+</nav>
+<!-- SideNavBar (Collapsed/Minimal View) -->
+<aside class="fixed left-0 top-16 h-[calc(100vh-64px)] w-20 md:w-64 bg-slate-950/80 backdrop-blur-lg flex flex-col py-6 border-r border-white/5 transition-all duration-300">
+<div class="px-6 mb-8 hidden md:block">
+<h3 class="font-manrope text-xs uppercase tracking-widest text-slate-500">Administration</h3>
+<p class="text-[10px] text-slate-600 mt-1">Manage your workspace</p>
+</div>
+<nav class="flex-1 space-y-2">
+<a class="flex items-center gap-3 text-slate-500 px-6 py-3 hover:text-slate-300 hover:bg-white/5 transition-all" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span class="hidden md:inline font-manrope text-xs uppercase tracking-widest">Billing</span>
+</a>
+<a class="flex items-center gap-3 text-slate-500 px-6 py-3 hover:text-slate-300 hover:bg-white/5 transition-all" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="hidden md:inline font-manrope text-xs uppercase tracking-widest">Settings</span>
+</a>
+</nav>
+<div class="mt-auto border-t border-white/5 pt-4">
+<a class="flex items-center gap-3 text-slate-500 px-6 py-3 hover:text-slate-300 hover:bg-white/5 transition-all" href="#">
+<span class="material-symbols-outlined">contact_support</span>
+<span class="hidden md:inline font-manrope text-xs uppercase tracking-widest">Support</span>
+</a>
+<a class="flex items-center gap-3 text-slate-500 px-6 py-3 hover:text-slate-300 hover:bg-white/5 transition-all" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span class="hidden md:inline font-manrope text-xs uppercase tracking-widest">Logout</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-20 md:ml-64 mt-16 p-8 min-h-[calc(100vh-64px)] bg-surface-container-low flex flex-col">
+<!-- Header Section -->
+<header class="mb-12 flex justify-between items-end">
+<div class="max-w-2xl">
+<span class="text-primary font-label text-xs uppercase tracking-widest mb-2 block">Configuration</span>
+<h1 class="font-headline text-4xl font-extrabold tracking-tight text-on-surface mb-3">Bot Builder</h1>
+<p class="text-on-surface-variant body-md max-w-lg">Define your agent's soul. Configure core behaviors, linguistic nuances, and connect specialized knowledge clusters.</p>
+</div>
+<div class="flex gap-4">
+<button class="px-6 py-2.5 rounded-full border border-outline-variant/30 bg-surface-variant/20 hover:bg-surface-variant/40 transition-all font-label text-sm font-medium">
+                    Save Draft
+                </button>
+<button class="px-6 py-2.5 rounded-full bg-gradient-to-r from-primary to-primary-dim text-on-primary-fixed hover:shadow-[0_0_20px_rgba(197,154,255,0.4)] transition-all font-label text-sm font-bold flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">rocket_launch</span>
+                    Deploy to WhatsApp
+                </button>
+</div>
+</header>
+<!-- Bento Layout Form -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+<!-- Left Column: Core Identity -->
+<div class="lg:col-span-7 space-y-6">
+<!-- Section: Identity -->
+<section class="glass-card rounded-xl p-8 border border-white/5 ai-glow transition-all">
+<div class="flex items-center gap-3 mb-6">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">face</span>
+<h2 class="font-headline text-xl font-bold">Identity &amp; Voice</h2>
+</div>
+<div class="space-y-6">
+<div class="group">
+<label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Chatbot Name</label>
+<input class="w-full bg-surface-container-highest border-none rounded-lg p-4 text-on-surface placeholder:text-slate-600 focus:ring-1 focus:ring-primary/50 transition-all" placeholder="e.g. Lume Concierge" type="text"/>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<div>
+<label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Personality Profile</label>
+<select class="w-auto min-w-full bg-surface-container-highest border-none rounded-lg p-4 text-on-surface appearance-none cursor-pointer focus:ring-1 focus:ring-primary/50">
+<option>Professional Assistant</option>
+<option>Creative Spark</option>
+<option>Technical Expert</option>
+<option>Support Hero</option>
+</select>
+</div>
+<div>
+<label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Language Preference</label>
+<select class="w-full bg-surface-container-highest border-none rounded-lg p-4 text-on-surface appearance-none cursor-pointer focus:ring-1 focus:ring-primary/50">
+<option>English</option>
+<option>Roman Urdu</option>
+<option>Bilingual (Hybrid)</option>
+</select>
+</div>
+</div>
+<div>
+<label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Response Tone</label>
+<div class="flex gap-4">
+<label class="flex-1 cursor-pointer">
+<input checked="" class="hidden peer" name="tone" type="radio"/>
+<div class="p-4 rounded-lg bg-surface-container-highest text-center border border-transparent peer-checked:border-primary peer-checked:bg-primary/5 transition-all">
+<span class="text-sm font-medium">Formal</span>
+</div>
+</label>
+<label class="flex-1 cursor-pointer">
+<input class="hidden peer" name="tone" type="radio"/>
+<div class="p-4 rounded-lg bg-surface-container-highest text-center border border-transparent peer-checked:border-primary peer-checked:bg-primary/5 transition-all">
+<span class="text-sm font-medium">Friendly</span>
+</div>
+</label>
+<label class="flex-1 cursor-pointer">
+<input class="hidden peer" name="tone" type="radio"/>
+<div class="p-4 rounded-lg bg-surface-container-highest text-center border border-transparent peer-checked:border-primary peer-checked:bg-primary/5 transition-all">
+<span class="text-sm font-medium">Concise</span>
+</div>
+</label>
+</div>
+</div>
+</div>
+</section>
+<!-- Section: Behavior -->
+<section class="glass-card rounded-xl p-8 border border-white/5 ai-glow transition-all">
+<div class="flex items-center gap-3 mb-6">
+<span class="material-symbols-outlined text-tertiary" style="font-variation-settings: 'FILL' 1;">psychology</span>
+<h2 class="font-headline text-xl font-bold">Behavioral Guardrails</h2>
+</div>
+<div class="space-y-6">
+<div>
+<label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Fallback Response Message</label>
+<textarea class="w-full bg-surface-container-highest border-none rounded-lg p-4 text-on-surface placeholder:text-slate-600 focus:ring-1 focus:ring-primary/50 transition-all resize-none" placeholder="I'm sorry, I couldn't find information on that. Let me connect you with a human expert..." rows="3"></textarea>
+<p class="text-[10px] text-slate-500 mt-2">This is sent when the AI is less than 60% confident in its answer.</p>
+</div>
+</div>
+</section>
+</div>
+<!-- Right Column: Knowledge Base & Status -->
+<div class="lg:col-span-5 space-y-6">
+<!-- Section: Linked Knowledge Base -->
+<section class="glass-card rounded-xl p-8 border border-white/5 h-full">
+<div class="flex items-center justify-between mb-8">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary">folder_managed</span>
+<h2 class="font-headline text-xl font-bold">Knowledge Base</h2>
+</div>
+<button class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors">add_circle</button>
+</div>
+<div class="space-y-4">
+<!-- Doc Item -->
+<div class="p-4 rounded-lg bg-surface-container-high border border-white/5 flex items-center justify-between">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded bg-blue-500/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-blue-400">description</span>
+</div>
+<div>
+<p class="text-sm font-semibold">Product_Catalog_2024.pdf</p>
+<p class="text-[10px] text-slate-500">Last updated: 2h ago</p>
+</div>
+</div>
+<span class="px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold uppercase tracking-tighter">Completed</span>
+</div>
+<!-- Doc Item -->
+<div class="p-4 rounded-lg bg-surface-container-high border border-white/5 flex items-center justify-between">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded bg-purple-500/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-purple-400">article</span>
+</div>
+<div>
+<p class="text-sm font-semibold">Customer_Support_FAQ.docx</p>
+<p class="text-[10px] text-slate-500">Processing vectors...</p>
+</div>
+</div>
+<span class="px-2 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-tighter animate-pulse">Processing</span>
+</div>
+<!-- Doc Item -->
+<div class="p-4 rounded-lg bg-surface-container-high border border-white/5 flex items-center justify-between opacity-60">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded bg-slate-500/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-slate-400">table_chart</span>
+</div>
+<div>
+<p class="text-sm font-semibold">Pricing_Tier_Matrix.csv</p>
+<p class="text-[10px] text-slate-500">In queue</p>
+</div>
+</div>
+<span class="px-2 py-1 rounded-full bg-slate-500/20 text-slate-400 text-[10px] font-bold uppercase tracking-tighter">Queued</span>
+</div>
+<!-- Empty State Filler -->
+<div class="mt-8 border-2 border-dashed border-white/5 rounded-xl h-32 flex flex-col items-center justify-center text-slate-600">
+<span class="material-symbols-outlined mb-2">upload_file</span>
+<p class="text-xs font-medium">Drag more documents here</p>
+</div>
+</div>
+</section>
+</div>
+</div>
+<!-- Footer -->
+<footer class="w-full py-4 mt-auto border-t border-white/5 flex justify-between items-center px-0">
+<span class="text-sm font-bold text-slate-400">Luminal AI</span>
+<p class="font-inter text-xs text-slate-500">© 2024 Luminal AI. All rights reserved.</p>
+<div class="flex gap-4">
+<a class="font-inter text-xs text-slate-600 hover:text-purple-400 transition-colors" href="#">Privacy</a>
+<a class="font-inter text-xs text-slate-600 hover:text-purple-400 transition-colors" href="#">Terms</a>
+<a class="font-inter text-xs text-slate-600 hover:text-purple-400 transition-colors" href="#">API Docs</a>
+</div>
+</footer>
+</main>
+<!-- Visual Accent: The "Lume" (Ambient Background Glow) -->
+<div class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[120px] pointer-events-none -z-10"></div>
+<div class="fixed bottom-0 right-0 w-[400px] h-[400px] bg-secondary/5 rounded-full blur-[100px] pointer-events-none -z-10"></div>
+</body></html>
