@@ -3,11 +3,13 @@
 .pnpm-store/
 docs/
 .agent/
+.agents/
+graphify-out/
 # Build outputs
 dist/
 build/
 *.dist
-
+.env
 # Environment variables
 .env
 .env.local
