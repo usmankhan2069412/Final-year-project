@@ -9,6 +9,13 @@ export default function Login() {
   const [, setLocation] = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  
+  // Validation States
+  const [emailError, setEmailError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  
   const container = useRef<HTMLDivElement>(null);
 
   useGSAP(() => {
@@ -28,6 +35,8 @@ export default function Login() {
       ease: "none",
     });
 
+
+
     // Right panel / form animations
     gsap.from(".auth-item", {
       y: 20,
@@ -39,10 +48,60 @@ export default function Login() {
     });
   }, { scope: container });
 
+  const validateEmail = (val: string) => {
+    if (!val.trim()) {
+      setEmailError("Email is required");
+      return false;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(val)) {
+      setEmailError("Please enter a valid email address");
+      return false;
+    }
+    setEmailError("");
+    return true;
+  };
+
+  const validatePassword = (val: string) => {
+    if (!val) {
+      setPasswordError("Password is required");
+      return false;
+    }
+    if (val.length < 6) {
+      setPasswordError("Password must be at least 6 characters");
+      return false;
+    }
+    setPasswordError("");
+    return true;
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Mock authentication
-    setLocation("/dashboard");
+    
+    const isEmailValid = validateEmail(email);
+    const isPasswordValid = validatePassword(password);
+
+    if (!isEmailValid || !isPasswordValid) {
+      // Premium error shake feedback (Doherty Threshold & Visceral Design)
+      gsap.to(".auth-form-card", {
+        x: -8,
+        duration: 0.06,
+        repeat: 5,
+        yoyo: true,
+        ease: "power1.inOut",
+        onComplete: () => {
+          gsap.set(".auth-form-card", { clearProps: "x" });
+        }
+      });
+      return;
+    }
+
+    setLoading(true);
+    // Simulate server request delay for optimal perception and professional feel
+    setTimeout(() => {
+      setLoading(false);
+      setLocation("/dashboard");
+    }, 1200);
   };
 
   return (
@@ -57,10 +116,10 @@ export default function Login() {
 
         {/* Logo */}
         <div 
-          className="brand-element font-serif text-3xl font-bold tracking-tight text-[#fbfbf2] flex items-center gap-3 cursor-pointer z-10" 
+          className="brand-element font-serif text-3xl font-bold tracking-tight text-[#fbfbf2] flex items-center gap-3 cursor-pointer z-10 hover:opacity-90 transition-opacity" 
           onClick={() => setLocation("/")}
         >
-          <div className="w-10 h-10 bg-[#EBDCFF] rounded-xl flex items-center justify-center text-[#1c1c1e]">
+          <div className="w-10 h-10 bg-[#EBDCFF] rounded-xl flex items-center justify-center text-[#1c1c1e] shadow-md hover:scale-105 active:scale-95 transition-transform duration-300">
              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 2L2 22h20L12 2z"></path>
             </svg>
@@ -77,16 +136,6 @@ export default function Login() {
              Sign in to access your AI automations, deploy new flows, and manage customer interactions across all channels.
            </p>
 
-           <div className="brand-element mt-16 flex items-center gap-4">
-              <div className="flex -space-x-3">
-                 {[1,2,3,4].map((i) => (
-                    <div key={i} className={`w-10 h-10 rounded-full border-2 border-[#1c1c1e] bg-white/10 flex items-center justify-center overflow-hidden backdrop-blur-md`}>
-                       <img src={`https://i.pravatar.cc/100?img=${i+10}`} alt="avatar" className="w-full h-full object-cover" />
-                    </div>
-                 ))}
-              </div>
-              <p className="text-sm font-medium text-white/50">Joined by 500+ businesses</p>
-           </div>
         </div>
 
         {/* Decorative Floating Element */}
@@ -118,7 +167,7 @@ export default function Login() {
             </div>
         </header>
 
-        <div className="w-full max-w-[420px] mt-12 lg:mt-0">
+        <div className="auth-form-card w-full max-w-[420px] mt-12 lg:mt-0">
           
           <div className="mb-10 auth-item">
             <h1 className="text-[2.5rem] font-serif font-bold text-[#1c1c1e] mb-3 tracking-tight leading-none" style={{ fontFamily: "'Playfair Display', serif" }}>
@@ -127,55 +176,121 @@ export default function Login() {
             <p className="text-[#1c1c1e]/60 text-base font-medium">Please enter your details to sign in.</p>
           </div>
 
-          <form className="space-y-6" onSubmit={handleSubmit}>
+          <form className="space-y-6" onSubmit={handleSubmit} noValidate>
             {/* Email Field */}
             <div className="space-y-2.5 auth-item group">
-              <label className="block text-[11px] font-bold text-[#1c1c1e]/50 uppercase tracking-widest group-focus-within:text-[#1c1c1e] transition-colors">
+              <label htmlFor="email-input" className="block text-[11px] font-bold text-[#1c1c1e]/50 uppercase tracking-widest group-focus-within:text-[#1c1c1e] transition-colors">
                 Business Email
               </label>
               <div className="relative">
                 <input
+                    id="email-input"
                     type="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (emailError) validateEmail(e.target.value);
+                    }}
+                    onBlur={() => validateEmail(email)}
                     placeholder="name@company.com"
-                    className="w-full bg-white border border-black/10 focus:border-[#1c1c1e] hover:border-black/20 rounded-xl px-4 py-3.5 text-[#1c1c1e] placeholder:text-[#1c1c1e]/30 outline-none transition-all text-[15px] font-medium shadow-sm"
+                    aria-invalid={!!emailError}
+                    aria-describedby={emailError ? "email-error" : undefined}
+                    className={`w-full bg-white border ${
+                      emailError ? "border-[#ea4335] focus:border-[#ea4335] focus:ring-red-100" : "border-black/10 focus:border-[#1c1c1e] focus:ring-[#EBDCFF]/50"
+                    } hover:border-black/20 rounded-xl px-4 py-3.5 text-[#1c1c1e] placeholder:text-[#1c1c1e]/30 outline-none transition-all text-[15px] font-medium shadow-sm focus:ring-4`}
                 />
               </div>
+              {emailError && (
+                <p id="email-error" className="text-xs text-[#ea4335] font-semibold flex items-center gap-1.5 animate-fadeIn">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                  {emailError}
+                </p>
+              )}
             </div>
 
             {/* Password Field */}
             <div className="space-y-2.5 auth-item group">
               <div className="flex justify-between items-center">
-                <label className="block text-[11px] font-bold text-[#1c1c1e]/50 uppercase tracking-widest group-focus-within:text-[#1c1c1e] transition-colors">
+                <label htmlFor="password-input" className="block text-[11px] font-bold text-[#1c1c1e]/50 uppercase tracking-widest group-focus-within:text-[#1c1c1e] transition-colors">
                   Password
                 </label>
-                <a
-                  href="#"
-                  className="text-[10px] font-bold text-[#1c1c1e]/40 hover:text-[#1c1c1e] transition-colors uppercase tracking-wider"
+                <button
+                  type="button"
+                  onClick={() => setLocation("/forgot-password")}
+                  className="text-[10px] font-bold text-[#1c1c1e]/40 hover:text-[#1c1c1e] transition-colors uppercase tracking-wider cursor-pointer focus:outline-none"
                 >
                   Forgot password?
-                </a>
+                </button>
               </div>
               <div className="relative">
                 <input
-                    type="password"
+                    id="password-input"
+                    type={showPassword ? "text" : "password"}
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (passwordError) validatePassword(e.target.value);
+                    }}
+                    onBlur={() => validatePassword(password)}
                     placeholder="••••••••"
-                    className="w-full bg-white border border-black/10 focus:border-[#1c1c1e] hover:border-black/20 rounded-xl px-4 py-3.5 text-[#1c1c1e] placeholder:text-[#1c1c1e]/30 outline-none transition-all text-[15px] font-medium tracking-widest shadow-sm"
+                    aria-invalid={!!passwordError}
+                    aria-describedby={passwordError ? "password-error" : undefined}
+                    className={`w-full bg-white border ${
+                      passwordError ? "border-[#ea4335] focus:border-[#ea4335] focus:ring-red-100" : "border-black/10 focus:border-[#1c1c1e] focus:ring-[#EBDCFF]/50"
+                    } hover:border-black/20 rounded-xl px-4 py-3.5 pr-12 text-[#1c1c1e] placeholder:text-[#1c1c1e]/30 outline-none transition-all text-[15px] font-medium shadow-sm focus:ring-4 ${
+                      showPassword ? "" : "tracking-widest"
+                    }`}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#1c1c1e]/30 hover:text-[#1c1c1e] transition-colors focus:outline-none"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                      <line x1="1" y1="1" x2="23" y2="23"></line>
+                    </svg>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                      <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                  )}
+                </button>
               </div>
+              {passwordError && (
+                <p id="password-error" className="text-xs text-[#ea4335] font-semibold flex items-center gap-1.5 animate-fadeIn">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                  {passwordError}
+                </p>
+              )}
             </div>
 
             {/* Submit Button */}
-            <button
-              type="submit"
-              className="auth-item w-full mt-2 bg-[#EBDCFF] hover:bg-[#d8bfff] text-[#1c1c1e] py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-sm border border-[#1c1c1e]/5 hover:shadow-md text-[15px]"
-            >
-              Sign In
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
-            </button>
+            <div className="auth-item w-full mt-2">
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-[#EBDCFF] hover:bg-[#d8bfff] text-[#1c1c1e] py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-sm border border-[#1c1c1e]/5 hover:shadow-md hover:scale-[1.01] active:scale-[0.99] text-[15px] cursor-pointer disabled:opacity-75 disabled:pointer-events-none"
+              >
+                {loading ? (
+                  <div className="flex items-center gap-2">
+                    <svg className="animate-spin h-5 w-5 text-[#1c1c1e]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Signing In...</span>
+                  </div>
+                ) : (
+                  <>
+                    Sign In
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><polyline points="10 17 15 12 10 7"></polyline><line x1="15" y1="12" x2="3" y2="12"></line></svg>
+                  </>
+                )}
+              </button>
+            </div>
 
             {/* Divider */}
             <div className="flex items-center gap-4 py-4 auth-item text-[#1c1c1e]/10">
@@ -185,10 +300,10 @@ export default function Login() {
             </div>
 
             {/* Social Login */}
-            <div className="grid grid-cols-2 gap-3 auth-item">
+            <div className="auth-item w-full">
               <button
                 type="button"
-                className="flex items-center justify-center gap-2 bg-white hover:bg-black/5 border border-black/10 py-3.5 rounded-xl transition-all text-[13px] font-bold text-[#1c1c1e] shadow-sm"
+                className="w-full flex items-center justify-center gap-2 bg-white hover:bg-black/5 border border-black/10 py-3.5 rounded-xl transition-all text-[13px] font-bold text-[#1c1c1e] shadow-sm hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
               >
                 <div className="w-4 h-4 flex-shrink-0 bg-transparent rounded-sm flex items-center justify-center">
                   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -200,13 +315,6 @@ export default function Login() {
                 </div>
                 Google
               </button>
-              <button
-                type="button"
-                className="flex items-center justify-center gap-2 bg-white hover:bg-black/5 border border-black/10 py-3.5 rounded-xl transition-all text-[13px] font-bold text-[#1c1c1e] shadow-sm"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#1c1c1e]/70"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
-                SAML
-              </button>
             </div>
           </form>
 
@@ -216,7 +324,7 @@ export default function Login() {
               Don't have an account?{" "}
               <button
                 onClick={() => setLocation("/signup")}
-                className="font-bold text-[#1c1c1e] hover:text-[#1c1c1e]/70 transition-colors underline decoration-2 underline-offset-4 decoration-[#EBDCFF]"
+                className="font-bold text-[#1c1c1e] hover:text-[#1c1c1e]/70 transition-colors underline decoration-2 underline-offset-4 decoration-[#EBDCFF] focus:outline-none focus:ring-2 focus:ring-[#EBDCFF] rounded-md px-1"
               >
                 Sign Up
               </button>
@@ -227,3 +335,4 @@ export default function Login() {
     </div>
   );
 }
+

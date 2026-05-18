@@ -11,6 +11,13 @@ export default function Signup() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  // Validation States
+  const [nameError, setNameError] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  
   const container = useRef<HTMLDivElement>(null);
 
   useGSAP(() => {
@@ -23,13 +30,7 @@ export default function Signup() {
       ease: "power3.out",
     });
 
-    gsap.to(".float-icon", {
-      y: -15,
-      duration: 2.5,
-      repeat: -1,
-      yoyo: true,
-      ease: "sine.inOut",
-    });
+
 
     // Right panel / form animations
     gsap.from(".auth-item", {
@@ -42,10 +43,44 @@ export default function Signup() {
     });
   }, { scope: container });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Mock registration
-    setLocation("/dashboard");
+  const validateName = (val: string) => {
+    if (!val.trim()) {
+      setNameError("Full Name is required");
+      return false;
+    }
+    if (val.trim().length < 2) {
+      setNameError("Name must be at least 2 characters");
+      return false;
+    }
+    setNameError("");
+    return true;
+  };
+
+  const validateEmail = (val: string) => {
+    if (!val.trim()) {
+      setEmailError("Business Email is required");
+      return false;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(val)) {
+      setEmailError("Please enter a valid email address");
+      return false;
+    }
+    setEmailError("");
+    return true;
+  };
+
+  const validatePassword = (val: string) => {
+    if (!val) {
+      setPasswordError("Password is required");
+      return false;
+    }
+    if (val.length < 8) {
+      setPasswordError("Password must be at least 8 characters");
+      return false;
+    }
+    setPasswordError("");
+    return true;
   };
 
   const getPasswordStrength = () => {
@@ -57,6 +92,52 @@ export default function Signup() {
   };
 
   const strength = getPasswordStrength();
+
+  const getStrengthColorClass = () => {
+    if (strength === 1) return "bg-[#ea4335]"; // Weak - Red
+    if (strength === 2) return "bg-[#fbbc05]"; // Fair - Orange/Yellow
+    if (strength === 3) return "bg-[#3b82f6]"; // Good - Blue
+    if (strength === 4) return "bg-[#34a853]"; // Secure - Green
+    return "bg-black/5";
+  };
+
+  const getStrengthTextClass = () => {
+    if (strength === 1) return "text-[#ea4335]";
+    if (strength === 2) return "text-[#fbbc05]";
+    if (strength === 3) return "text-[#3b82f6]";
+    if (strength === 4) return "text-[#34a853]";
+    return "text-[#1c1c1e]/40";
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const isNameValid = validateName(name);
+    const isEmailValid = validateEmail(email);
+    const isPasswordValid = validatePassword(password);
+
+    if (!isNameValid || !isEmailValid || !isPasswordValid) {
+      // Premium error shake feedback (Doherty Threshold & Visceral Design)
+      gsap.to(".auth-form-card", {
+        x: -8,
+        duration: 0.06,
+        repeat: 5,
+        yoyo: true,
+        ease: "power1.inOut",
+        onComplete: () => {
+          gsap.set(".auth-form-card", { clearProps: "x" });
+        }
+      });
+      return;
+    }
+
+    setLoading(true);
+    // Simulate loading for optimal perception and professional feel
+    setTimeout(() => {
+      setLoading(false);
+      setLocation("/dashboard");
+    }, 1200);
+  };
 
   return (
     <div ref={container} className="min-h-screen bg-white text-[#1c1c1e] font-sans flex relative selection:bg-[#EBDCFF] selection:text-[#1c1c1e]">
@@ -70,10 +151,10 @@ export default function Signup() {
 
         {/* Logo */}
         <div 
-          className="brand-element font-serif text-3xl font-bold tracking-tight text-[#fbfbf2] flex items-center gap-3 cursor-pointer z-10" 
+          className="brand-element font-serif text-3xl font-bold tracking-tight text-[#fbfbf2] flex items-center gap-3 cursor-pointer z-10 hover:opacity-90 transition-opacity" 
           onClick={() => setLocation("/")}
         >
-          <div className="w-10 h-10 bg-[#EBDCFF] rounded-xl flex items-center justify-center text-[#1c1c1e]">
+          <div className="w-10 h-10 bg-[#EBDCFF] rounded-xl flex items-center justify-center text-[#1c1c1e] shadow-md hover:scale-105 active:scale-95 transition-transform duration-300">
              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 2L2 22h20L12 2z"></path>
             </svg>
@@ -83,15 +164,7 @@ export default function Signup() {
 
         {/* Center Graphic */}
         <div className="flex-grow flex flex-col justify-center relative z-10 my-12">
-            <div className="brand-element mb-12">
-                <div className="float-icon w-20 h-20 bg-[#EBDCFF] rounded-2xl flex items-center justify-center shadow-2xl z-20 pointer-events-auto">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#1c1c1e" strokeWidth="1.5">
-                        <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"></path>
-                        <path d="M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0 -8"></path>
-                        <path d="M12 4a8 8 0 1 0 0 16a8 8 0 1 0 0 -16"></path>
-                    </svg>
-                </div>
-            </div>
+
 
            <h2 className="brand-element font-serif text-[4.5rem] leading-[1.05] tracking-tight mb-8" style={{ fontFamily: "'Playfair Display', serif" }}>
               Empower your <br/><span className="italic text-[#EBDCFF]">business</span>
@@ -102,7 +175,7 @@ export default function Signup() {
 
            <div className="brand-element mt-16 flex flex-wrap gap-3">
                 {['WhatsApp', 'Messenger', 'Web Widget', 'REST API', 'iOS'].map((platform) => (
-                  <div key={platform} className="px-5 py-2.5 rounded-full border border-white/20 text-sm font-semibold flex items-center gap-2 bg-white/5 backdrop-blur-sm shadow-sm text-white">
+                  <div key={platform} className="px-5 py-2.5 rounded-full border border-white/20 text-sm font-semibold flex items-center gap-2 bg-white/5 backdrop-blur-sm shadow-sm text-white hover:scale-105 hover:bg-white/10 hover:border-white/40 cursor-pointer transition-all duration-300">
                     <div className="w-2.5 h-2.5 rounded-full bg-white"></div>
                     {platform}
                   </div>
@@ -125,7 +198,7 @@ export default function Signup() {
             </div>
         </header>
 
-        <div className="w-full max-w-[420px] my-auto mt-20 lg:mt-auto">
+        <div className="auth-form-card w-full max-w-[420px] my-auto mt-20 lg:mt-auto">
           
           <div className="mb-8 auth-item">
             <h1 className="text-[2.5rem] font-serif font-bold text-[#1c1c1e] mb-2 tracking-tight leading-none" style={{ fontFamily: "'Playfair Display', serif" }}>
@@ -134,72 +207,130 @@ export default function Signup() {
             <p className="text-[#1c1c1e]/60 text-[15px] font-medium">Create your business account setup.</p>
           </div>
 
-          <form className="space-y-5" onSubmit={handleSubmit}>
+          <form className="space-y-5" onSubmit={handleSubmit} noValidate>
             {/* Name Field */}
             <div className="space-y-2 auth-item group">
-              <label className="block text-[11px] font-bold text-[#1c1c1e]/50 uppercase tracking-widest group-focus-within:text-[#1c1c1e] transition-colors">
+              <label htmlFor="name-input" className="block text-[11px] font-bold text-[#1c1c1e]/50 uppercase tracking-widest group-focus-within:text-[#1c1c1e] transition-colors">
                 Full Name
               </label>
               <input
+                id="name-input"
                 type="text"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  if (nameError) validateName(e.target.value);
+                }}
+                onBlur={() => validateName(name)}
                 placeholder="e.g. Ahmed Khan"
-                className="w-full bg-white border border-black/10 focus:border-[#1c1c1e] hover:border-black/20 rounded-xl px-4 py-3.5 text-[#1c1c1e] placeholder:text-[#1c1c1e]/30 outline-none transition-all text-[15px] font-medium shadow-sm"
+                aria-invalid={!!nameError}
+                aria-describedby={nameError ? "name-error" : undefined}
+                className={`w-full bg-white border ${
+                  nameError ? "border-[#ea4335] focus:border-[#ea4335] focus:ring-red-100" : "border-black/10 focus:border-[#1c1c1e] focus:ring-[#EBDCFF]/50"
+                } hover:border-black/20 rounded-xl px-4 py-3.5 text-[#1c1c1e] placeholder:text-[#1c1c1e]/30 outline-none transition-all text-[15px] font-medium shadow-sm focus:ring-4`}
               />
+              {nameError && (
+                <p id="name-error" className="text-xs text-[#ea4335] font-semibold flex items-center gap-1.5 animate-fadeIn">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                  {nameError}
+                </p>
+              )}
             </div>
 
             {/* Email Field */}
             <div className="space-y-2 auth-item group">
-              <label className="block text-[11px] font-bold text-[#1c1c1e]/50 uppercase tracking-widest group-focus-within:text-[#1c1c1e] transition-colors">
+              <label htmlFor="email-input" className="block text-[11px] font-bold text-[#1c1c1e]/50 uppercase tracking-widest group-focus-within:text-[#1c1c1e] transition-colors">
                 Business Email
               </label>
               <input
+                id="email-input"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (emailError) validateEmail(e.target.value);
+                }}
+                onBlur={() => validateEmail(email)}
                 placeholder="ahmed@company.pk"
-                className="w-full bg-white border border-black/10 focus:border-[#1c1c1e] hover:border-black/20 rounded-xl px-4 py-3.5 text-[#1c1c1e] placeholder:text-[#1c1c1e]/30 outline-none transition-all text-[15px] font-medium shadow-sm"
+                aria-invalid={!!emailError}
+                aria-describedby={emailError ? "email-error" : undefined}
+                className={`w-full bg-white border ${
+                  emailError ? "border-[#ea4335] focus:border-[#ea4335] focus:ring-red-100" : "border-black/10 focus:border-[#1c1c1e] focus:ring-[#EBDCFF]/50"
+                } hover:border-black/20 rounded-xl px-4 py-3.5 text-[#1c1c1e] placeholder:text-[#1c1c1e]/30 outline-none transition-all text-[15px] font-medium shadow-sm focus:ring-4`}
               />
+              {emailError && (
+                <p id="email-error" className="text-xs text-[#ea4335] font-semibold flex items-center gap-1.5 animate-fadeIn">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                  {emailError}
+                </p>
+              )}
             </div>
 
             {/* Password Field */}
             <div className="space-y-2 auth-item group">
-              <label className="block text-[11px] font-bold text-[#1c1c1e]/50 uppercase tracking-widest group-focus-within:text-[#1c1c1e] transition-colors">
+              <label htmlFor="password-input" className="block text-[11px] font-bold text-[#1c1c1e]/50 uppercase tracking-widest group-focus-within:text-[#1c1c1e] transition-colors">
                 Password
               </label>
               <div className="relative">
                 <input
+                    id="password-input"
                     type={showPassword ? "text" : "password"}
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (passwordError) validatePassword(e.target.value);
+                    }}
+                    onBlur={() => validatePassword(password)}
                     placeholder="••••••••"
-                    className="w-full bg-white border border-black/10 focus:border-[#1c1c1e] hover:border-black/20 rounded-xl px-4 py-3.5 text-[#1c1c1e] placeholder:text-[#1c1c1e]/30 pr-12 outline-none transition-all text-[15px] tracking-widest font-mono shadow-sm"
+                    aria-invalid={!!passwordError}
+                    aria-describedby={passwordError ? "password-error" : undefined}
+                    className={`w-full bg-white border ${
+                      passwordError ? "border-[#ea4335] focus:border-[#ea4335] focus:ring-red-100" : "border-black/10 focus:border-[#1c1c1e] focus:ring-[#EBDCFF]/50"
+                    } hover:border-black/20 rounded-xl px-4 py-3.5 pr-12 text-[#1c1c1e] placeholder:text-[#1c1c1e]/30 outline-none transition-all text-[15px] font-medium shadow-sm focus:ring-4 ${
+                      showPassword ? "" : "tracking-widest"
+                    }`}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#1c1c1e]/30 hover:text-[#1c1c1e] transition-colors"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#1c1c1e]/30 hover:text-[#1c1c1e] transition-colors focus:outline-none"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                 >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  {showPassword ? (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                      <line x1="1" y1="1" x2="23" y2="23"></line>
+                    </svg>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                      <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                  )}
                 </button>
               </div>
+              {passwordError && (
+                <p id="password-error" className="text-xs text-[#ea4335] font-semibold flex items-center gap-1.5 animate-fadeIn">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                  {passwordError}
+                </p>
+              )}
 
                {/* Password Strength Indicator */}
-               <div className="pt-2">
+               <div className="pt-2 animate-fadeIn">
                 <div className="flex gap-1.5 mb-2 mt-1">
                   {[1, 2, 3, 4].map((i) => (
                     <div
                       key={i}
-                      className={`h-1 flex-1 rounded-full transition-all duration-500 block ${
+                      className={`h-1.5 flex-1 rounded-full transition-all duration-500 block ${
                         password.length === 0 ? "bg-black/5" :
-                        strength >= i ? (strength === 4 ? "bg-[#1c1c1e]" : "bg-[#1c1c1e]/40") : "bg-black/5"
+                        strength >= i ? getStrengthColorClass() : "bg-black/5"
                       }`}
                     ></div>
                   ))}
                 </div>
                 <div className="text-[10px] uppercase tracking-widest font-bold text-[#1c1c1e]/40">
-                  STRENGTH: <span className={strength === 4 ? "text-[#1c1c1e]" : ""}>
+                  STRENGTH: <span className={`font-extrabold transition-colors duration-300 ${getStrengthTextClass()}`}>
                     {strength === 0 ? "NONE" : strength === 1 ? "WEAK" : strength === 2 ? "FAIR" : strength === 3 ? "GOOD" : "SECURE"}
                   </span>
                 </div>
@@ -207,13 +338,28 @@ export default function Signup() {
             </div>
 
             {/* Submit Button */}
-            <button
-              type="submit"
-              className="auth-item w-full mt-4 bg-[#EBDCFF] hover:bg-[#d8bfff] text-[#1c1c1e] py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-sm border border-[#1c1c1e]/5 hover:shadow-md text-[15px]"
-            >
-              Configure Setup
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-            </button>
+            <div className="auth-item w-full mt-4">
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-[#EBDCFF] hover:bg-[#d8bfff] text-[#1c1c1e] py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-sm border border-[#1c1c1e]/5 hover:shadow-md hover:scale-[1.01] active:scale-[0.99] text-[15px] cursor-pointer disabled:opacity-75 disabled:pointer-events-none"
+              >
+                {loading ? (
+                  <div className="flex items-center gap-2">
+                    <svg className="animate-spin h-5 w-5 text-[#1c1c1e]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Configuring...</span>
+                  </div>
+                ) : (
+                  <>
+                    Configure Setup
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                  </>
+                )}
+              </button>
+            </div>
 
             {/* Divider */}
             <div className="flex items-center gap-4 py-4 auth-item text-[#1c1c1e]/10">
@@ -223,9 +369,10 @@ export default function Signup() {
             </div>
 
             {/* Social Login */}
-            <button
+            <div className="auth-item w-full">
+              <button
                 type="button"
-                className="auth-item w-full flex items-center justify-center gap-2 bg-white hover:bg-black/5 border border-black/10 py-3.5 rounded-xl transition-all text-[13px] font-bold text-[#1c1c1e] shadow-sm"
+                className="w-full flex items-center justify-center gap-2 bg-white hover:bg-black/5 border border-black/10 py-3.5 rounded-xl transition-all text-[13px] font-bold text-[#1c1c1e] shadow-sm hover:scale-[1.01] active:scale-[0.99]"
               >
                 <div className="w-4 h-4 flex-shrink-0 bg-transparent rounded-sm flex items-center justify-center">
                   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -237,6 +384,7 @@ export default function Signup() {
                 </div>
                 Sign up with Google
               </button>
+            </div>
           </form>
 
           {/* Context Switch Link */}
@@ -245,7 +393,7 @@ export default function Signup() {
               Already have an account?{" "}
               <button
                 onClick={() => setLocation("/login")}
-                className="font-bold text-[#1c1c1e] hover:text-[#1c1c1e]/70 transition-colors underline decoration-2 underline-offset-4 decoration-[#EBDCFF]"
+                className="font-bold text-[#1c1c1e] hover:text-[#1c1c1e]/70 transition-colors underline decoration-2 underline-offset-4 decoration-[#EBDCFF] focus:outline-none focus:ring-2 focus:ring-[#EBDCFF] rounded-md px-1"
               >
                 Log In
               </button>
