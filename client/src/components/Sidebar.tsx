@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { useTheme } from "../contexts/ThemeContext";
 
@@ -16,17 +17,33 @@ const NAV_ITEMS: NavItem[] = [
 
 interface SidebarProps {
   onNewBot?: () => void;
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
-export default function Sidebar({ onNewBot }: SidebarProps) {
+export default function Sidebar({ onNewBot, isOpen = false, onClose }: SidebarProps) {
   const [location, setLocation] = useLocation();
   const { isDark } = useTheme();
 
   const isActive = (href: string) => location === href;
 
-  return (
+  // Close sidebar on route change (mobile)
+  useEffect(() => {
+    if (onClose) onClose();
+  }, [location]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Close on Escape key
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && onClose) onClose();
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [onClose]);
+
+  const sidebarContent = (
     <aside
-      className={`w-64 flex-shrink-0 flex flex-col h-screen sticky top-0 font-sans transition-colors duration-300 ${
+      className={`w-64 flex-shrink-0 flex flex-col h-full font-sans transition-colors duration-300 ${
         isDark
           ? "bg-[#111115] border-r border-white/5"
           : "bg-[#1c1c1e] border-r border-white/5"
@@ -34,13 +51,13 @@ export default function Sidebar({ onNewBot }: SidebarProps) {
     >
       {/* Brand */}
       <div
-        className="h-20 flex items-center gap-3 px-6 border-b border-white/5 cursor-pointer flex-shrink-0 group"
+        className="h-16 flex items-center gap-2.5 px-5 border-b border-white/5 cursor-pointer flex-shrink-0 group"
         onClick={() => setLocation("/")}
       >
-        <div className="w-10 h-10 rounded-xl bg-[#EBDCFF] flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-105">
+        <div className="w-9 h-9 rounded-xl bg-[#EBDCFF] flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-105">
           <svg
-            width="24"
-            height="24"
+            width="20"
+            height="20"
             viewBox="0 0 24 24"
             fill="none"
             stroke="#1c1c1e"
@@ -53,20 +70,31 @@ export default function Sidebar({ onNewBot }: SidebarProps) {
         </div>
         <div>
           <p
-            className="text-[#fbfbf2] font-serif font-bold text-xl leading-tight"
+            className="text-[#F5F5F7] font-serif font-bold text-lg leading-tight"
             style={{ fontFamily: "'Playfair Display', serif" }}
           >
             Aina
           </p>
-          <p className="text-white/40 text-[10px] uppercase tracking-[0.2em] font-bold">
+          <p className="text-white/40 text-[9px] uppercase tracking-[0.2em] font-bold">
             Platform
           </p>
         </div>
+
+        {/* Close button — mobile only */}
+        {onClose && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onClose(); }}
+            aria-label="Close menu"
+            className="ml-auto w-8 h-8 flex items-center justify-center rounded-lg text-white/40 hover:text-white hover:bg-white/5 transition-all md:hidden"
+          >
+            <span className="material-symbols-outlined text-[20px]">close</span>
+          </button>
+        )}
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
-        <p className="text-[10px] uppercase tracking-widest text-white/30 font-bold px-3 pt-4 pb-2">
+      <nav className="flex-1 p-3.5 space-y-1 overflow-y-auto no-scrollbar">
+        <p className="text-[9px] uppercase tracking-widest text-white/30 font-bold px-3 pt-2.5 pb-1.5">
           Overview
         </p>
         {NAV_ITEMS.map((item) => {
@@ -75,14 +103,14 @@ export default function Sidebar({ onNewBot }: SidebarProps) {
             <a
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-[14px] font-semibold transition-all duration-200 group ${
+              className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-200 group ${
                 active
                   ? "bg-[#EBDCFF] text-[#1c1c1e] shadow-sm"
-                  : "text-white/60 hover:text-[#fbfbf2] hover:bg-white/5"
+                  : "text-white/60 hover:text-[#F5F5F7] hover:bg-white/5"
               }`}
             >
               <span
-                className={`material-symbols-outlined text-[20px] flex-shrink-0 transition-colors ${
+                className={`material-symbols-outlined text-[18px] flex-shrink-0 transition-colors ${
                   active
                     ? "text-[#1c1c1e]"
                     : "text-white/40 group-hover:text-white/80"
@@ -100,35 +128,62 @@ export default function Sidebar({ onNewBot }: SidebarProps) {
       </nav>
 
       {/* Bottom Section */}
-      <div className="p-4 border-t border-white/5 space-y-2 flex-shrink-0">
+      <div className="p-3.5 border-t border-white/5 space-y-1 flex-shrink-0">
         <button
           onClick={() => setLocation("/builder")}
-          className="w-full bg-[#EBDCFF] hover:bg-[#d8bfff] text-[#1c1c1e] font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 text-[14px] transition-colors mb-4 shadow-sm"
+          className="w-full bg-[#EBDCFF] hover:bg-[#d8bfff] text-[#1c1c1e] font-bold py-2.5 rounded-xl flex items-center justify-center gap-2 text-[13px] transition-colors mb-2.5 shadow-sm"
         >
-          <span className="material-symbols-outlined text-[18px]">add</span>
+          <span className="material-symbols-outlined text-[16px]">add</span>
           New Agent
         </button>
 
         <a
           href="mailto:support@aina.ai"
-          className="flex items-center gap-3 px-4 py-3 rounded-xl text-[14px] font-semibold text-white/60 hover:text-[#fbfbf2] hover:bg-white/5 transition-all"
+          className="flex items-center gap-3 px-3.5 py-2 rounded-xl text-[13px] font-semibold text-white/60 hover:text-[#F5F5F7] hover:bg-white/5 transition-all"
         >
-          <span className="material-symbols-outlined text-[20px] text-white/40">
+          <span className="material-symbols-outlined text-[18px] text-white/40">
             help_outline
           </span>
-          Help & Support
+          Help &amp; Support
         </a>
 
         <button
           onClick={() => setLocation("/login")}
-          className="flex items-center gap-3 px-4 py-3 rounded-xl text-[14px] font-semibold text-white/60 hover:text-white hover:bg-white/5 transition-all w-full"
+          className="flex items-center gap-3 px-3.5 py-2 rounded-xl text-[13px] font-semibold text-white/60 hover:text-white hover:bg-white/5 transition-all w-full"
         >
-          <span className="material-symbols-outlined text-[20px] text-white/40">
+          <span className="material-symbols-outlined text-[18px] text-white/40">
             logout
           </span>
           Sign Out
         </button>
       </div>
     </aside>
+  );
+
+  return (
+    <>
+      {/* ── Desktop: always-visible sticky sidebar ── */}
+      <div className="hidden md:flex h-screen sticky top-0 flex-shrink-0">
+        {sidebarContent}
+      </div>
+
+      {/* ── Mobile: overlay drawer ── */}
+      {/* Backdrop */}
+      <div
+        className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity duration-300 md:hidden ${
+          isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        }`}
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      {/* Drawer */}
+      <div
+        className={`fixed inset-y-0 left-0 z-50 h-full transition-transform duration-300 ease-in-out md:hidden ${
+          isOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        {sidebarContent}
+      </div>
+    </>
   );
 }

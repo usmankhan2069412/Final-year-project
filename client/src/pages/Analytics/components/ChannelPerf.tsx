@@ -6,7 +6,7 @@ export default function ChannelPerf() {
 
   return (
     <div
-      className={`rounded-[2rem] border p-8 ${
+      className={`rounded-[2rem] border p-4 sm:p-8 ${
         isDark
           ? "bg-[#1f1f23] border-white/[0.06]"
           : "bg-white border-black/5 shadow-[0_8px_30px_rgb(0,0,0,0.02)]"
@@ -43,6 +43,7 @@ export default function ChannelPerf() {
                   className={`material-symbols-outlined text-[18px] ${
                     c("text-[#1c1c1e]/50", "text-[#85948b]")
                   }`}
+                  aria-hidden="true"
                 >
                   {ch.icon}
                 </span>

@@ -43,6 +43,95 @@
 }
 
 :root {
+  /* Aina AI Design System - Light Theme (Soft neutral-warm, low-contrast, comfortable for the eyes) */
+  --primary: #5c3ea3; /* Deep premium purple */
+  --primary-foreground: #ffffff;
+  --primary-container: #ebdcff;
+  --on-primary: #ffffff;
+  --on-primary-container: #21005d;
+  --primary-fixed: #ebdcff;
+  --primary-fixed-dim: #d0bcff;
+  --on-primary-fixed: #21005d;
+  --on-primary-fixed-variant: #4f378b;
+  
+  --secondary: #2f5ad7;
+  --secondary-foreground: #ffffff;
+  --secondary-container: #e0e7ff;
+  --on-secondary: #ffffff;
+  --on-secondary-container: #001945;
+  --secondary-fixed: #e0e7ff;
+  --secondary-fixed-dim: #b0c6ff;
+  --on-secondary-fixed: #001945;
+  --on-secondary-fixed-variant: #174391;
+  
+  --tertiary: #0b9662;
+  --tertiary-container: #c2ffdf;
+  --on-tertiary: #ffffff;
+  --on-tertiary-container: #003826;
+  --tertiary-fixed: #c2ffdf;
+  --tertiary-fixed-dim: #99ffd0;
+  --on-tertiary-fixed: #002114;
+  --on-tertiary-fixed-variant: #005138;
+  
+  --error: #ba1a1a;
+  --error-container: #ffdad6;
+  --on-error: #ffffff;
+  --on-error-container: #410002;
+  
+  --background: #f5f5f7; /* Very soft Apple-style gray background - soothing for the eyes */
+  --foreground: #1c1c1e; /* Gentle dark charcoal instead of harsh pure black */
+  --surface: #ffffff;    /* Elevated surfaces remain clean white */
+  --on-surface: #1c1c1e;
+  --on-surface-variant: #5c635e;
+  --surface-dim: #e4e5e7;
+  --surface-bright: #ffffff;
+  --surface-container-lowest: #ffffff;
+  --surface-container-low: #f8f9fa;
+  --surface-container: #f1f2f4;
+  --surface-container-high: #e8e9eb;
+  --surface-container-highest: #dedfe1;
+  --surface-variant: #dedfe1;
+  --surface-tint: #5c3ea3;
+  --inverse-surface: #1c1c1e;
+  --inverse-on-surface: #f4f5f6;
+  --inverse-primary: #ebdcff;
+  
+  --outline: #727974;
+  --outline-variant: #c0c9c2;
+  
+  --card: #ffffff;
+  --card-foreground: #1c1c1e;
+  --popover: #ffffff;
+  --popover-foreground: #1c1c1e;
+  --muted: #f1f2f4;
+  --muted-foreground: #6e6e73; /* Apple-style muted text color */
+  --accent: #ebdcff;
+  --accent-foreground: #21005d;
+  --destructive: #ba1a1a;
+  --destructive-foreground: #ffffff;
+  --border: #e8e9eb; /* Clean, subtle borders */
+  --input: #ffffff;
+  --ring: #5c3ea3;
+  
+  --chart-1: #5c3ea3;
+  --chart-2: #2f5ad7;
+  --chart-3: #0b9662;
+  --chart-4: #ebdcff;
+  --chart-5: #1c1c1e;
+  
+  --sidebar: #1c1c1e;
+  --sidebar-foreground: #f5f5f7;
+  --sidebar-primary: #ebdcff;
+  --sidebar-primary-foreground: #1c1c1e;
+  --sidebar-accent: #2c2c2e;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #2c2c2e;
+  --sidebar-ring: #ebdcff;
+  
+  --radius: 0.5rem;
+}
+
+.dark {
   /* Aina AI Design System - Dark Theme */
   --primary: #c2ffdf;
   --primary-foreground: #003826;
@@ -129,41 +218,6 @@
   --sidebar-ring: #59eeb4;
   
   --radius: 0.5rem;
-}
-
-.dark {
-  --primary: #c2ffdf;
-  --primary-foreground: #003826;
-  --sidebar-primary: #59eeb4;
-  --sidebar-primary-foreground: #003826;
-  --background: #131317;
-  --foreground: #e4e1e7;
-  --card: #1f1f23;
-  --card-foreground: #e4e1e7;
-  --popover: #1f1f23;
-  --popover-foreground: #e4e1e7;
-  --secondary: #b0c6ff;
-  --secondary-foreground: #002d6f;
-  --muted: #353439;
-  --muted-foreground: #bbcac0;
-  --accent: #59eeb4;
-  --accent-foreground: #003826;
-  --destructive: #ffb4ab;
-  --destructive-foreground: #690005;
-  --border: #353439;
-  --input: #1f1f23;
-  --ring: #59eeb4;
-  --chart-1: #59eeb4;
-  --chart-2: #b0c6ff;
-  --chart-3: #ffecff;
-  --chart-4: #c2ffdf;
-  --chart-5: #174391;
-  --sidebar: #1f1f23;
-  --sidebar-foreground: #e4e1e7;
-  --sidebar-accent: #353439;
-  --sidebar-accent-foreground: #e4e1e7;
-  --sidebar-border: #353439;
-  --sidebar-ring: #59eeb4;
 }
 
 @layer base {
@@ -257,12 +311,22 @@
   
   /* Glass Panel - Frosted Glass Effect */
   .glass-panel {
-    background: rgba(19, 19, 23, 0.7);
+    background: rgba(255, 255, 255, 0.7);
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
   }
   
+  .dark .glass-panel {
+    background: rgba(19, 19, 23, 0.7);
+  }
+  
   .hero-mesh {
+    background-image: 
+        radial-gradient(at 0% 0%, rgba(92, 62, 163, 0.08) 0px, transparent 50%),
+        radial-gradient(at 100% 0%, rgba(47, 90, 215, 0.08) 0px, transparent 50%);
+  }
+
+  .dark .hero-mesh {
     background-image: 
         radial-gradient(at 0% 0%, rgba(89, 238, 180, 0.15) 0px, transparent 50%),
         radial-gradient(at 100% 0%, rgba(79, 70, 229, 0.15) 0px, transparent 50%),
@@ -272,8 +336,12 @@
   .gradient-border {
     position: relative;
     border-radius: 1.5rem;
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(0, 0, 0, 0.02);
     transition: all 0.3s ease;
+  }
+
+  .dark .gradient-border {
+    background: rgba(255, 255, 255, 0.03);
   }
 
   .gradient-border::before {
@@ -282,7 +350,7 @@
     inset: -1px;
     border-radius: 1.5rem;
     padding: 1px;
-    background: linear-gradient(135deg, rgba(89, 238, 180, 0.3), rgba(79, 70, 229, 0.3));
+    background: linear-gradient(135deg, rgba(92, 62, 163, 0.2), rgba(47, 90, 215, 0.2));
     -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
     mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
     -webkit-mask-composite: xor;
@@ -290,15 +358,30 @@
     pointer-events: none;
   }
 
+  .dark .gradient-border::before {
+    background: linear-gradient(135deg, rgba(89, 238, 180, 0.3), rgba(79, 70, 229, 0.3));
+  }
+
   .cta-gradient {
-    background: #59EEB4;
+    background: #5c3ea3;
+    color: #ffffff;
     transition: all 0.3s ease;
   }
 
   .cta-gradient:hover {
+    background: #4f378b;
+    box-shadow: 0 0 25px rgba(92, 62, 163, 0.25);
+    transform: translateY(-1px);
+  }
+
+  .dark .cta-gradient {
+    background: #59EEB4;
+    color: #003826;
+  }
+
+  .dark .cta-gradient:hover {
     background: #46dfa6;
     box-shadow: 0 0 25px rgba(89, 238, 180, 0.4);
-    transform: translateY(-1px);
   }
 
   .beam-bg {
@@ -314,22 +397,42 @@
     transform: translateX(-50%);
     width: 1px;
     height: 100%;
-    background: linear-gradient(to bottom, transparent, rgba(89, 238, 180, 0.2), transparent);
+    background: linear-gradient(to bottom, transparent, rgba(92, 62, 163, 0.2), transparent);
     z-index: 0;
+  }
+
+  .dark .beam-bg::after {
+    background: linear-gradient(to bottom, transparent, rgba(89, 238, 180, 0.2), transparent);
   }
   
   /* Primary Gradient - CTA Buttons */
   .gradient-primary {
+    background: linear-gradient(135deg, #ebdcff 0%, #ebdcff 100%);
+  }
+
+  .dark .gradient-primary {
     background: linear-gradient(135deg, #c2ffdf 0%, #59eeb4 100%);
   }
   
   /* Hero Gradient Background */
   .hero-gradient {
+    background: radial-gradient(circle at 50% 50%, rgba(92, 62, 163, 0.05) 0%, rgba(245, 245, 247, 0) 70%);
+  }
+
+  .dark .hero-gradient {
     background: radial-gradient(circle at 50% 50%, rgba(89, 238, 180, 0.1) 0%, rgba(19, 19, 23, 0) 70%);
   }
   
   /* Mesh Gradient - Complex Background */
   .mesh-gradient {
+    background-color: #f5f5f7;
+    background-image: 
+      radial-gradient(at 0% 0%, rgba(92, 62, 163, 0.05) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, rgba(47, 90, 215, 0.05) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(11, 150, 98, 0.04) 0px, transparent 50%);
+  }
+
+  .dark .mesh-gradient {
     background-color: #131317;
     background-image: 
       radial-gradient(at 0% 0%, rgba(23, 67, 145, 0.15) 0px, transparent 50%),
@@ -340,17 +443,29 @@
   
   /* Canvas Grid Pattern */
   .canvas-grid {
-    background-image: radial-gradient(#ffffff08 1px, transparent 1px);
+    background-image: radial-gradient(rgba(0, 0, 0, 0.03) 1px, transparent 1px);
     background-size: 32px 32px;
+  }
+
+  .dark .canvas-grid {
+    background-image: radial-gradient(#ffffff08 1px, transparent 1px);
   }
   
   /* Ambient Shadow - Floating Elements */
   .shadow-ambient {
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.03);
+  }
+
+  .dark .shadow-ambient {
     box-shadow: 0 0 40px rgba(11, 28, 48, 0.06);
   }
   
   /* Ghost Border - Subtle Outline */
   .border-ghost {
+    border: 1px solid rgba(92, 62, 163, 0.1);
+  }
+
+  .dark .border-ghost {
     border: 1px solid rgba(79, 70, 229, 0.15);
   }
 }

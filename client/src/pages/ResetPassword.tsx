@@ -164,7 +164,7 @@ export default function ResetPassword() {
     <div ref={container} className="min-h-screen bg-white text-[#1c1c1e] font-sans flex relative selection:bg-[#EBDCFF] selection:text-[#1c1c1e]">
       
       {/* Left Panel - Visual Appeal Area (Hidden on Mobile) */}
-      <div className="hidden lg:flex flex-col justify-between w-1/2 p-12 relative overflow-hidden bg-[#1c1c1e] text-[#fbfbf2]">
+      <div className="hidden lg:flex flex-col justify-between w-1/2 p-12 relative overflow-hidden bg-[#1c1c1e] text-[#F5F5F7]">
         
         {/* Background ambient light */}
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#EBDCFF] rounded-full mix-blend-overlay opacity-5 blur-3xl"></div>
@@ -172,7 +172,7 @@ export default function ResetPassword() {
 
         {/* Logo */}
         <div 
-          className="brand-element font-serif text-3xl font-bold tracking-tight text-[#fbfbf2] flex items-center gap-3 cursor-pointer z-10 hover:opacity-90 transition-opacity" 
+          className="brand-element font-serif text-3xl font-bold tracking-tight text-[#F5F5F7] flex items-center gap-3 cursor-pointer z-10 hover:opacity-90 transition-opacity" 
           onClick={() => setLocation("/")}
         >
           <div className="w-10 h-10 bg-[#EBDCFF] rounded-xl flex items-center justify-center text-[#1c1c1e] shadow-md hover:scale-105 active:scale-95 transition-transform duration-300">
@@ -210,7 +210,7 @@ export default function ResetPassword() {
       </div>
 
       {/* Right Panel - Form Area */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 relative bg-[#fbfbf2]">
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 relative bg-[#F5F5F7]">
         
         {/* Mobile Header (Only visible on small screens) */}
         <header className="absolute top-0 left-0 w-full flex justify-between items-center px-6 py-6 lg:hidden">
@@ -357,7 +357,7 @@ export default function ResetPassword() {
               <div className="success-item w-full">
                 <button
                   onClick={() => setLocation("/login")}
-                  className="w-full bg-[#1c1c1e] hover:bg-black text-[#fbfbf2] py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-sm hover:scale-[1.01] active:scale-[0.99] text-[15px] cursor-pointer"
+                  className="w-full bg-[#1c1c1e] hover:bg-black text-[#F5F5F7] py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-sm hover:scale-[1.01] active:scale-[0.99] text-[15px] cursor-pointer"
                 >
                   Sign In with New Password
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>

@@ -7,28 +7,32 @@ export default function KPIs() {
   const kpis = [
     {
       label: "Total Conversations",
-      value: "42.8k",
+      value: "42.8",
+      unit: "k",
       delta: "+12%",
       icon: "forum",
       bar: 60,
     },
     {
       label: "Avg. Response Time",
-      value: "1.4s",
+      value: "1.4",
+      unit: "s",
       delta: "-0.2s",
       icon: "timer",
       bar: 40,
     },
     {
       label: "User Satisfaction",
-      value: "88%",
+      value: "88",
+      unit: "%",
       delta: "Optimal",
       icon: "sentiment_satisfied",
       bar: 88,
     },
     {
       label: "Workload Reduction",
-      value: "70%",
+      value: "70",
+      unit: "%",
       delta: "Target",
       icon: "bolt",
       bar: 70,
@@ -36,11 +40,11 @@ export default function KPIs() {
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-10">
       {kpis.map((card) => (
         <div
           key={card.label}
-          className={`rounded-3xl border p-6 transition-all group relative overflow-hidden ${
+          className={`rounded-3xl border p-4 sm:p-6 transition-[border-color,box-shadow] duration-300 group relative overflow-hidden ${
             isDark
               ? "bg-[#1f1f23] border-white/[0.06] hover:border-white/10 shadow-none"
               : "bg-white border-black/5 shadow-[0_8px_30px_rgb(0,0,0,0.02)] hover:shadow-[0_8px_40px_rgb(0,0,0,0.06)]"
@@ -51,7 +55,7 @@ export default function KPIs() {
 
           <div className="flex items-start justify-between mb-6 relative z-10">
             <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-[#EBDCFF] text-[#1c1c1e] shadow-inner">
-              <span className="material-symbols-outlined text-[24px]">
+              <span className="material-symbols-outlined text-[24px]" aria-hidden="true">
                 {card.icon}
               </span>
             </div>
@@ -75,12 +79,17 @@ export default function KPIs() {
               {card.label}
             </p>
             <h3
-              className={`text-[2rem] font-serif font-bold mb-4 tracking-tight ${
+              className={`text-[1.8rem] sm:text-[2.5rem] font-serif font-bold mb-4 tracking-tight flex items-baseline leading-none ${
                 c("text-[#1c1c1e]", "text-white")
               }`}
               style={{ fontFamily: "'Playfair Display', serif" }}
             >
-              {card.value}
+              <span>{card.value}</span>
+              {card.unit && (
+                <span className={`font-sans text-xl font-bold ml-0.5 tracking-normal ${c("text-[#1c1c1e]/50", "text-white/40")}`}>
+                  {card.unit}
+                </span>
+              )}
             </h3>
             
             <div className={`w-full h-1.5 rounded-full overflow-hidden ${c("bg-black/5", "bg-white/10")}`}>

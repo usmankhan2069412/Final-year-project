@@ -6,7 +6,7 @@ export default function LanguageMix() {
 
   return (
     <div
-      className={`rounded-[2rem] border p-8 ${
+      className={`rounded-[2rem] border p-4 sm:p-8 ${
         isDark
           ? "bg-[#1f1f23] border-white/[0.06]"
           : "bg-white border-black/5 shadow-[0_8px_30px_rgb(0,0,0,0.02)]"
@@ -20,9 +20,9 @@ export default function LanguageMix() {
       >
         Language Mix
       </h3>
-      <div className="flex items-center gap-10">
+      <div className="flex flex-col sm:flex-row items-center sm:items-start md:items-center gap-6 sm:gap-10">
         <div className="relative w-32 h-32 flex-shrink-0">
-          <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90 drop-shadow-sm">
+          <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90 drop-shadow-sm" aria-hidden="true">
             <path
               strokeDasharray="100, 100"
               d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"

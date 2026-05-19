@@ -43,10 +43,10 @@ export default function Home() {
   }, { scope: container });
 
   return (
-    <div ref={container} className="min-h-screen bg-[#fbfbf2] text-[#1c1c1e] font-sans selection:bg-[#EBDCFF] selection:text-[#1c1c1e] overflow-x-hidden">
+    <div ref={container} className="min-h-screen bg-[#F5F5F7] text-[#1c1c1e] font-sans selection:bg-[#EBDCFF] selection:text-[#1c1c1e] overflow-x-hidden">
       
       {/* Navigation */}
-      <nav className="fixed top-0 w-full z-50 bg-[#fbfbf2]/80 backdrop-blur-md border-b-0">
+      <nav className="fixed top-0 w-full z-50 bg-[#F5F5F7]/80 backdrop-blur-md border-b-0">
         <div className="flex justify-between items-center w-full px-6 py-4 max-w-[1400px] mx-auto hidden md:flex">
           <div className="font-serif text-2xl font-bold tracking-tight text-[#1c1c1e] flex items-center gap-2">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#1c1c1e]">
@@ -135,7 +135,7 @@ export default function Home() {
 
         {/* Section 2: Dark Panel */}
         <section className="px-4 md:px-8 mt-12 w-full max-w-[1400px] mx-auto reveal-up">
-          <div className="bg-[#1c1c1e] rounded-[3rem] p-10 md:p-24 relative overflow-hidden text-[#fbfbf2]">
+          <div className="bg-[#1c1c1e] rounded-[3rem] p-10 md:p-24 relative overflow-hidden text-[#F5F5F7]">
             <div className="max-w-[800px] relative z-10">
               
               <div className="tags-container flex flex-wrap gap-3 mb-10">
@@ -169,7 +169,7 @@ export default function Home() {
         </section>
 
         {/* Section 3: Faster than typing */}
-        <section className="py-24 px-6 overflow-hidden bg-[#fbfbf2]">
+        <section className="py-24 px-6 overflow-hidden bg-[#F5F5F7]">
           <div className="max-w-[1000px] mx-auto text-center draw-trigger">
             <h2 className="reveal-up font-serif text-[4rem] sm:text-[4.5rem] md:text-[6.5rem] leading-[1.1] tracking-tight relative inline-block text-[#1c1c1e]" style={{ fontFamily: "'Playfair Display', serif" }}>
               4x faster <span className="relative inline-block z-10">
@@ -207,21 +207,21 @@ export default function Home() {
 
             <div className="grid md:grid-cols-3 gap-8 px-4">
                {/* Card 1 */}
-               <div className="hiw-card bg-[#1c1c1e] rounded-3xl p-10 text-[#fbfbf2] shadow-2xl relative">
+               <div className="hiw-card bg-[#1c1c1e] rounded-3xl p-10 text-[#F5F5F7] shadow-2xl relative">
                   <div className="absolute -top-6 -left-6 w-16 h-16 bg-[#EBDCFF] text-[#1c1c1e] rounded-full flex items-center justify-center text-3xl font-serif border border-black/10">1</div>
                   <h3 className="text-2xl font-serif mb-4" style={{ fontFamily: "'Playfair Display', serif" }}>Ingest Knowledge</h3>
                   <p className="text-white/70 leading-relaxed text-lg">Upload PDFs, scrape your website, or sync with your helpdesk. Aina understands your business deeply.</p>
                </div>
 
                {/* Card 2 */}
-               <div className="hiw-card bg-[#1c1c1e] rounded-3xl p-10 text-[#fbfbf2] shadow-2xl relative">
+               <div className="hiw-card bg-[#1c1c1e] rounded-3xl p-10 text-[#F5F5F7] shadow-2xl relative">
                   <div className="absolute -top-6 -left-6 w-16 h-16 bg-[#EBDCFF] text-[#1c1c1e] rounded-full flex items-center justify-center text-3xl font-serif border border-black/10">2</div>
                   <h3 className="text-2xl font-serif mb-4" style={{ fontFamily: "'Playfair Display', serif" }}>Design Flow</h3>
                   <p className="text-white/70 leading-relaxed text-lg">Use the visual node editor to set rules, conditions, and persona tones to ensure perfect brand voice.</p>
                </div>
 
                {/* Card 3 */}
-               <div className="hiw-card bg-[#1c1c1e] rounded-3xl p-10 text-[#fbfbf2] shadow-2xl relative">
+               <div className="hiw-card bg-[#1c1c1e] rounded-3xl p-10 text-[#F5F5F7] shadow-2xl relative">
                   <div className="absolute -top-6 -left-6 w-16 h-16 bg-[#EBDCFF] text-[#1c1c1e] rounded-full flex items-center justify-center text-3xl font-serif border border-black/10">3</div>
                   <h3 className="text-2xl font-serif mb-4" style={{ fontFamily: "'Playfair Display', serif" }}>Deploy Everywhere</h3>
                   <p className="text-white/70 leading-relaxed text-lg">With a single click, push your AI assistant live to WhatsApp, Messenger, and a floating web widget.</p>
@@ -232,7 +232,7 @@ export default function Home() {
 
         {/* Section 5: Made for You Container */}
         <section className="px-4 md:px-8 max-w-[1400px] mx-auto mt-12 mb-20 reveal-up">
-            <div className="bg-[#1c1c1e] rounded-[3rem] p-10 md:p-24 text-[#fbfbf2] grid md:grid-cols-2 gap-16 relative overflow-hidden">
+            <div className="bg-[#1c1c1e] rounded-[3rem] p-10 md:p-24 text-[#F5F5F7] grid md:grid-cols-2 gap-16 relative overflow-hidden">
                  
                 {/* Background graphic touch */}
                  <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#EBDCFF] rounded-full mix-blend-overlay opacity-10 blur-3xl"></div>
@@ -246,7 +246,7 @@ export default function Home() {
                 </div>
                 
                 <div className="relative z-10 flex flex-col justify-center">
-                   <h2 className="font-serif text-[4.5rem] leading-[1] text-[#fbfbf2] mb-12" style={{ fontFamily: "'Playfair Display', serif" }}>
+                   <h2 className="font-serif text-[4.5rem] leading-[1] text-[#F5F5F7] mb-12" style={{ fontFamily: "'Playfair Display', serif" }}>
                         Aina is made <br/>
                         <span className="italic font-normal text-[#EBDCFF]">for you</span>
                    </h2>
@@ -265,7 +265,7 @@ export default function Home() {
                     <p className="text-white/70 text-lg md:text-xl leading-relaxed mb-10">
                         Your workflows deserve a shortcut. Aina supports anyone who feels slowed down by manual coding by turning knowledge into direct automations using RAG and LLMs.
                     </p>
-                    <div className="h-64 sm:h-80 w-full bg-[#fbfbf2] rounded-3xl p-6 flex flex-col justify-center items-center shadow-inner relative overflow-hidden group">
+                    <div className="h-64 sm:h-80 w-full bg-[#F5F5F7] rounded-3xl p-6 flex flex-col justify-center items-center shadow-inner relative overflow-hidden group">
                         
                         <svg className="absolute w-full h-full opacity-10 text-black top-20 left-10 transition-transform group-hover:scale-105" viewBox="0 0 200 200">
                            <path d="M10,10 Q50,90 190,50 T100,190" fill="none" stroke="currentColor" strokeWidth="4"></path>

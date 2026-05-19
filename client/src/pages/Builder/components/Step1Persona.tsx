@@ -123,7 +123,7 @@ export default function Step1Persona({
     <div className="space-y-8 animate-in fade-in duration-300">
       {/* Bot basic info */}
       <div
-        className={`rounded-[2rem] border p-8 ${
+        className={`rounded-[2rem] border p-4 sm:p-8 ${
           isDark ? "bg-[#1f1f23] border-white/[0.06]" : "bg-white border-black/5 shadow-[0_8px_30px_rgb(0,0,0,0.02)]"
         }`}
       >
@@ -143,7 +143,7 @@ export default function Step1Persona({
               className={`w-full rounded-xl px-5 py-3.5 text-[14px] font-medium outline-none transition-all shadow-inner ${
                 isDark
                   ? "bg-[#131317] border border-white/[0.06] text-white focus:border-[#EBDCFF]/50"
-                  : "bg-[#fbfbf2] border border-black/5 text-[#1c1c1e] focus:border-black/20 focus:bg-white"
+                  : "bg-[#F5F5F7] border border-black/5 text-[#1c1c1e] focus:border-black/20 focus:bg-white"
               }`}
               placeholder="e.g. Aina Concierge"
             />
@@ -158,7 +158,7 @@ export default function Step1Persona({
               className={`w-full rounded-xl px-5 py-3.5 text-[14px] font-medium outline-none transition-all shadow-inner cursor-pointer appearance-none ${
                 isDark
                   ? "bg-[#131317] border border-white/[0.06] text-white focus:border-[#EBDCFF]/50"
-                  : "bg-[#fbfbf2] border border-black/5 text-[#1c1c1e] focus:border-black/20 focus:bg-white"
+                  : "bg-[#F5F5F7] border border-black/5 text-[#1c1c1e] focus:border-black/20 focus:bg-white"
               }`}
             >
               <option value="urdu">Roman Urdu (Recommended)</option>
@@ -183,73 +183,73 @@ export default function Step1Persona({
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-6">
           {BUILT_IN_PERSONAS.map((p) => {
             const isSelected = selected === p.id;
             return (
               <button
                 key={p.id}
                 onClick={() => onSelect(p.id)}
-                className={`relative text-left p-6 rounded-3xl border transition-all duration-300 group ${
+                className={`relative text-left p-3 sm:p-6 rounded-2xl sm:rounded-3xl border transition-all duration-300 group ${
                   isSelected
                     ? c(
                         "border-[#1c1c1e] bg-white shadow-lg scale-[1.02]",
                         "border-[#EBDCFF]/60 bg-[#EBDCFF]/5 scale-[1.02] shadow-lg"
                       )
                     : c(
-                        "border-black/5 bg-[#fbfbf2] hover:bg-white hover:border-black/10 hover:shadow-md",
+                        "border-black/5 bg-[#F5F5F7] hover:bg-white hover:border-black/10 hover:shadow-md",
                         "border-white/[0.06] bg-[#1f1f23] hover:border-white/15"
                       )
                 } ${p.custom ? "border-dashed" : ""}`}
               >
                 {isSelected && (
                   <div
-                    className={`absolute top-4 right-4 w-6 h-6 rounded-full flex items-center justify-center shadow-md ${
+                    className={`absolute top-2 right-2 sm:top-4 sm:right-4 w-4 h-4 sm:w-6 sm:h-6 rounded-full flex items-center justify-center shadow-md ${
                       c("bg-[#1c1c1e]", "bg-[#EBDCFF]")
                     }`}
                   >
-                    <span className={`material-symbols-outlined text-[14px] ${c("text-white", "text-[#1c1c1e]")}`}>
+                    <span className={`material-symbols-outlined text-[10px] sm:text-[14px] ${c("text-white", "text-[#1c1c1e]")}`}>
                       check
                     </span>
                   </div>
                 )}
 
                 {p.custom ? (
-                  <div className="flex flex-col items-center justify-center py-6 text-center h-full">
-                    <div className="text-[40px] mb-4 drop-shadow-sm">{p.emoji}</div>
-                    <h4 className={`text-[16px] font-bold mb-2 ${c("text-[#1c1c1e]", "text-white")}`}>
+                  <div className="flex flex-col items-center justify-center py-4 sm:py-6 text-center h-full">
+                    <div className="text-[28px] sm:text-[40px] mb-2 sm:mb-4 drop-shadow-sm">{p.emoji}</div>
+                    <h4 className={`text-[14px] sm:text-[16px] font-bold mb-1 sm:mb-2 ${c("text-[#1c1c1e]", "text-white")}`}>
                       {p.name}
                     </h4>
-                    <p className={`text-[12px] font-medium leading-relaxed ${c("text-[#1c1c1e]/50", "text-[#85948b]")}`}>
+                    <p className={`text-[10px] sm:text-[12px] font-medium leading-relaxed line-clamp-3 sm:line-clamp-none ${c("text-[#1c1c1e]/50", "text-[#85948b]")}`}>
                       {p.description}
                     </p>
                   </div>
                 ) : (
                   <div className="flex flex-col h-full">
-                    <div className="flex items-center gap-4 mb-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mb-3 sm:mb-4">
                       <div
-                        className="w-14 h-14 rounded-2xl flex items-center justify-center text-[28px] flex-shrink-0 shadow-sm"
+                        className="w-10 h-10 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center text-[20px] sm:text-[28px] flex-shrink-0 shadow-sm"
                         style={{ background: isDark ? p.bgDark : p.bgLight }}
                       >
                         {p.emoji}
                       </div>
-                      <div>
-                        <h4 className={`text-[17px] font-bold ${c("text-[#1c1c1e]", "text-white")}`}>{p.name}</h4>
-                        <p className="text-[11px] font-bold uppercase tracking-[0.15em]" style={{ color: isDark ? p.color : c(p.color === "#f5c5ff" ? "#d073e6" : p.color === "#59eeb4" ? "#0b9662" : p.color === "#b0c6ff" ? "#295bd9" : p.color === "#ffb4ab" ? "#d14b3d" : p.color, p.color) }}>
+                      <div className="min-w-0">
+                        <h4 className={`text-[14px] sm:text-[17px] font-bold truncate ${c("text-[#1c1c1e]", "text-white")}`}>{p.name}</h4>
+                        <p className="text-[9px] sm:text-[11px] font-bold uppercase tracking-[0.1em] sm:tracking-[0.15em] truncate" style={{ color: isDark ? p.color : c(p.color === "#f5c5ff" ? "#d073e6" : p.color === "#59eeb4" ? "#0b9662" : p.color === "#b0c6ff" ? "#295bd9" : p.color === "#ffb4ab" ? "#d14b3d" : p.color, p.color) }}>
                           {p.role}
                         </p>
                       </div>
                     </div>
 
-                    <p className={`text-[13px] leading-relaxed mb-4 flex-1 font-medium ${c("text-[#1c1c1e]/60", "text-white/60")}`}>
+                    <p className={`text-[11px] sm:text-[13px] leading-relaxed mb-3 sm:mb-4 flex-1 font-medium line-clamp-2 sm:line-clamp-none ${c("text-[#1c1c1e]/60", "text-white/60")}`}>
                       {p.description}
                     </p>
 
-                    <div className="flex flex-wrap gap-2 mb-5">
-                      {p.traits.map((t) => (
+                    <div className="flex flex-wrap gap-1 sm:gap-2 mb-4 sm:mb-5">
+                      {p.traits.slice(0, 3).map((t) => (
                         <span
                           key={t}
-                          className="text-[10px] font-bold px-2.5 py-1 rounded-full border"
+                          className="text-[8px] sm:text-[10px] font-bold px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-full border"
                           style={{
                             color: isDark ? p.color : c(p.color === "#f5c5ff" ? "#d073e6" : p.color === "#59eeb4" ? "#0b9662" : p.color === "#b0c6ff" ? "#295bd9" : p.color === "#ffb4ab" ? "#d14b3d" : p.color, p.color),
                             backgroundColor: isDark ? p.bgDark : p.bgLight,
@@ -263,7 +263,7 @@ export default function Step1Persona({
 
                     {/* Sample message bubble */}
                     <div
-                      className={`rounded-2xl p-4 border mt-auto relative shadow-inner ${
+                      className={`hidden sm:block rounded-2xl p-4 border mt-auto relative shadow-inner ${
                         c("bg-white border-black/5", "bg-[#131317] border-white/[0.04]")
                       }`}
                     >
@@ -287,7 +287,7 @@ export default function Step1Persona({
       {/* Custom persona form */}
       {selected === "custom" && (
         <div
-          className={`rounded-[2rem] border p-8 space-y-6 animate-in slide-in-from-bottom-4 duration-300 ${
+          className={`rounded-[2rem] border p-4 sm:p-8 space-y-6 animate-in slide-in-from-bottom-4 duration-300 ${
             isDark ? "bg-[#1f1f23] border-white/[0.06]" : "bg-white border-black/5 shadow-[0_8px_30px_rgb(0,0,0,0.02)]"
           }`}
         >
@@ -308,7 +308,7 @@ export default function Step1Persona({
                 className={`w-full rounded-xl px-5 py-3.5 text-[14px] font-medium outline-none transition-all shadow-inner ${
                   isDark
                     ? "bg-[#131317] border border-white/[0.06] text-white focus:border-[#EBDCFF]/50"
-                    : "bg-[#fbfbf2] border border-black/5 text-[#1c1c1e] focus:border-black/20 focus:bg-white"
+                    : "bg-[#F5F5F7] border border-black/5 text-[#1c1c1e] focus:border-black/20 focus:bg-white"
                 }`}
                 placeholder="e.g. Zara"
               />
@@ -324,7 +324,7 @@ export default function Step1Persona({
                 className={`w-full rounded-xl px-5 py-3.5 text-[14px] font-medium outline-none transition-all shadow-inner ${
                   isDark
                     ? "bg-[#131317] border border-white/[0.06] text-white focus:border-[#EBDCFF]/50"
-                    : "bg-[#fbfbf2] border border-black/5 text-[#1c1c1e] focus:border-black/20 focus:bg-white"
+                    : "bg-[#F5F5F7] border border-black/5 text-[#1c1c1e] focus:border-black/20 focus:bg-white"
                 }`}
                 placeholder="e.g. Brand Ambassador"
               />
@@ -355,7 +355,7 @@ export default function Step1Persona({
                     className={`py-4 rounded-2xl border text-center transition-all shadow-sm ${
                       isDark
                         ? "bg-[#131317] border-white/[0.06] peer-checked:border-[#EBDCFF]/50 peer-checked:bg-[#EBDCFF]/10 text-white/50 peer-checked:text-white"
-                        : "bg-[#fbfbf2] border-black/5 peer-checked:border-[#1c1c1e]/50 peer-checked:bg-white peer-checked:shadow-md text-[#1c1c1e]/50 peer-checked:text-[#1c1c1e]"
+                        : "bg-[#F5F5F7] border-black/5 peer-checked:border-[#1c1c1e]/50 peer-checked:bg-white peer-checked:shadow-md text-[#1c1c1e]/50 peer-checked:text-[#1c1c1e]"
                     }`}
                   >
                     <div className="text-[28px] mb-2">{t.emoji}</div>
@@ -379,7 +379,7 @@ export default function Step1Persona({
               className={`w-full rounded-xl px-5 py-4 text-[14px] font-medium outline-none transition-all shadow-inner resize-none ${
                 isDark
                   ? "bg-[#131317] border border-white/[0.06] text-white focus:border-[#EBDCFF]/50"
-                  : "bg-[#fbfbf2] border border-black/5 text-[#1c1c1e] focus:border-black/20 focus:bg-white"
+                  : "bg-[#F5F5F7] border border-black/5 text-[#1c1c1e] focus:border-black/20 focus:bg-white"
               }`}
               placeholder="Write the first message your bot will say to a user..."
             />
@@ -397,7 +397,7 @@ export default function Step1Persona({
                className={`w-full rounded-xl px-5 py-4 text-[14px] font-medium outline-none transition-all shadow-inner resize-none ${
                 isDark
                   ? "bg-[#131317] border border-white/[0.06] text-white focus:border-[#EBDCFF]/50"
-                  : "bg-[#fbfbf2] border border-black/5 text-[#1c1c1e] focus:border-black/20 focus:bg-white"
+                  : "bg-[#F5F5F7] border border-black/5 text-[#1c1c1e] focus:border-black/20 focus:bg-white"
               }`}
               placeholder="What should the bot say when it doesn't know the answer?"
             />
@@ -437,7 +437,7 @@ export default function Step1Persona({
       {/* Preview of selected non-custom persona */}
       {selected !== "custom" && persona && !persona.custom && (
         <div
-          className={`rounded-[2rem] border p-8 animate-in slide-in-from-bottom-4 duration-300 ${
+          className={`rounded-[2rem] border p-4 sm:p-8 animate-in slide-in-from-bottom-4 duration-300 ${
             isDark ? "bg-[#1f1f23] border-white/[0.06]" : "bg-white border-black/5 shadow-[0_8px_30px_rgb(0,0,0,0.02)]"
           }`}
         >

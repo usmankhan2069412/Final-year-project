@@ -22,7 +22,7 @@ export default function StepBar({ current, onStep }: { current: number; onStep: 
               onClick={() => done && onStep(step.num)}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all text-[12px] font-bold ${
                 active
-                  ? c("bg-[#1c1c1e] text-[#fbfbf2] shadow-md", "bg-[#EBDCFF] text-[#1c1c1e] shadow-md")
+                  ? c("bg-[#1c1c1e] text-[#F5F5F7] shadow-md", "bg-[#EBDCFF] text-[#1c1c1e] shadow-md")
                   : done
                   ? c("text-[#1c1c1e] hover:bg-black/5 cursor-pointer", "text-white hover:bg-white/5 cursor-pointer")
                   : c("text-[#1c1c1e]/40 cursor-default", "text-white/30 cursor-default")
@@ -31,7 +31,7 @@ export default function StepBar({ current, onStep }: { current: number; onStep: 
               <div
                 className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 transition-colors ${
                   active
-                    ? c("bg-[#fbfbf2] text-[#1c1c1e]", "bg-[#1c1c1e] text-[#EBDCFF]")
+                    ? c("bg-[#F5F5F7] text-[#1c1c1e]", "bg-[#1c1c1e] text-[#EBDCFF]")
                     : done
                     ? c("bg-[#1c1c1e]/10 text-[#1c1c1e]", "bg-[#EBDCFF]/20 text-[#EBDCFF]")
                     : c("bg-black/5 text-[#1c1c1e]/40", "bg-[#2a2a2e] text-white/30")

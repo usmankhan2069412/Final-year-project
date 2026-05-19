@@ -1,19 +1,24 @@
+import { useState } from "react";
 import { useTheme } from "../contexts/ThemeContext";
 import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
 
 export default function Models() {
   const { isDark } = useTheme();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   
   const c = (light: string, dark: string) => (isDark ? dark : light);
 
   return (
     <div
       className={`min-h-screen flex font-sans selection:bg-[#EBDCFF] selection:text-[#1c1c1e] transition-colors duration-300 ${
-        isDark ? "bg-[#131317] text-[#e4e1e7]" : "bg-[#fbfbf2] text-[#1c1c1e]"
+        isDark ? "bg-[#131317] text-[#e4e1e7]" : "bg-[#F5F5F7] text-[#1c1c1e]"
       }`}
     >
-      <Sidebar />
+      <Sidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
         <div
@@ -26,21 +31,21 @@ export default function Models() {
 
         <TopBar
           title="Production Environment"
+          onMenuToggle={() => setSidebarOpen((v) => !v)}
           actions={
             <button
-              className={`px-4 py-2 rounded-xl border transition-all text-[13px] font-bold flex items-center gap-1.5 shadow-sm ${
+              className={`px-4 py-2 rounded-xl border transition-[color,background-color,border-color,box-shadow] duration-200 text-[13px] font-bold flex items-center gap-1.5 shadow-sm focus-visible:ring-2 outline-none ${
                 isDark
-                  ? "bg-[#EBDCFF]/10 border-[#EBDCFF]/20 text-[#EBDCFF] hover:bg-[#EBDCFF]/20"
-                  : "bg-[#1c1c1e] border-[#1c1c1e] text-[#fbfbf2] hover:bg-black"
+                  ? "bg-[#EBDCFF]/10 border-[#EBDCFF]/20 text-[#EBDCFF] hover:bg-[#EBDCFF]/20 focus-visible:ring-[#EBDCFF]/20"
+                  : "bg-[#1c1c1e] border-[#1c1c1e] text-[#F5F5F7] hover:bg-black focus-visible:ring-black/20"
               }`}
             >
-              <span className="material-symbols-outlined text-[18px]">add</span>
-              Add Provider
+              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">add</span>
+              <span className="hidden sm:inline">Add Provider</span>
             </button>
           }
         />
-
-        <main className="flex-1 overflow-y-auto p-8 lg:p-12 z-10">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-8 lg:p-12 z-10">
           <div className="mb-12">
             <span
               className={`text-[11px] font-bold tracking-[0.2em] uppercase mb-3 block ${
@@ -87,7 +92,7 @@ export default function Models() {
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-full border shadow-sm ${
                   isDark
                     ? "bg-white/5 border-white/10"
-                    : "bg-[#fbfbf2] border-black/5"
+                    : "bg-[#F5F5F7] border-black/5"
                 }`}
               >
                 <div
@@ -111,7 +116,7 @@ export default function Models() {
                 className={`rounded-[1.5rem] p-6 w-48 text-center border shadow-sm transition-all ${
                   isDark
                     ? "bg-[#131317] border-white/[0.06]"
-                    : "bg-[#fbfbf2] border-black/5"
+                    : "bg-[#F5F5F7] border-black/5"
                 }`}
               >
                 <div
@@ -123,6 +128,7 @@ export default function Models() {
                     className={`material-symbols-outlined ${
                       c("text-[#1c1c1e]", "text-[#EBDCFF]")
                     }`}
+                    aria-hidden="true"
                   >
                     input
                   </span>
@@ -144,16 +150,17 @@ export default function Models() {
               </div>
 
               {/* Arrow */}
-              <div className="hidden md:flex items-center">
-                <div
-                  className={`w-10 h-[2px] ${c("bg-black/10", "bg-white/10")}`}
-                ></div>
-                <span
-                  className={`material-symbols-outlined text-[20px] ${
-                    c("text-black/30", "text-white/30")
-                  }`}
-                >
-                  arrow_forward
+              <div className="flex md:items-center justify-center py-2 md:py-0">
+                {/* Desktop arrow */}
+                <div className="hidden md:flex items-center">
+                  <div className={`w-10 h-[2px] ${c("bg-black/10", "bg-white/10")}`}></div>
+                  <span className={`material-symbols-outlined text-[20px] ${c("text-black/30", "text-white/30")}`} aria-hidden="true">
+                    arrow_forward
+                  </span>
+                </div>
+                {/* Mobile arrow */}
+                <span className={`material-symbols-outlined text-[24px] md:hidden ${c("text-black/30", "text-white/30")}`} aria-hidden="true">
+                  arrow_downward
                 </span>
               </div>
 
@@ -162,15 +169,15 @@ export default function Models() {
                 className={`rounded-[1.5rem] p-6 w-48 text-center border-2 border-dashed relative ${
                   isDark
                     ? "bg-[#131317] border-[#EBDCFF]/30"
-                    : "bg-[#fbfbf2] border-[#1c1c1e]/20"
+                    : "bg-[#F5F5F7] border-[#1c1c1e]/20"
                 }`}
               >
                 <div
                   className={`w-12 h-12 mx-auto rounded-xl flex items-center justify-center mb-4 ${
-                    isDark ? "bg-[#EBDCFF]/10 text-[#EBDCFF]" : "bg-[#1c1c1e] text-[#fbfbf2]"
+                    isDark ? "bg-[#EBDCFF]/10 text-[#EBDCFF]" : "bg-[#1c1c1e] text-[#F5F5F7]"
                   }`}
                 >
-                  <span className="material-symbols-outlined">hub</span>
+                  <span className="material-symbols-outlined" aria-hidden="true">hub</span>
                 </div>
                 <h3
                   className={`font-bold text-[14px] ${
@@ -189,32 +196,34 @@ export default function Models() {
               </div>
 
               {/* Arrow */}
-              <div className="hidden md:flex items-center">
-                <div
-                  className={`w-10 h-[2px] ${c("bg-black/10", "bg-white/10")}`}
-                ></div>
-                <span
-                  className={`material-symbols-outlined text-[20px] ${
-                    c("text-black/30", "text-white/30")
-                  }`}
-                >
-                  arrow_forward
+              <div className="flex md:items-center justify-center py-2 md:py-0">
+                {/* Desktop arrow */}
+                <div className="hidden md:flex items-center">
+                  <div className={`w-10 h-[2px] ${c("bg-black/10", "bg-white/10")}`}></div>
+                  <span className={`material-symbols-outlined text-[20px] ${c("text-black/30", "text-white/30")}`} aria-hidden="true">
+                    arrow_forward
+                  </span>
+                </div>
+                {/* Mobile arrow */}
+                <span className={`material-symbols-outlined text-[24px] md:hidden ${c("text-black/30", "text-white/30")}`} aria-hidden="true">
+                  arrow_downward
                 </span>
               </div>
 
               {/* Destination Nodes */}
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3 w-full md:w-auto">
                 {[
                   { label: "General Inquiries", model: "GPT-4o-mini", icon: "speed" },
                   { label: "Complex Problems", model: "Claude 3.5 Sonnet", icon: "psychology_alt" },
                   { label: "Image Analysis", model: "Gemini 1.5 Pro", icon: "image_search" },
                 ].map((dest) => (
-                  <div
+                  <button
                     key={dest.label}
-                    className={`rounded-2xl px-5 py-4 flex items-center justify-between gap-8 border shadow-sm transition-all cursor-pointer ${
+                    type="button"
+                    className={`rounded-2xl px-5 py-4 flex items-center justify-between gap-8 border shadow-sm text-left w-full md:w-64 outline-none transition-[border-color,box-shadow,background-color] duration-200 cursor-pointer focus-visible:ring-2 ${
                       isDark
-                        ? "bg-[#131317] border-white/[0.04] hover:border-white/20"
-                        : "bg-[#fbfbf2] border-black/5 hover:border-black/20"
+                        ? "bg-[#131317] border-white/[0.04] hover:border-white/20 focus-visible:ring-[#EBDCFF]/20"
+                        : "bg-[#F5F5F7] border-black/5 hover:border-black/20 focus-visible:ring-black/20"
                     }`}
                   >
                     <div>
@@ -234,15 +243,15 @@ export default function Models() {
                       </p>
                     </div>
                     <div
-                      className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
                         isDark ? "bg-[#EBDCFF]/10 text-[#EBDCFF]" : "bg-white border text-[#1c1c1e]"
                       }`}
                     >
-                      <span className="material-symbols-outlined text-[18px]">
+                      <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
                         {dest.icon}
                       </span>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -327,7 +336,14 @@ export default function Models() {
                       
                       {/* Toggle Switch */}
                       <button
-                        className={`w-12 h-6 rounded-full relative cursor-pointer outline-none transition-all ${
+                        role="switch"
+                        aria-checked={toggle.enabled}
+                        aria-label={toggle.label}
+                        className={`w-12 h-6 rounded-full relative cursor-pointer outline-none transition-[background-color,box-shadow] duration-200 focus-visible:ring-2 focus-visible:ring-offset-2 ${
+                          isDark 
+                            ? "focus-visible:ring-offset-[#1f1f23] focus-visible:ring-[#EBDCFF]" 
+                            : "focus-visible:ring-offset-white focus-visible:ring-[#1c1c1e]"
+                        } ${
                           toggle.enabled
                             ? (isDark ? "bg-[#EBDCFF]" : "bg-[#1c1c1e]")
                             : (isDark ? "bg-[#353439]" : "bg-black/10")
@@ -336,7 +352,7 @@ export default function Models() {
                         <div
                           className={`absolute top-1 w-4 h-4 rounded-full transition-all shadow-sm ${
                             toggle.enabled
-                              ? `right-1 ${isDark ? "bg-[#1c1c1e]" : "bg-[#fbfbf2]"}`
+                              ? `right-1 ${isDark ? "bg-[#1c1c1e]" : "bg-[#F5F5F7]"}`
                               : `left-1 ${isDark ? "bg-[#85948b]" : "bg-white"}`
                           }`}
                         ></div>
@@ -380,11 +396,11 @@ export default function Models() {
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead>
-                    <tr className={isDark ? "bg-black/20" : "bg-[#fbfbf2]/50"}>
+                    <tr className={isDark ? "bg-black/20" : "bg-[#F5F5F7]/50"}>
                       {["Provider", "Model Version", "Status", ""].map((h) => (
                         <th
                           key={h}
-                          className={`px-8 py-4 text-[11px] font-bold uppercase tracking-[0.15em] border-b whitespace-nowrap ${
+                          className={`px-4 sm:px-8 py-3.5 sm:py-4 text-[11px] font-bold uppercase tracking-[0.15em] border-b whitespace-nowrap ${
                             isDark
                               ? "text-white/30 border-white/[0.06]"
                               : "text-[#1c1c1e]/40 border-black/5"
@@ -428,7 +444,7 @@ export default function Models() {
                           isDark ? "hover:bg-white/[0.02]" : "hover:bg-black/[0.02]"
                         }`}
                       >
-                        <td className="px-8 py-6">
+                        <td className="px-4 sm:px-8 py-4 sm:py-6">
                           <div className="flex items-center gap-4">
                             <div
                               className="w-10 h-10 rounded-xl flex items-center justify-center text-[16px] font-bold shadow-sm"
@@ -446,24 +462,24 @@ export default function Models() {
                           </div>
                         </td>
                         <td
-                          className={`px-8 py-6 text-[13px] font-mono font-medium ${
+                          className={`px-4 sm:px-8 py-4 sm:py-6 text-[13px] font-mono font-medium ${
                             c("text-[#1c1c1e]/60", "text-[#bbcac0]")
                           }`}
                         >
                           {b.model}
                         </td>
-                        <td className="px-8 py-6">
+                        <td className="px-4 sm:px-8 py-4 sm:py-6">
                           {b.active ? (
                             <span
                               className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider border shadow-sm ${
                                 isDark
                                   ? "bg-[#EBDCFF]/10 text-[#EBDCFF] border-[#EBDCFF]/20"
-                                  : "bg-[#1c1c1e] text-[#fbfbf2] border-transparent"
+                                  : "bg-[#1c1c1e] text-[#F5F5F7] border-transparent"
                               }`}
                             >
                               <span
                                 className={`w-1.5 h-1.5 rounded-full animate-pulse ${
-                                  isDark ? "bg-[#EBDCFF]" : "bg-[#fbfbf2]"
+                                  isDark ? "bg-[#EBDCFF]" : "bg-[#F5F5F7]"
                                 }`}
                               ></span>
                               Active
@@ -480,15 +496,16 @@ export default function Models() {
                             </span>
                           )}
                         </td>
-                        <td className="px-8 py-6 text-right">
+                        <td className="px-4 sm:px-8 py-4 sm:py-6 text-right">
                           <button
-                            className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all outline-none border ${
+                            aria-label={`Configure settings for ${b.provider}`}
+                            className={`w-10 h-10 flex items-center justify-center rounded-xl transition-[color,background-color,border-color,box-shadow] duration-200 outline-none border focus-visible:ring-2 ${
                               isDark
-                                ? "text-white/30 hover:text-white hover:bg-white/5 border-transparent hover:border-white/10"
-                                : "text-[#1c1c1e]/40 hover:text-[#1c1c1e] hover:bg-black/5 border-transparent hover:border-black/5"
+                                ? "text-white/30 hover:text-white hover:bg-white/5 border-transparent hover:border-white/10 focus-visible:ring-[#EBDCFF]/20"
+                                : "text-[#1c1c1e]/40 hover:text-[#1c1c1e] hover:bg-black/5 border-transparent hover:border-black/5 focus-visible:ring-[#1c1c1e]/20"
                             }`}
                           >
-                            <span className="material-symbols-outlined text-[20px]">settings</span>
+                            <span className="material-symbols-outlined text-[20px]" aria-hidden="true">settings</span>
                           </button>
                         </td>
                       </tr>

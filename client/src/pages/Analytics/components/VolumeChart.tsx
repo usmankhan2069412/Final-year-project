@@ -6,13 +6,13 @@ export default function VolumeChart() {
 
   return (
     <div
-      className={`rounded-[2rem] border p-8 mb-6 ${
+      className={`rounded-[2rem] border p-4 sm:p-8 mb-6 ${
         isDark
           ? "bg-[#1f1f23] border-white/[0.06]"
           : "bg-white border-black/5 shadow-[0_8px_30px_rgb(0,0,0,0.02)]"
       }`}
     >
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
         <div>
           <h2
             className={`text-[20px] font-serif font-bold ${
@@ -30,7 +30,7 @@ export default function VolumeChart() {
             Daily interaction metrics across all clusters
           </p>
         </div>
-        <div className="flex items-center gap-6">
+        <div className="flex flex-wrap items-center gap-4 sm:gap-6 w-full sm:w-auto justify-between sm:justify-start">
           <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${c("bg-[#1c1c1e]", "bg-[#EBDCFF]")}`}></div>
             <span
@@ -52,10 +52,10 @@ export default function VolumeChart() {
             </span>
           </div>
           <select
-            className={`border rounded-xl px-4 py-2.5 text-[13px] font-medium outline-none shadow-sm cursor-pointer ${
+            className={`border rounded-xl px-4 py-2.5 text-[13px] font-medium outline-none shadow-sm cursor-pointer transition-[border-color,box-shadow] duration-200 focus-visible:ring-1 w-full sm:w-auto ${
               isDark
-                ? "bg-[#131317] border-white/[0.06] text-white/80"
-                : "bg-[#fbfbf2] border-black/5 text-[#1c1c1e]/80 focus:border-black/20"
+                ? "bg-[#131317] border-white/[0.06] text-white/80 focus-visible:ring-[#EBDCFF] focus-visible:border-transparent"
+                : "bg-[#F5F5F7] border-black/5 text-[#1c1c1e]/80 focus-visible:ring-black/20 focus:border-black/20"
             }`}
           >
             <option>Last 30 Days</option>
@@ -66,7 +66,7 @@ export default function VolumeChart() {
       </div>
 
       {/* Mock Chart */}
-      <div className="relative w-full h-64">
+      <div className="relative w-full h-48 sm:h-64">
         <div className="absolute inset-0 flex flex-col justify-between pb-0">
           {["2k", "1.5k", "1k", "0.5k", "0"].map((v) => (
             <div key={v} className="flex items-center gap-4">
@@ -81,7 +81,7 @@ export default function VolumeChart() {
             </div>
           ))}
         </div>
-        <div className="absolute inset-0 pl-12">
+        <div className="absolute inset-0 pl-10 sm:pl-12">
           <svg
             className="w-full h-full"
             preserveAspectRatio="none"
@@ -116,21 +116,28 @@ export default function VolumeChart() {
               strokeDasharray="8,6"
               vectorEffect="non-scaling-stroke"
             />
-            {/* Peak dot */}
+            {/* Peak dot ambient glow */}
             <circle
               cx="800"
               cy="110"
-              r="5"
-              fill={isDark ? "#1f1f23" : "#fff"}
-              stroke={isDark ? "#EBDCFF" : "#1c1c1e"}
-              strokeWidth="3"
+              r="8"
+              fill={isDark ? "#EBDCFF" : "#1c1c1e"}
+              opacity="0.3"
+              vectorEffect="non-scaling-stroke"
+            />
+            {/* Peak dot solid inner */}
+            <circle
+              cx="800"
+              cy="110"
+              r="4.5"
+              fill={isDark ? "#EBDCFF" : "#1c1c1e"}
               vectorEffect="non-scaling-stroke"
             />
           </svg>
         </div>
       </div>
 
-      <div className="flex justify-between mt-5 pl-12">
+      <div className="flex justify-between mt-5 pl-10 sm:pl-12">
         {["Jan 1", "Jan 8", "Jan 15", "Jan 22", "Jan 29"].map((d) => (
           <span
             key={d}
