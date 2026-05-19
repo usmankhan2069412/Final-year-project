@@ -5,3 +5,8 @@ psycopg2-binary # Postgres Driver - Python aur Postgres ko jorne ke liye
 alembic # DB Migrations - Database ka version control (Git jaisa)
 pydantic-settings # Config Manager - .env files ko safely handle karne ke liye
 python-dotenv # .env Loader - Environment variables load karne ke liye
+python-jose[cryptography] # JWT Generation and Verification
+argon2-cffi # Secure Password Hashing
+python-multipart # Form data handling for OAuth2 Login
+fastapi-mail>=1.4.1 # for mail services  
+

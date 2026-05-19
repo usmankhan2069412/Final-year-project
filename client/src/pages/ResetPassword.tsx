@@ -1,18 +1,32 @@
 import { useLocation } from "wouter";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 
 gsap.registerPlugin(useGSAP);
 
-export default function ForgotPassword() {
+export default function ResetPassword() {
   const [, setLocation] = useLocation();
-  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [emailError, setEmailError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [confirmError, setConfirmError] = useState("");
+  const [apiError, setApiError] = useState("");
   
   const container = useRef<HTMLDivElement>(null);
+
+  // Extract reset token from query string
+  const [token, setToken] = useState("");
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tokenVal = params.get("token") || "";
+    setToken(tokenVal);
+    if (!tokenVal) {
+      setApiError("Authentication token is missing. Please request a new password reset link.");
+    }
+  }, []);
 
   useGSAP(() => {
     // Left panel animations
@@ -42,29 +56,40 @@ export default function ForgotPassword() {
     });
   }, { scope: container });
 
-  const validateEmail = (val: string) => {
-    if (!val.trim()) {
-      setEmailError("Email is required");
+  const validatePassword = (val: string) => {
+    if (!val) {
+      setPasswordError("Password is required");
       return false;
     }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(val)) {
-      setEmailError("Please enter a valid email address");
+    if (val.length < 6) {
+      setPasswordError("Password must be at least 6 characters long");
       return false;
     }
-    setEmailError("");
+    setPasswordError("");
     return true;
   };
 
-  const [apiError, setApiError] = useState("");
+  const validateConfirm = (val: string) => {
+    if (!val) {
+      setConfirmError("Please confirm your password");
+      return false;
+    }
+    if (val !== password) {
+      setConfirmError("Passwords do not match");
+      return false;
+    }
+    setConfirmError("");
+    return true;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setApiError("");
     
-    const isEmailValid = validateEmail(email);
+    const isPasswordValid = validatePassword(password);
+    const isConfirmValid = validateConfirm(confirmPassword);
 
-    if (!isEmailValid) {
+    if (!isPasswordValid || !isConfirmValid || !token) {
       // Premium error shake feedback
       gsap.to(".auth-form-card", {
         x: -8,
@@ -81,23 +106,26 @@ export default function ForgotPassword() {
 
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:8000/api/v1/auth/forgot-password", {
+      const response = await fetch("http://localhost:8000/api/v1/auth/reset-password", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Accept": "application/json"
         },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ 
+          token,
+          new_password: password 
+        })
       });
 
       if (!response.ok) {
-        let errMsg = "An error occurred while sending reset link.";
+        let errMsg = "An error occurred while resetting your password.";
         try {
           const errData = await response.json();
           errMsg = errData.detail || errMsg;
         } catch {
           if (response.status === 503) {
-            errMsg = "Database service is offline. Please make sure database server is running and credentials in .env are correct.";
+            errMsg = "Database service is offline. Please check connection.";
           }
         }
         throw new Error(errMsg);
@@ -158,10 +186,10 @@ export default function ForgotPassword() {
         {/* Center Graphic */}
         <div className="flex-grow flex flex-col justify-center relative z-10 my-12">
            <h2 className="brand-element font-serif text-[4rem] leading-[1.05] tracking-tight mb-8" style={{ fontFamily: "'Playfair Display', serif" }}>
-              Lost your <br/><span className="italic text-[#EBDCFF]">credentials?</span>
+              Secure <br/><span className="italic text-[#EBDCFF]">credentials.</span>
            </h2>
            <p className="brand-element text-white/60 text-xl max-w-md leading-relaxed">
-             No worries. Provide your registered business email address, and we'll transmit a secure access key to restore your dashboard profile immediately.
+             Establish your new administrative password key below to seamlessly re-encrypt and claim authority over your dashboard environment.
            </p>
         </div>
 
@@ -202,7 +230,7 @@ export default function ForgotPassword() {
                 <h1 className="text-[2.5rem] font-serif font-bold text-[#1c1c1e] mb-3 tracking-tight leading-none" style={{ fontFamily: "'Playfair Display', serif" }}>
                   Reset your <span className="italic">password</span>
                 </h1>
-                <p className="text-[#1c1c1e]/60 text-base font-medium">We'll send you instructions to reset your password.</p>
+                <p className="text-[#1c1c1e]/60 text-base font-medium">Please enter your new password below.</p>
               </div>
 
               {apiError && (
@@ -213,33 +241,62 @@ export default function ForgotPassword() {
               )}
 
               <form className="space-y-6" onSubmit={handleSubmit} noValidate>
-                {/* Email Field */}
+                {/* Password Field */}
                 <div className="space-y-2.5 auth-item group">
-                  <label htmlFor="email-input" className="block text-[11px] font-bold text-[#1c1c1e]/50 uppercase tracking-widest group-focus-within:text-[#1c1c1e] transition-colors">
-                    Business Email
+                  <label htmlFor="password-input" className="block text-[11px] font-bold text-[#1c1c1e]/50 uppercase tracking-widest group-focus-within:text-[#1c1c1e] transition-colors">
+                    New Password
                   </label>
                   <div className="relative">
                     <input
-                      id="email-input"
-                      type="email"
-                      value={email}
+                      id="password-input"
+                      type="password"
+                      value={password}
                       onChange={(e) => {
-                        setEmail(e.target.value);
-                        if (emailError) validateEmail(e.target.value);
+                        setPassword(e.target.value);
+                        if (passwordError) validatePassword(e.target.value);
                       }}
-                      onBlur={() => validateEmail(email)}
-                      placeholder="ahmed@company.pk"
-                      aria-invalid={!!emailError}
-                      aria-describedby={emailError ? "email-error" : undefined}
+                      onBlur={() => validatePassword(password)}
+                      placeholder="••••••••"
+                      aria-invalid={!!passwordError}
                       className={`w-full bg-white border ${
-                        emailError ? "border-[#ea4335] focus:border-[#ea4335] focus:ring-red-100" : "border-black/10 focus:border-[#1c1c1e] focus:ring-[#EBDCFF]/50"
+                        passwordError ? "border-[#ea4335] focus:border-[#ea4335] focus:ring-red-100" : "border-black/10 focus:border-[#1c1c1e] focus:ring-[#EBDCFF]/50"
                       } hover:border-black/20 rounded-xl px-4 py-3.5 text-[#1c1c1e] placeholder:text-[#1c1c1e]/30 outline-none transition-all text-[15px] font-medium shadow-sm focus:ring-4`}
                     />
                   </div>
-                  {emailError && (
-                    <p id="email-error" className="text-xs text-[#ea4335] font-semibold flex items-center gap-1.5 animate-fadeIn">
+                  {passwordError && (
+                    <p className="text-xs text-[#ea4335] font-semibold flex items-center gap-1.5 animate-fadeIn">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-                      {emailError}
+                      {passwordError}
+                    </p>
+                  )}
+                </div>
+
+                {/* Confirm Password Field */}
+                <div className="space-y-2.5 auth-item group">
+                  <label htmlFor="confirm-input" className="block text-[11px] font-bold text-[#1c1c1e]/50 uppercase tracking-widest group-focus-within:text-[#1c1c1e] transition-colors">
+                    Confirm New Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="confirm-input"
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => {
+                        setConfirmPassword(e.target.value);
+                        if (confirmError) validateConfirm(e.target.value);
+                      }}
+                      onBlur={() => validateConfirm(confirmPassword)}
+                      placeholder="••••••••"
+                      aria-invalid={!!confirmError}
+                      className={`w-full bg-white border ${
+                        confirmError ? "border-[#ea4335] focus:border-[#ea4335] focus:ring-red-100" : "border-black/10 focus:border-[#1c1c1e] focus:ring-[#EBDCFF]/50"
+                      } hover:border-black/20 rounded-xl px-4 py-3.5 text-[#1c1c1e] placeholder:text-[#1c1c1e]/30 outline-none transition-all text-[15px] font-medium shadow-sm focus:ring-4`}
+                    />
+                  </div>
+                  {confirmError && (
+                    <p className="text-xs text-[#ea4335] font-semibold flex items-center gap-1.5 animate-fadeIn">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                      {confirmError}
                     </p>
                   )}
                 </div>
@@ -248,8 +305,8 @@ export default function ForgotPassword() {
                 <div className="auth-item w-full mt-2">
                   <button
                     type="submit"
-                    disabled={loading}
-                    className="w-full bg-[#EBDCFF] hover:bg-[#d8bfff] text-[#1c1c1e] py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-sm border border-[#1c1c1e]/5 hover:shadow-md hover:scale-[1.01] active:scale-[0.99] text-[15px] cursor-pointer disabled:opacity-75 disabled:pointer-events-none"
+                    disabled={loading || !token}
+                    className="w-full bg-[#EBDCFF] hover:bg-[#d8bfff] text-[#1c1c1e] py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-sm border border-[#1c1c1e]/5 hover:shadow-md hover:scale-[1.01] active:scale-[0.99] text-[15px] cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
                   >
                     {loading ? (
                       <div className="flex items-center gap-2">
@@ -257,12 +314,12 @@ export default function ForgotPassword() {
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
-                        <span>Transmitting key...</span>
+                        <span>Resetting...</span>
                       </div>
                     ) : (
                       <>
-                        Send Reset Link
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                        Update Password
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
                       </>
                     )}
                   </button>
@@ -290,11 +347,11 @@ export default function ForgotPassword() {
               </div>
 
               <h1 className="success-item text-[2.5rem] font-serif font-bold text-[#1c1c1e] mb-3 tracking-tight leading-none" style={{ fontFamily: "'Playfair Display', serif" }}>
-                Check your <span className="italic">inbox</span>
+                Success!
               </h1>
               
               <p className="success-item text-[#1c1c1e]/60 text-base font-medium mb-8 leading-relaxed">
-                We've sent a secure password reset link to <strong className="text-[#1c1c1e] font-semibold">{email}</strong>. Please follow the instructions in the email to configure your new credentials.
+                Your credentials have been securely updated. You can now use your new password to access your administrative dashboard.
               </p>
 
               <div className="success-item w-full">
@@ -302,13 +359,9 @@ export default function ForgotPassword() {
                   onClick={() => setLocation("/login")}
                   className="w-full bg-[#1c1c1e] hover:bg-black text-[#fbfbf2] py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-sm hover:scale-[1.01] active:scale-[0.99] text-[15px] cursor-pointer"
                 >
-                  Return to Sign In
+                  Sign In with New Password
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
                 </button>
-              </div>
-
-              <div className="success-item mt-6 text-xs text-[#1c1c1e]/40 font-medium">
-                Didn't receive email? Check spam folder or try again in 2 minutes.
               </div>
             </div>
           )}

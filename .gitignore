@@ -5,6 +5,7 @@ docs/
 .agent/
 .agents/
 graphify-out/
+.gemini/
 # Build outputs
 dist/
 build/
@@ -113,3 +114,27 @@ temp/
 
 # Manus version file (auto-generated, not part of source)
 client/public/__manus__/version.json
+
+# Python virtual environments & packages
+venv/
+.venv/
+env/
+.env/
+ENV/
+backend/venv/
+
+# Python cache & compiled files
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+
+# Security reports & test outputs
+security_report*.json
+security_report*.txt
+

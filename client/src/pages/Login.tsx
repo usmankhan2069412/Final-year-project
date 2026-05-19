@@ -2,6 +2,7 @@ import { useLocation } from "wouter";
 import { useState, useRef } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
+import { useGoogleLogin } from '@react-oauth/google';
 
 gsap.registerPlugin(useGSAP);
 
@@ -75,8 +76,11 @@ export default function Login() {
     return true;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [apiError, setApiError] = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setApiError("");
     
     const isEmailValid = validateEmail(email);
     const isPasswordValid = validatePassword(password);
@@ -97,12 +101,98 @@ export default function Login() {
     }
 
     setLoading(true);
-    // Simulate server request delay for optimal perception and professional feel
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      const response = await fetch("http://localhost:8000/api/v1/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify({ email, password })
+      });
+
+      if (!response.ok) {
+        let errMsg = "An error occurred during authentication.";
+        try {
+          const errData = await response.json();
+          errMsg = errData.detail || errMsg;
+        } catch {
+          if (response.status === 503) {
+            errMsg = "Database service is offline. Please make sure database server is running and credentials in .env are correct.";
+          }
+        }
+        throw new Error(errMsg);
+      }
+
+      const data = await response.json();
+      localStorage.setItem("token", data.access_token);
       setLocation("/dashboard");
-    }, 1200);
+    } catch (err: any) {
+      setApiError(err.message || "Failed to connect to the backend server.");
+      // Shake the card on API error
+      gsap.to(".auth-form-card", {
+        x: -8,
+        duration: 0.06,
+        repeat: 5,
+        yoyo: true,
+        ease: "power1.inOut",
+        onComplete: () => {
+          gsap.set(".auth-form-card", { clearProps: "x" });
+        }
+      });
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const loginWithGoogle = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      setLoading(true);
+      setApiError("");
+      try {
+        const response = await fetch("http://localhost:8000/api/v1/auth/google-login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+          },
+          body: JSON.stringify({ token: tokenResponse.access_token })
+        });
+        
+        if (!response.ok) {
+          let errorDetail = "Failed to authenticate with Google";
+          try {
+            const errData = await response.json();
+            errorDetail = errData.detail || errorDetail;
+          } catch {
+            // Silence JSON parsing errors for error body
+          }
+          throw new Error(errorDetail);
+        }
+        
+        const data = await response.json();
+        localStorage.setItem("token", data.access_token);
+        setLocation("/dashboard");
+      } catch (err: any) {
+        setApiError(err.message || "Failed to authenticate with Google.");
+        gsap.to(".auth-form-card", {
+          x: -8,
+          duration: 0.06,
+          repeat: 5,
+          yoyo: true,
+          ease: "power1.inOut",
+          onComplete: () => {
+            gsap.set(".auth-form-card", { clearProps: "x" });
+          }
+        });
+      } finally {
+        setLoading(false);
+      }
+    },
+    onError: () => {
+      setApiError("Google Sign-In was unsuccessful. Please try again.");
+    }
+  });
 
   return (
     <div ref={container} className="min-h-screen bg-white text-[#1c1c1e] font-sans flex relative selection:bg-[#EBDCFF] selection:text-[#1c1c1e]">
@@ -175,6 +265,13 @@ export default function Login() {
             </h1>
             <p className="text-[#1c1c1e]/60 text-base font-medium">Please enter your details to sign in.</p>
           </div>
+
+          {apiError && (
+            <div className="bg-[#ea4335]/10 text-[#ea4335] border border-[#ea4335]/20 p-4 rounded-xl text-xs font-semibold flex items-start gap-2 mb-6 animate-fadeIn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="mt-0.5 flex-shrink-0"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+              <span>{apiError}</span>
+            </div>
+          )}
 
           <form className="space-y-6" onSubmit={handleSubmit} noValidate>
             {/* Email Field */}
@@ -303,7 +400,9 @@ export default function Login() {
             <div className="auth-item w-full">
               <button
                 type="button"
-                className="w-full flex items-center justify-center gap-2 bg-white hover:bg-black/5 border border-black/10 py-3.5 rounded-xl transition-all text-[13px] font-bold text-[#1c1c1e] shadow-sm hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+                onClick={() => loginWithGoogle()}
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-2 bg-white hover:bg-black/5 border border-black/10 py-3.5 rounded-xl transition-all text-[13px] font-bold text-[#1c1c1e] shadow-sm hover:scale-[1.01] active:scale-[0.99] cursor-pointer disabled:opacity-75 disabled:pointer-events-none"
               >
                 <div className="w-4 h-4 flex-shrink-0 bg-transparent rounded-sm flex items-center justify-center">
                   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
