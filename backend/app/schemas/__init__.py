@@ -7,6 +7,7 @@ from app.schemas.bot import (
     RoutingRuleBase, RoutingRuleCreate, RoutingRuleResponse,
     AIModelConfigBase, AIModelConfigCreate, AIModelConfigUpdate, AIModelConfigResponse
 )
+from app.schemas.document import KnowledgeSourceCreate, KnowledgeChunkResponse, KnowledgeSourceResponse, KnowledgeSourceDetailResponse
 
 __all__ = [
     "UserBase",
@@ -38,4 +39,8 @@ __all__ = [
     "AIModelConfigCreate",
     "AIModelConfigUpdate",
     "AIModelConfigResponse",
+    "KnowledgeSourceCreate",
+    "KnowledgeChunkResponse",
+    "KnowledgeSourceResponse",
+    "KnowledgeSourceDetailResponse",
 ]

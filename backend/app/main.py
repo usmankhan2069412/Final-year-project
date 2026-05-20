@@ -8,6 +8,7 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.users import router as users_router
 from app.api.v1.bots import router as bots_router
 from app.api.v1.models import router as models_router
+from app.api.v1.knowledge import router as knowledge_router
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -59,6 +60,7 @@ app.include_router(auth_router, prefix=f"{settings.API_V1_STR}/auth", tags=["aut
 app.include_router(users_router, prefix=f"{settings.API_V1_STR}/users", tags=["users"])
 app.include_router(bots_router, prefix=f"{settings.API_V1_STR}", tags=["bots"])
 app.include_router(models_router, prefix=f"{settings.API_V1_STR}/models", tags=["models"])
+app.include_router(knowledge_router, prefix=f"{settings.API_V1_STR}/knowledge", tags=["knowledge"])
 
 @app.get("/")
 def root():

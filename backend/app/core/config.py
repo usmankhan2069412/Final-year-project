@@ -23,6 +23,14 @@ class Settings(BaseSettings):
     SMTP_FROM: str = "onboarding@resend.dev"
     SMTP_FROM_NAME: str = "Aina Security"
     SEND_REAL_EMAILS: bool = False
+    # Document Processing & Vector DB Settings
+    UPLOAD_DIR: str = "data/uploads"
+    FAISS_DIR: str = "data/faiss"
+    EMBEDDING_MODEL: str = "Qwen/Qwen3-Embedding-0.6B"
+    EMBEDDING_DIM: int = 1024            # Qwen3-Embedding-0.6B output dimension
+    CHUNK_SIZE: int = 500                # Characters per chunk
+    CHUNK_OVERLAP: int = 50              # Overlap between chunks
+    MAX_UPLOAD_SIZE_MB: int = 50
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
 
