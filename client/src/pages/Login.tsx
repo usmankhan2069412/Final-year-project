@@ -3,11 +3,13 @@ import { useState, useRef } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import { useGoogleLogin } from '@react-oauth/google';
+import { useAuth } from "../contexts/AuthContext";
 
 gsap.registerPlugin(useGSAP);
 
 export default function Login() {
   const [, setLocation] = useLocation();
+  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -125,7 +127,7 @@ export default function Login() {
       }
 
       const data = await response.json();
-      localStorage.setItem("token", data.access_token);
+      login(data.access_token);
       setLocation("/dashboard");
     } catch (err: any) {
       setApiError(err.message || "Failed to connect to the backend server.");
@@ -171,7 +173,7 @@ export default function Login() {
         }
         
         const data = await response.json();
-        localStorage.setItem("token", data.access_token);
+        login(data.access_token);
         setLocation("/dashboard");
       } catch (err: any) {
         setApiError(err.message || "Failed to authenticate with Google.");

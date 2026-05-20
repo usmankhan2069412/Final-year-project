@@ -1,4 +1,12 @@
 from app.schemas.auth import UserBase, UserCreate, UserLogin, UserResponse, OrgResponse, Token, TokenPayload, UserMeResponse, ForgotPasswordRequest, ResetPasswordRequest
+from app.schemas.bot import (
+    PersonaTraitBase, PersonaTraitCreate, PersonaTraitResponse,
+    PersonaBase, PersonaCreate, PersonaUpdate, PersonaResponse,
+    ChatbotBase, ChatbotCreate, ChatbotUpdate, ChatbotResponse,
+    AIProviderResponse,
+    RoutingRuleBase, RoutingRuleCreate, RoutingRuleResponse,
+    AIModelConfigBase, AIModelConfigCreate, AIModelConfigUpdate, AIModelConfigResponse
+)
 
 __all__ = [
     "UserBase",
@@ -11,4 +19,23 @@ __all__ = [
     "UserMeResponse",
     "ForgotPasswordRequest",
     "ResetPasswordRequest",
+    "PersonaTraitBase",
+    "PersonaTraitCreate",
+    "PersonaTraitResponse",
+    "PersonaBase",
+    "PersonaCreate",
+    "PersonaUpdate",
+    "PersonaResponse",
+    "ChatbotBase",
+    "ChatbotCreate",
+    "ChatbotUpdate",
+    "ChatbotResponse",
+    "AIProviderResponse",
+    "RoutingRuleBase",
+    "RoutingRuleCreate",
+    "RoutingRuleResponse",
+    "AIModelConfigBase",
+    "AIModelConfigCreate",
+    "AIModelConfigUpdate",
+    "AIModelConfigResponse",
 ]

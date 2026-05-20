@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useTheme } from "../contexts/ThemeContext";
+import { useAuth } from "../contexts/AuthContext";
 
 type NavItem = {
   label: string;
@@ -24,6 +25,7 @@ interface SidebarProps {
 export default function Sidebar({ onNewBot, isOpen = false, onClose }: SidebarProps) {
   const [location, setLocation] = useLocation();
   const { isDark } = useTheme();
+  const { logout } = useAuth();
 
   // Desktop collapse state with persistence
   const [isCollapsed, setIsCollapsed] = useState(() => {
@@ -214,7 +216,7 @@ export default function Sidebar({ onNewBot, isOpen = false, onClose }: SidebarPr
         </a>
 
         <button
-          onClick={() => setLocation("/login")}
+          onClick={() => { logout(); setLocation("/login"); }}
           className={`flex items-center rounded-xl text-[13px] font-semibold text-white/60 hover:text-white hover:bg-white/5 transition-all w-full group relative ${
             isCollapsed ? "justify-center p-2.5" : "px-3.5 py-2"
           }`}
@@ -349,7 +351,7 @@ export default function Sidebar({ onNewBot, isOpen = false, onClose }: SidebarPr
               Help &amp; Support
             </a>
             <button
-              onClick={() => setLocation("/login")}
+              onClick={() => { logout(); setLocation("/login"); }}
               className="flex items-center gap-3 px-3.5 py-2 rounded-xl text-[13px] font-semibold text-white/60 hover:text-white hover:bg-white/5 transition-all w-full"
             >
               <span className="material-symbols-outlined text-[18px] text-white/40">logout</span>

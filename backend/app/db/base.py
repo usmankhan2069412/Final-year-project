@@ -3,3 +3,6 @@
 from app.db.session import Base  # noqa
 from app.models.user import User  # noqa
 from app.models.organization import Organization, OrgMember  # noqa
+from app.models.persona import Persona, PersonaTrait  # noqa
+from app.models.chatbot import Chatbot  # noqa
+from app.models.ai_model import AIProvider, AIModelConfig, RoutingRule  # noqa

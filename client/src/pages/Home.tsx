@@ -2,12 +2,14 @@ import { useRef } from "react";
 import { useLocation } from "wouter";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
+import { useAuth } from "../contexts/AuthContext";
 
 gsap.registerPlugin(useGSAP);
 gsap.config({ force3D: true }); // Enforce GPU hardware acceleration globally
 
 export default function Home() {
   const [, setLocation] = useLocation();
+  const { isAuthenticated } = useAuth();
   const container = useRef<HTMLDivElement>(null);
 
   useGSAP(() => {
@@ -63,19 +65,31 @@ export default function Home() {
           </div>
 
           <div className="flex gap-4 items-center">
-            <button 
-              onClick={() => setLocation("/login")} 
-              className="text-[#1c1c1e] hover:bg-black/5 px-4 py-2 rounded-full transition-colors text-sm font-semibold border border-black/20"
-            >
-              Log In
-            </button>
-            <button 
-              onClick={() => setLocation("/signup")} 
-              className="bg-[#EBDCFF] text-[#1c1c1e] hover:bg-[#d8bfff] px-5 py-2.5 rounded-full font-semibold text-sm transition-all border border-[#1c1c1e]/10 shadow-sm flex items-center gap-2"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>
-              Start Building
-            </button>
+            {isAuthenticated ? (
+              <button
+                onClick={() => setLocation("/dashboard")}
+                className="bg-[#EBDCFF] text-[#1c1c1e] hover:bg-[#d8bfff] px-5 py-2.5 rounded-full font-semibold text-sm transition-all border border-[#1c1c1e]/10 shadow-sm flex items-center gap-2"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                Dashboard
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => setLocation("/login")}
+                  className="text-[#1c1c1e] hover:bg-black/5 px-4 py-2 rounded-full transition-colors text-sm font-semibold border border-black/20"
+                >
+                  Log In
+                </button>
+                <button
+                  onClick={() => setLocation("/signup")}
+                  className="bg-[#EBDCFF] text-[#1c1c1e] hover:bg-[#d8bfff] px-5 py-2.5 rounded-full font-semibold text-sm transition-all border border-[#1c1c1e]/10 shadow-sm flex items-center gap-2"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>
+                  Start Building
+                </button>
+              </>
+            )}
           </div>
         </div>
       </nav>
