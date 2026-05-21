@@ -18,7 +18,7 @@ def get_current_user(
     token_credentials: HTTPAuthorizationCredentials = Depends(reusable_oauth2),
 ) -> User:
     """
-    Extract + decode the Bearer JWT and return the active User.
+    Extract + decode the JWT credentials and return the active User.
     Raises HTTP 401 for any invalid/expired token or missing user.
     """
     user_id_str = decode_access_token(token_credentials.credentials)

@@ -7,4 +7,5 @@ from app.models.persona import Persona, PersonaTrait  # noqa
 from app.models.chatbot import Chatbot  # noqa
 from app.models.ai_model import AIProvider, AIModelConfig, RoutingRule  # noqa
 from app.models.document import KnowledgeSource, Document, KnowledgeChunk  # noqa
+from app.models.conversation import Deployment, Conversation, Message  # noqa
 
