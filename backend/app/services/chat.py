@@ -353,7 +353,7 @@ class ChatService:
 
     @classmethod
     def get_rag_response(
-        cls, db: Session, org_id: uuid.UUID, chatbot_id: uuid.UUID, user_message: str, conversation_id: Optional[uuid.UUID] = None
+        cls, db: Session, org_id: uuid.UUID, chatbot_id: uuid.UUID, user_message: str, conversation_id: Optional[uuid.UUID] = None, deployment_id: Optional[uuid.UUID] = None
     ) -> Dict[str, Any]:
         
         # 1. Fetch resources
@@ -397,7 +397,7 @@ class ChatService:
             if not conversation:
                 raise ValueError("Conversation session not found")
         else:
-            conversation = Conversation(chatbot_id=chatbot_id, status=ConversationStatus.ONGOING)
+            conversation = Conversation(chatbot_id=chatbot_id, status=ConversationStatus.ONGOING, deployment_id=deployment_id)
             db.add(conversation)
             db.flush()
             is_new_conv = True

@@ -64,6 +64,13 @@ app.include_router(models_router, prefix=f"{settings.API_V1_STR}/models", tags=[
 app.include_router(knowledge_router, prefix=f"{settings.API_V1_STR}/knowledge", tags=["knowledge"])
 app.include_router(messaging_router, prefix=f"{settings.API_V1_STR}/chat", tags=["chat"])
 
+from app.api.v1.channels import router as channels_router
+from app.api.v1.deployments import router as deployments_router
+
+app.include_router(channels_router, prefix=f"{settings.API_V1_STR}/channels", tags=["channels"])
+app.include_router(deployments_router, prefix=f"{settings.API_V1_STR}/deployments", tags=["deployments"])
+
+
 @app.get("/")
 def root():
     return {"message": "Welcome to Aina AI Platform API"}

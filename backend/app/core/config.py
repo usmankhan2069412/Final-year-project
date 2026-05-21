@@ -23,6 +23,13 @@ class Settings(BaseSettings):
     SMTP_FROM: str = "onboarding@resend.dev"
     SMTP_FROM_NAME: str = "Aina Security"
     SEND_REAL_EMAILS: bool = False
+
+    # WhatsApp Cloud API Settings
+    WHATSAPP_VERIFY_TOKEN: str = ""
+    WHATSAPP_ACCESS_TOKEN: str = ""
+    WHATSAPP_APP_SECRET: str = ""
+    WHATSAPP_API_VERSION: str = "v21.0"
+
     # Document Processing & Vector DB Settings
     UPLOAD_DIR: str = "data/uploads"
     FAISS_DIR: str = "data/faiss"

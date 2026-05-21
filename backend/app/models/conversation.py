@@ -1,7 +1,7 @@
 import uuid
 from enum import Enum as PyEnum
 from datetime import datetime
-from sqlalchemy import Column, String, Text, DateTime, Enum, ForeignKey, Index
+from sqlalchemy import Column, String, Text, DateTime, Enum, ForeignKey, Index, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.db.session import Base
@@ -33,6 +33,10 @@ class Deployment(Base):
         nullable=False,
         default=Channel.WEB
     )
+    whatsapp_phone_number_id = Column(String(50), nullable=True)  # Meta phone number ID
+    whatsapp_business_account_id = Column(String(50), nullable=True)  # WABA ID
+    is_active = Column(Boolean, nullable=False, default=False)
+    webhook_verified_at = Column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     chatbot = relationship("Chatbot")
@@ -50,6 +54,7 @@ class Conversation(Base):
         nullable=False,
         default=ConversationStatus.ONGOING
     )
+    sender_phone = Column(String(20), nullable=True)  # WhatsApp sender phone number
     started_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
 
@@ -79,3 +84,13 @@ class Message(Base):
     # Relationships
     conversation = relationship("Conversation")
     config = relationship("AIModelConfig")
+
+
+class ProcessedEvent(Base):
+    __tablename__ = "processed_events"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    event_id = Column(String(255), nullable=False, unique=True)
+    event_type = Column(String(80), nullable=False)
+    processed_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+
