@@ -1,41 +1,94 @@
+import { useEffect, useState } from "react";
 import { useTheme } from "../../../contexts/ThemeContext";
+
+interface KPIData {
+  value: number;
+  change_pct: number;
+}
+
+interface KPIResponseData {
+  total_conversations: KPIData;
+  avg_response_time: KPIData;
+  satisfaction_score: KPIData;
+  workload_reduction: KPIData;
+}
 
 export default function KPIs() {
   const { isDark } = useTheme();
   const c = (light: string, dark: string) => (isDark ? dark : light);
+  const [data, setData] = useState<KPIResponseData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchKPIs() {
+      try {
+        const token = localStorage.getItem("token");
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+        const response = await fetch("http://localhost:8000/api/v1/analytics/kpi", {
+          headers,
+        });
+        if (response.ok) {
+          const json = await response.json();
+          setData(json);
+        }
+      } catch (err) {
+        console.error("Error fetching KPIs:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchKPIs();
+  }, []);
+
+  const formatConversations = (val: number) => {
+    if (val >= 1000) {
+      return { value: (val / 1000).toFixed(1), unit: "k" };
+    }
+    return { value: val.toString(), unit: "" };
+  };
+
+  const getDelta = (pct: number, fallback: string) => {
+    if (pct === 0) return fallback;
+    return `${pct >= 0 ? "+" : ""}${pct.toFixed(0)}%`;
+  };
 
   const kpis = [
     {
       label: "Total Conversations",
-      value: "42.8",
-      unit: "k",
-      delta: "+12%",
+      value: data ? formatConversations(data.total_conversations.value).value : "...",
+      unit: data ? formatConversations(data.total_conversations.value).unit : "",
+      delta: data ? getDelta(data.total_conversations.change_pct, "+0%") : "...",
       icon: "forum",
-      bar: 60,
+      bar: data ? Math.min(100, Math.max(10, Math.round(50 + data.total_conversations.change_pct))) : 50,
     },
     {
       label: "Avg. Response Time",
-      value: "1.4",
+      value: data ? data.avg_response_time.value.toFixed(1) : "...",
       unit: "s",
-      delta: "-0.2s",
+      delta: data ? getDelta(data.avg_response_time.change_pct, "0%") : "...",
       icon: "timer",
-      bar: 40,
+      bar: data ? Math.max(10, Math.min(100, Math.round(100 - (data.avg_response_time.value * 20)))) : 40,
     },
     {
       label: "User Satisfaction",
-      value: "88",
-      unit: "%",
-      delta: "Optimal",
+      value: data ? data.satisfaction_score.value.toFixed(1) : "...",
+      unit: "/5",
+      delta: data ? getDelta(data.satisfaction_score.change_pct, "Optimal") : "...",
       icon: "sentiment_satisfied",
-      bar: 88,
+      bar: data ? Math.round((data.satisfaction_score.value / 5) * 100) : 80,
     },
     {
       label: "Workload Reduction",
-      value: "70",
+      value: data ? data.workload_reduction.value.toFixed(0) : "...",
       unit: "%",
-      delta: "Target",
+      delta: data ? getDelta(data.workload_reduction.change_pct, "Target") : "...",
       icon: "bolt",
-      bar: 70,
+      bar: data ? Math.round(data.workload_reduction.value) : 70,
     },
   ];
 

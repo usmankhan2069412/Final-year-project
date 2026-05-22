@@ -16,6 +16,7 @@ import Builder from "./pages/Builder";
 import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
 import Models from "./pages/Models";
+import Inbox from "./pages/Inbox";
 
 function Router() {
   return (
@@ -30,6 +31,9 @@ function Router() {
       {/* Protected routes */}
       <Route path={"/dashboard"}>
         <ProtectedRoute><Dashboard /></ProtectedRoute>
+      </Route>
+      <Route path={"/inbox"}>
+        <ProtectedRoute><Inbox /></ProtectedRoute>
       </Route>
       <Route path={"/builder"}>
         <ProtectedRoute><Builder /></ProtectedRoute>

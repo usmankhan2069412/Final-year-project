@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     CHUNK_OVERLAP: int = 50              # Overlap between chunks
     MAX_UPLOAD_SIZE_MB: int = 50
 
+    # PubSub / SSE scaling settings
+    REDIS_URL: str = ""
+    PUB_SUB_BACKEND: str = "in_memory"
+
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
 
 settings = Settings()

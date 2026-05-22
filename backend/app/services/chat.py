@@ -396,11 +396,31 @@ class ChatService:
             ).first()
             if not conversation:
                 raise ValueError("Conversation session not found")
+            
+            # If resolved, auto-resume bot
+            if conversation.status == ConversationStatus.RESOLVED:
+                conversation.status = ConversationStatus.ONGOING
+                conversation.assigned_agent_id = None
+                db.add(conversation)
+                db.flush()
         else:
             conversation = Conversation(chatbot_id=chatbot_id, status=ConversationStatus.ONGOING, deployment_id=deployment_id)
             db.add(conversation)
             db.flush()
             is_new_conv = True
+
+        # If already escalated, bypass RAG execution
+        if conversation.status == ConversationStatus.ESCALATED:
+            from app.services.escalation_router import EscalationRouter
+            return EscalationRouter.handle_escalated_message(
+                db=db,
+                conversation=conversation,
+                chatbot=chatbot,
+                org_id=org_id,
+                user_message=user_message,
+                language=persona.language,
+                active_config_id=active_config.id if active_config else None
+            )
 
         start_date = conversation.started_at
         end_date = datetime.now(timezone.utc)
@@ -425,6 +445,21 @@ class ChatService:
         response_text = final_state.get("response", "An error occurred during generation.")
         new_status = final_state.get("status", conversation.status)
         sources = final_state.get("sources", [])
+
+        if new_status == ConversationStatus.ESCALATED:
+            from app.services.escalation_router import EscalationRouter
+            return EscalationRouter.escalate(
+                db=db,
+                conversation=conversation,
+                chatbot=chatbot,
+                org_id=org_id,
+                user_message=user_message,
+                response_text=response_text,
+                language=persona.language,
+                is_new_conv=is_new_conv,
+                active_config_id=active_config.id if active_config else None,
+                sources=sources
+            )
 
         if new_status != conversation.status:
             conversation.status = new_status

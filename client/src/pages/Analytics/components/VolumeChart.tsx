@@ -1,8 +1,97 @@
+import { useEffect, useState } from "react";
 import { useTheme } from "../../../contexts/ThemeContext";
+
+interface VolumeItem {
+  date: string;
+  conversations: number;
+  messages: number;
+}
 
 export default function VolumeChart() {
   const { isDark } = useTheme();
   const c = (light: string, dark: string) => (isDark ? dark : light);
+  const [days, setDays] = useState(30);
+  const [data, setData] = useState<VolumeItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchVolume() {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem("token");
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+        const response = await fetch(`http://localhost:8000/api/v1/analytics/volume?days=${days}`, {
+          headers,
+        });
+        if (response.ok) {
+          const json = await response.json();
+          setData(json);
+        }
+      } catch (err) {
+        console.error("Error fetching volume data:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchVolume();
+  }, [days]);
+
+  // Compute SVG path coordinates
+  const width = 1000;
+  const height = 200;
+  const paddingY = 20;
+  const chartHeight = height - paddingY * 2;
+
+  const maxVal = data.length > 0 ? Math.max(...data.map((d) => d.conversations), 10) : 10;
+  const points = data.map((d, i) => {
+    const x = data.length > 1 ? (i / (data.length - 1)) * width : 0;
+    const y = height - paddingY - (d.conversations / maxVal) * chartHeight;
+    return { x, y };
+  });
+
+  const linePath = points.length > 0
+    ? points.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")
+    : "";
+  const areaPath = points.length > 0 ? `${linePath} L${width},${height} L0,${height} Z` : "";
+
+  // Handover proxy path (15% of conversations)
+  const handoverPoints = data.map((d, i) => {
+    const x = data.length > 1 ? (i / (data.length - 1)) * width : 0;
+    const handoverVal = d.conversations * 0.15;
+    const y = height - paddingY - (handoverVal / maxVal) * chartHeight;
+    return { x, y };
+  });
+  const handoverLinePath = handoverPoints.length > 0
+    ? handoverPoints.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")
+    : "";
+
+  // Dynamic Y-axis labels
+  const formatYLabel = (val: number) => {
+    if (val >= 1000) return `${(val / 1000).toFixed(1)}k`;
+    return val.toString();
+  };
+  const yLabels = [maxVal, maxVal * 0.75, maxVal * 0.5, maxVal * 0.25, 0].map(formatYLabel);
+
+  // Dynamic X-axis labels (5 ticks)
+  const getXTicks = () => {
+    if (data.length === 0) return [];
+    const ticks = [];
+    const step = Math.max(1, Math.floor(data.length / 4));
+    for (let i = 0; i < data.length; i += step) {
+      ticks.push(data[i]);
+    }
+    if (ticks[ticks.length - 1] !== data[data.length - 1]) {
+      ticks[ticks.length - 1] = data[data.length - 1];
+    }
+    return ticks.slice(0, 5); // Ensure exactly 5 ticks
+  };
+
+  const xTicks = getXTicks();
 
   return (
     <div
@@ -52,24 +141,26 @@ export default function VolumeChart() {
             </span>
           </div>
           <select
+            value={days}
+            onChange={(e) => setDays(Number(e.target.value))}
             className={`border rounded-xl px-4 py-2.5 text-[13px] font-medium outline-none shadow-sm cursor-pointer transition-[border-color,box-shadow] duration-200 focus-visible:ring-1 w-full sm:w-auto ${
               isDark
                 ? "bg-[#131317] border-white/[0.06] text-white/80 focus-visible:ring-[#EBDCFF] focus-visible:border-transparent"
                 : "bg-[#F5F5F7] border-black/5 text-[#1c1c1e]/80 focus-visible:ring-black/20 focus:border-black/20"
             }`}
           >
-            <option>Last 30 Days</option>
-            <option>Last 7 Days</option>
-            <option>Last 90 Days</option>
+            <option value={30}>Last 30 Days</option>
+            <option value={7}>Last 7 Days</option>
+            <option value={90}>Last 90 Days</option>
           </select>
         </div>
       </div>
 
-      {/* Mock Chart */}
+      {/* SVG Chart */}
       <div className="relative w-full h-48 sm:h-64">
         <div className="absolute inset-0 flex flex-col justify-between pb-0">
-          {["2k", "1.5k", "1k", "0.5k", "0"].map((v) => (
-            <div key={v} className="flex items-center gap-4">
+          {yLabels.map((v, i) => (
+            <div key={i} className="flex items-center gap-4">
               <span
                 className={`text-[11px] font-medium w-8 text-right ${
                   c("text-[#1c1c1e]/40", "text-white/30")
@@ -82,70 +173,56 @@ export default function VolumeChart() {
           ))}
         </div>
         <div className="absolute inset-0 pl-10 sm:pl-12">
-          <svg
-            className="w-full h-full"
-            preserveAspectRatio="none"
-            viewBox="0 0 1000 200"
-          >
-            <defs>
-              <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={isDark ? "#EBDCFF" : "#1c1c1e"} stopOpacity="0.15" />
-                <stop offset="100%" stopColor={isDark ? "#EBDCFF" : "#1c1c1e"} stopOpacity="0" />
-              </linearGradient>
-            </defs>
-            {/* Area fill */}
-            <path
-              d="M0,160 C200,130 400,80 600,80 C700,80 800,110 900,80 L1000,40 L1000,200 L0,200 Z"
-              fill="url(#areaGrad)"
-            />
-            {/* Line */}
-            <path
-              d="M0,160 C200,130 400,80 600,80 C700,80 800,110 900,80 L1000,40"
-              fill="none"
-              stroke={isDark ? "#EBDCFF" : "#1c1c1e"}
-              strokeWidth="3"
-              strokeLinecap="round"
-              vectorEffect="non-scaling-stroke"
-            />
-            {/* Handovers line */}
-            <path
-              d="M0,180 C300,160 400,190 1000,140"
-              fill="none"
-              stroke={isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.2)"}
-              strokeWidth="2.5"
-              strokeDasharray="8,6"
-              vectorEffect="non-scaling-stroke"
-            />
-            {/* Peak dot ambient glow */}
-            <circle
-              cx="800"
-              cy="110"
-              r="8"
-              fill={isDark ? "#EBDCFF" : "#1c1c1e"}
-              opacity="0.3"
-              vectorEffect="non-scaling-stroke"
-            />
-            {/* Peak dot solid inner */}
-            <circle
-              cx="800"
-              cy="110"
-              r="4.5"
-              fill={isDark ? "#EBDCFF" : "#1c1c1e"}
-              vectorEffect="non-scaling-stroke"
-            />
-          </svg>
+          {data.length > 0 && (
+            <svg
+              className="w-full h-full"
+              preserveAspectRatio="none"
+              viewBox={`0 0 ${width} ${height}`}
+            >
+              <defs>
+                <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={isDark ? "#EBDCFF" : "#1c1c1e"} stopOpacity="0.15" />
+                  <stop offset="100%" stopColor={isDark ? "#EBDCFF" : "#1c1c1e"} stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              {/* Area fill */}
+              {areaPath && <path d={areaPath} fill="url(#areaGrad)" />}
+              {/* Line */}
+              {linePath && (
+                <path
+                  d={linePath}
+                  fill="none"
+                  stroke={isDark ? "#EBDCFF" : "#1c1c1e"}
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  vectorEffect="non-scaling-stroke"
+                />
+              )}
+              {/* Handovers line */}
+              {handoverLinePath && (
+                <path
+                  d={handoverLinePath}
+                  fill="none"
+                  stroke={isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.2)"}
+                  strokeWidth="2.5"
+                  strokeDasharray="8,6"
+                  vectorEffect="non-scaling-stroke"
+                />
+              )}
+            </svg>
+          )}
         </div>
       </div>
 
       <div className="flex justify-between mt-5 pl-10 sm:pl-12">
-        {["Jan 1", "Jan 8", "Jan 15", "Jan 22", "Jan 29"].map((d) => (
+        {xTicks.map((d, i) => (
           <span
-            key={d}
+            key={i}
             className={`text-[11px] font-medium ${
               c("text-[#1c1c1e]/40", "text-white/30")
             }`}
           >
-            {d}
+            {new Date(d.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
           </span>
         ))}
       </div>

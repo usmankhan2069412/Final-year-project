@@ -64,6 +64,12 @@ app.include_router(models_router, prefix=f"{settings.API_V1_STR}/models", tags=[
 app.include_router(knowledge_router, prefix=f"{settings.API_V1_STR}/knowledge", tags=["knowledge"])
 app.include_router(messaging_router, prefix=f"{settings.API_V1_STR}/chat", tags=["chat"])
 
+from app.api.v1.analytics import router as analytics_router
+from app.api.v1.agents import router as agents_router
+
+app.include_router(analytics_router, prefix=f"{settings.API_V1_STR}/analytics", tags=["analytics"])
+app.include_router(agents_router, prefix=f"{settings.API_V1_STR}/agents", tags=["agents"])
+
 from app.api.v1.channels import router as channels_router
 from app.api.v1.deployments import router as deployments_router
 from app.api.v1.billing import router as billing_router
@@ -75,6 +81,17 @@ app.include_router(deployments_router, prefix=f"{settings.API_V1_STR}/deployment
 app.include_router(billing_router, prefix=f"{settings.API_V1_STR}")
 app.include_router(team_router, prefix=f"{settings.API_V1_STR}")
 app.include_router(api_keys_router, prefix=f"{settings.API_V1_STR}")
+
+from apscheduler.schedulers.background import BackgroundScheduler
+from app.tasks.analytics_aggregation import run_nightly_aggregation
+
+@app.on_event("startup")
+def start_scheduler():
+    scheduler = BackgroundScheduler()
+    # Run daily aggregation at 12:05 AM (00:05) every day
+    scheduler.add_job(run_nightly_aggregation, "cron", hour=0, minute=5)
+    scheduler.start()
+    logger.info("APScheduler initialized and started nightly aggregation task.")
 
 
 @app.get("/")

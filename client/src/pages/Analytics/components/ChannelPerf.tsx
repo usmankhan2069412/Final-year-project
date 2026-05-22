@@ -1,8 +1,57 @@
+import { useEffect, useState } from "react";
 import { useTheme } from "../../../contexts/ThemeContext";
+
+interface ChannelItem {
+  channel: string;
+  count: number;
+}
 
 export default function ChannelPerf() {
   const { isDark } = useTheme();
   const c = (light: string, dark: string) => (isDark ? dark : light);
+  const [data, setData] = useState<ChannelItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchChannels() {
+      try {
+        const token = localStorage.getItem("token");
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+        const response = await fetch("http://localhost:8000/api/v1/analytics/channels", {
+          headers,
+        });
+        if (response.ok) {
+          const json = await response.json();
+          setData(json);
+        }
+      } catch (err) {
+        console.error("Error fetching channels:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchChannels();
+  }, []);
+
+  const totalCount = data.reduce((sum, item) => sum + item.count, 0);
+
+  const channels = data.map((item) => {
+    const isWhatsApp = item.channel.toLowerCase().includes("whatsapp");
+    const pct = totalCount > 0 ? Math.round((item.count / totalCount) * 100) : 0;
+    return {
+      name: isWhatsApp ? "WhatsApp" : item.channel,
+      icon: isWhatsApp ? "chat" : "language",
+      pct,
+      color: isWhatsApp
+        ? (isDark ? "#EBDCFF" : "#1c1c1e")
+        : (isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.2)"),
+    };
+  });
 
   return (
     <div
@@ -32,49 +81,56 @@ export default function ChannelPerf() {
         </span>
       </div>
       <div className="space-y-6">
-        {[
-          { name: "WhatsApp", icon: "chat", pct: 78, color: isDark ? "#EBDCFF" : "#1c1c1e" },
-          { name: "Web Portal", icon: "language", pct: 22, color: isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.2)" },
-        ].map((ch) => (
-          <div key={ch.name}>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-3">
+        {loading ? (
+          <div className={`text-center py-4 text-[14px] ${c("text-[#1c1c1e]/50", "text-white/40")}`}>
+            Loading...
+          </div>
+        ) : channels.length === 0 ? (
+          <div className={`text-center py-4 text-[14px] ${c("text-[#1c1c1e]/50", "text-white/40")}`}>
+            No channel data available
+          </div>
+        ) : (
+          channels.map((ch) => (
+            <div key={ch.name}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-3">
+                  <span
+                    className={`material-symbols-outlined text-[18px] ${
+                      c("text-[#1c1c1e]/50", "text-[#85948b]")
+                    }`}
+                    aria-hidden="true"
+                  >
+                    {ch.icon}
+                  </span>
+                  <span
+                    className={`text-[14px] font-bold ${
+                      c("text-[#1c1c1e]", "text-white")
+                    }`}
+                  >
+                    {ch.name}
+                  </span>
+                </div>
                 <span
-                  className={`material-symbols-outlined text-[18px] ${
-                    c("text-[#1c1c1e]/50", "text-[#85948b]")
-                  }`}
-                  aria-hidden="true"
-                >
-                  {ch.icon}
-                </span>
-                <span
-                  className={`text-[14px] font-bold ${
+                  className={`text-[13px] font-bold ${
                     c("text-[#1c1c1e]", "text-white")
                   }`}
                 >
-                  {ch.name}
+                  {ch.pct}%
                 </span>
               </div>
-              <span
-                className={`text-[13px] font-bold ${
-                  c("text-[#1c1c1e]", "text-white")
+              <div
+                className={`w-full h-1.5 rounded-full overflow-hidden ${
+                  c("bg-black/5", "bg-[#131317]")
                 }`}
               >
-                {ch.pct}%
-              </span>
+                <div
+                  className="h-full rounded-full"
+                  style={{ width: `${ch.pct}%`, backgroundColor: ch.color }}
+                ></div>
+              </div>
             </div>
-            <div
-              className={`w-full h-1.5 rounded-full overflow-hidden ${
-                c("bg-black/5", "bg-[#131317]")
-              }`}
-            >
-              <div
-                className="h-full rounded-full"
-                style={{ width: `${ch.pct}%`, backgroundColor: ch.color }}
-              ></div>
-            </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
     </div>
   );
