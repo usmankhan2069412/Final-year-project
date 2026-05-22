@@ -8,6 +8,9 @@ from app.schemas.bot import (
     AIModelConfigBase, AIModelConfigCreate, AIModelConfigUpdate, AIModelConfigResponse
 )
 from app.schemas.document import KnowledgeSourceCreate, KnowledgeChunkResponse, KnowledgeSourceResponse, KnowledgeSourceDetailResponse
+from app.schemas.billing import SubscriptionPlanResponse, SubscriptionUsage, SubscriptionResponse, SubscribeRequest, BillingHistoryItem
+from app.schemas.team import TeamMemberResponse, InviteMemberRequest, UpdateRoleRequest
+from app.schemas.api_key import ApiKeyResponse, ApiKeyCreateRequest, ApiKeyCreateResponse
 
 __all__ = [
     "UserBase",
@@ -43,4 +46,15 @@ __all__ = [
     "KnowledgeChunkResponse",
     "KnowledgeSourceResponse",
     "KnowledgeSourceDetailResponse",
+    "SubscriptionPlanResponse",
+    "SubscriptionUsage",
+    "SubscriptionResponse",
+    "SubscribeRequest",
+    "BillingHistoryItem",
+    "TeamMemberResponse",
+    "InviteMemberRequest",
+    "UpdateRoleRequest",
+    "ApiKeyResponse",
+    "ApiKeyCreateRequest",
+    "ApiKeyCreateResponse",
 ]

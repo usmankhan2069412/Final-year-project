@@ -1,6 +1,8 @@
 from app.models.user import User, AuthProvider
 from app.models.organization import Organization, OrgMember, OrgRole
 from app.models.document import KnowledgeSource, Document, KnowledgeChunk, SourceType, SourceStatus, FileType, ChunkStatus
+from app.models.subscription import SubscriptionPlan, Subscription
+from app.models.api_key import ApiKey
 
 __all__ = [
     "User",
@@ -15,4 +17,7 @@ __all__ = [
     "SourceStatus",
     "FileType",
     "ChunkStatus",
+    "SubscriptionPlan",
+    "Subscription",
+    "ApiKey",
 ]

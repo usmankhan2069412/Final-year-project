@@ -1,10 +1,12 @@
 import re
 import logging
 from typing import Optional
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 import httpx
 from app.models.user import User, AuthProvider
 from app.models.organization import Organization, OrgMember, OrgRole
+from app.models.subscription import SubscriptionPlan, Subscription
 from app.schemas.auth import UserCreate
 from app.core.security import get_password_hash, verify_password, create_reset_token, verify_reset_token
 from app.core.config import settings
@@ -62,6 +64,20 @@ class AuthService:
         db.flush()
 
         db.add(OrgMember(org_id=db_org.id, user_id=db_user.id, role=OrgRole.OWNER))
+
+        # Auto-assign Starter plan
+        starter_plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.name == "Starter").first()
+        if starter_plan:
+            subscription = Subscription(
+                org_id=db_org.id,
+                plan_id=starter_plan.id,
+                status="active",
+                period_start=datetime.now(timezone.utc),
+                period_end=datetime.now(timezone.utc) + timedelta(days=30),
+            )
+            db.add(subscription)
+        else:
+            logger.warning("Starter plan not found in database; subscription auto-assignment skipped.")
 
         db.commit()
         db.refresh(db_user)
@@ -199,6 +215,20 @@ class AuthService:
             db.flush()
 
             db.add(OrgMember(org_id=db_org.id, user_id=db_user.id, role=OrgRole.OWNER))
+
+            # Auto-assign Starter plan
+            starter_plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.name == "Starter").first()
+            if starter_plan:
+                subscription = Subscription(
+                    org_id=db_org.id,
+                    plan_id=starter_plan.id,
+                    status="active",
+                    period_start=datetime.now(timezone.utc),
+                    period_end=datetime.now(timezone.utc) + timedelta(days=30),
+                )
+                db.add(subscription)
+            else:
+                logger.warning("Starter plan not found in database; subscription auto-assignment skipped.")
 
             db.commit()
             db.refresh(db_user)

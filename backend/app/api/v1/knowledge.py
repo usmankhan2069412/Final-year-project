@@ -1,41 +1,24 @@
 import uuid
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, BackgroundTasks
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_tenant_db
+from app.api.deps import get_tenant_db, get_current_org_id
 from app.services.document import KnowledgeService
 from app.schemas.document import KnowledgeSourceCreate, KnowledgeSourceResponse, KnowledgeSourceDetailResponse
-from app.models.document import KnowledgeSource, SourceType, SourceStatus
+from app.models.document import KnowledgeSource, SourceType
 
 router = APIRouter()
-
-def _get_org_id(db: Session) -> uuid.UUID:
-    """Helper to retrieve the resolved organization ID from the db session context."""
-    org_id_str = db.execute(text("SELECT current_setting('app.current_org_id', true)")).scalar()
-    if not org_id_str:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Organization context is missing."
-        )
-    try:
-        return uuid.UUID(org_id_str)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid organization ID format in tenant context."
-        )
 
 @router.post("/upload", response_model=KnowledgeSourceResponse, status_code=status.HTTP_201_CREATED)
 def upload_file(
     chatbot_id: uuid.UUID,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    db: Session = Depends(get_tenant_db)
+    db: Session = Depends(get_tenant_db),
+    org_id: uuid.UUID = Depends(get_current_org_id)
 ):
     """Upload a file as a knowledge source (PDF, DOCX, TXT, CSV) and trigger background embedding."""
-    org_id = _get_org_id(db)
     try:
         source = KnowledgeService.upload_file(db=db, org_id=org_id, chatbot_id=chatbot_id, file=file)
         background_tasks.add_task(KnowledgeService.process_source_background, source.id)
@@ -47,11 +30,10 @@ def upload_file(
 def create_knowledge_source(
     source_in: KnowledgeSourceCreate,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_tenant_db)
+    db: Session = Depends(get_tenant_db),
+    org_id: uuid.UUID = Depends(get_current_org_id)
 ):
     """Create a text, website, phone, email, or app knowledge source."""
-    org_id = _get_org_id(db)
-    
     if source_in.source_type == SourceType.FILE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -95,10 +77,10 @@ def create_knowledge_source(
 @router.get("/chatbots/{chatbot_id}", response_model=List[KnowledgeSourceResponse])
 def list_knowledge_sources(
     chatbot_id: uuid.UUID,
-    db: Session = Depends(get_tenant_db)
+    db: Session = Depends(get_tenant_db),
+    org_id: uuid.UUID = Depends(get_current_org_id)
 ):
     """List all knowledge sources for a chatbot."""
-    org_id = _get_org_id(db)
     sources = db.query(KnowledgeSource).filter(
         KnowledgeSource.chatbot_id == chatbot_id,
         KnowledgeSource.org_id == org_id
@@ -108,10 +90,10 @@ def list_knowledge_sources(
 @router.get("/{source_id}", response_model=KnowledgeSourceDetailResponse)
 def get_knowledge_source(
     source_id: uuid.UUID,
-    db: Session = Depends(get_tenant_db)
+    db: Session = Depends(get_tenant_db),
+    org_id: uuid.UUID = Depends(get_current_org_id)
 ):
     """Retrieve details and chunks of a knowledge source."""
-    org_id = _get_org_id(db)
     source = db.query(KnowledgeSource).filter(
         KnowledgeSource.id == source_id,
         KnowledgeSource.org_id == org_id
@@ -123,10 +105,10 @@ def get_knowledge_source(
 @router.delete("/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_knowledge_source(
     source_id: uuid.UUID,
-    db: Session = Depends(get_tenant_db)
+    db: Session = Depends(get_tenant_db),
+    org_id: uuid.UUID = Depends(get_current_org_id)
 ):
     """Delete a knowledge source and clean up files/vectors."""
-    org_id = _get_org_id(db)
     success = KnowledgeService.delete_source(db=db, org_id=org_id, source_id=source_id)
     if not success:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Knowledge source not found")

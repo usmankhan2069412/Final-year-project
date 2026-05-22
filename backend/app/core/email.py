@@ -36,3 +36,17 @@ async def send_reset_password_email(email_to: str, reset_link: str):
     fm = FastMail(mail_config)
     # Sends email using a Jinja2 template file: "reset_password.html"
     await fm.send_message(message, template_name="reset_password.html")
+
+async def send_invite_email(email_to: str, invite_link: str):
+    """Sends a premium styled HTML team invitation email asynchronously."""
+    message = MessageSchema(
+        subject="Invitation to join Aina Platform team",
+        recipients=[email_to],
+        template_body={
+            "invite_link": invite_link
+        },
+        subtype=MessageType.html
+    )
+    
+    fm = FastMail(mail_config)
+    await fm.send_message(message, template_name="invite_member.html")
