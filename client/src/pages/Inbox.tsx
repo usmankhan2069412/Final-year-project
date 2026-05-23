@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import Sidebar from "../components/Sidebar";
-import TopBar from "../components/TopBar";
 import { useTheme } from "../contexts/ThemeContext";
+import { useLayoutConfig } from "../contexts/LayoutContext";
 
 interface Message {
   id: string;
@@ -30,7 +29,7 @@ const CANNED_RESPONSES = [
 
 export default function Inbox() {
   const { isDark } = useTheme();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  useLayoutConfig({ title: "Escalated Chats", searchPlaceholder: "Search active live chat sessions..." });
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filterAssigned, setFilterAssigned] = useState(false);
@@ -349,28 +348,7 @@ export default function Inbox() {
   );
 
   return (
-    <div
-      className={`min-h-screen flex font-sans selection:bg-[#EBDCFF] selection:text-[#1c1c1e] transition-colors duration-300 ${
-        isDark ? "bg-[#131317] text-[#e4e1e7]" : "bg-[#F5F5F7] text-[#1c1c1e]"
-      }`}
-    >
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative h-screen">
-        {/* Ambient glow decoration */}
-        <div
-          className={`absolute top-0 right-0 w-[400px] h-[400px] rounded-full blur-3xl pointer-events-none transition-opacity duration-500 ${
-            isDark ? "bg-[#EBDCFF] opacity-5 mix-blend-screen" : "bg-[#EBDCFF] opacity-20 mix-blend-multiply"
-          }`}
-        />
-
-        <TopBar
-          searchPlaceholder="Search active live chat sessions..."
-          onMenuToggle={() => setSidebarOpen((v) => !v)}
-        />
-
-        {/* ── Main Inbox Interface ── */}
-        <div className="flex-1 flex overflow-hidden relative z-10">
+    <div className="flex-1 flex overflow-hidden relative z-10">
           
           {/* ── Left Column: Conversations Sidebar ── */}
           <div
@@ -766,8 +744,6 @@ export default function Inbox() {
             </div>
           )}
 
-        </div>
-      </div>
     </div>
   );
 }

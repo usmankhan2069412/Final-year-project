@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTheme } from "../contexts/ThemeContext";
-import Sidebar from "../components/Sidebar";
-import TopBar from "../components/TopBar";
+import { useLayoutConfig } from "../contexts/LayoutContext";
 import { toast } from "sonner";
 
 interface AIProvider {
@@ -53,7 +52,6 @@ const POPULAR_INTENTS = [
 
 export default function Models() {
   const { isDark } = useTheme();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Data states
@@ -295,43 +293,28 @@ export default function Models() {
     }))
   );
 
+  useLayoutConfig({
+    title: "Production Environment",
+    actions: (
+      <button
+        onClick={handleOpenAddModal}
+        className={`px-4 py-2 rounded-xl border transition-[color,background-color,border-color,box-shadow] duration-200 text-[13px] font-bold flex items-center gap-1.5 shadow-sm focus-visible:ring-2 outline-none cursor-pointer ${
+          isDark
+            ? "bg-[#EBDCFF]/10 border-[#EBDCFF]/20 text-[#EBDCFF] hover:bg-[#EBDCFF]/20 focus-visible:ring-[#EBDCFF]/20"
+            : "bg-[#1c1c1e] border-[#1c1c1e] text-[#F5F5F7] hover:bg-black focus-visible:ring-black/20"
+        }`}
+      >
+        <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+          add
+        </span>
+        <span className="hidden sm:inline">Add Provider</span>
+      </button>
+    )
+  });
+
   return (
-    <div
-      className={`min-h-screen flex font-sans selection:bg-[#EBDCFF] selection:text-[#1c1c1e] transition-colors duration-300 ${
-        isDark ? "bg-[#131317] text-[#e4e1e7]" : "bg-[#F5F5F7] text-[#1c1c1e]"
-      }`}
-    >
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-        <div
-          className={`absolute top-0 right-0 w-[500px] h-[500px] rounded-full blur-3xl pointer-events-none transition-opacity duration-500 ${
-            isDark
-              ? "bg-[#EBDCFF] opacity-5 mix-blend-screen"
-              : "bg-[#EBDCFF] opacity-10 mix-blend-multiply"
-          }`}
-        ></div>
-
-        <TopBar
-          title="Production Environment"
-          onMenuToggle={() => setSidebarOpen((v) => !v)}
-          actions={
-            <button
-              onClick={handleOpenAddModal}
-              className={`px-4 py-2 rounded-xl border transition-[color,background-color,border-color,box-shadow] duration-200 text-[13px] font-bold flex items-center gap-1.5 shadow-sm focus-visible:ring-2 outline-none cursor-pointer ${
-                isDark
-                  ? "bg-[#EBDCFF]/10 border-[#EBDCFF]/20 text-[#EBDCFF] hover:bg-[#EBDCFF]/20 focus-visible:ring-[#EBDCFF]/20"
-                  : "bg-[#1c1c1e] border-[#1c1c1e] text-[#F5F5F7] hover:bg-black focus-visible:ring-black/20"
-              }`}
-            >
-              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
-                add
-              </span>
-              <span className="hidden sm:inline">Add Provider</span>
-            </button>
-          }
-        />
-        <main className="flex-1 overflow-y-auto p-4 sm:p-8 lg:p-12 z-10">
+    <>
+      <main className="flex-1 overflow-y-auto p-4 sm:p-8 lg:p-12 z-10">
           <div className="mb-12">
             <span
               className={`text-[11px] font-bold tracking-[0.2em] uppercase mb-3 block ${
@@ -978,7 +961,6 @@ export default function Models() {
             </div>
           </div>
         </main>
-      </div>
 
       {/* Add / Edit Config Modal */}
       {isModalOpen && (
@@ -1237,6 +1219,6 @@ export default function Models() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

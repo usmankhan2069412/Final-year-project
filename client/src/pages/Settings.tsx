@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useTheme } from "../contexts/ThemeContext";
-import Sidebar from "../components/Sidebar";
-import TopBar from "../components/TopBar";
+import { useLayoutConfig } from "../contexts/LayoutContext";
 import ProfileTab from "./Settings/components/ProfileTab";
 import SecurityTab from "./Settings/components/SecurityTab";
 import ApiKeysTab from "./Settings/components/ApiKeysTab";
@@ -12,34 +11,10 @@ const TABS = ["Profile", "Security", "API Keys", "Usage & Billing"];
 export default function Settings() {
   const [activeTab, setActiveTab] = useState("Profile");
   const { isDark } = useTheme();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  useLayoutConfig({ title: "Account Settings" });
 
   return (
-    <div
-      className={`min-h-screen flex font-sans selection:bg-[#EBDCFF] selection:text-[#1c1c1e] transition-colors duration-300 ${
-        isDark ? "bg-[#131317] text-[#e4e1e7]" : "bg-[#F5F5F7] text-[#1c1c1e]"
-      }`}
-    >
-      <Sidebar
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-      />
-
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-        <div
-          className={`absolute top-0 right-0 w-[500px] h-[500px] rounded-full blur-3xl pointer-events-none transition-opacity duration-500 ${
-            isDark
-              ? "bg-[#EBDCFF] opacity-5 mix-blend-screen"
-              : "bg-[#EBDCFF] opacity-10 mix-blend-multiply"
-          }`}
-        ></div>
-
-        <TopBar
-          title="Account Settings"
-          onMenuToggle={() => setSidebarOpen((v) => !v)}
-        />
-
-        <main className="flex-1 overflow-y-auto z-10">
+    <main className="flex-1 overflow-y-auto z-10">
           {/* Tab Bar */}
           <div
             className={`border-b px-4 sm:px-8 lg:px-12 sticky top-0 z-20 backdrop-blur-md transition-colors ${
@@ -71,8 +46,6 @@ export default function Settings() {
             {activeTab === "API Keys" && <ApiKeysTab />}
             {activeTab === "Usage & Billing" && <UsageBillingTab />}
           </div>
-        </main>
-      </div>
-    </div>
+    </main>
   );
 }

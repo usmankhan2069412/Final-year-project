@@ -1,6 +1,6 @@
 import { useState } from "react";
-import Sidebar from "../../components/Sidebar";
 import { useTheme } from "../../contexts/ThemeContext";
+import { useLayoutConfig, useLayout } from "../../contexts/LayoutContext";
 import StepBar from "./components/StepBar";
 import Step1Persona, { BUILT_IN_PERSONAS } from "./components/Step1Persona";
 import Step2Knowledge from "./components/Step2Knowledge";
@@ -17,7 +17,8 @@ const STEPS = [
 
 export default function BotBuilder() {
   const { isDark } = useTheme();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { setSidebarOpen } = useLayout();
+  useLayoutConfig({ hideTopBar: true });
   const c = (light: string, dark: string) => (isDark ? dark : light);
 
   const [step, setStep] = useState(1);
@@ -42,14 +43,7 @@ export default function BotBuilder() {
   };
 
   return (
-    <div
-      className={`min-h-screen flex font-sans selection:bg-[#EBDCFF] selection:text-[#1c1c1e] transition-colors duration-300 ${
-        isDark ? "bg-[#131317] text-[#e4e1e7]" : "bg-[#F5F5F7] text-[#1c1c1e]"
-      }`}
-    >
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+    <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
         <div
           className={`absolute top-0 right-0 w-[600px] h-[600px] rounded-full blur-3xl pointer-events-none transition-opacity duration-500 ${
             isDark
@@ -216,7 +210,6 @@ export default function BotBuilder() {
             </div>
           </div>
         </main>
-      </div>
     </div>
   );
 }

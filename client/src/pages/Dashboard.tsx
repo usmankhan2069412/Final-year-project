@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import Sidebar from "../components/Sidebar";
-import TopBar from "../components/TopBar";
 import { useTheme } from "../contexts/ThemeContext";
 import { useAuth } from "../contexts/AuthContext";
+import { useLayoutConfig } from "../contexts/LayoutContext";
 
 // ── Types & Interfaces ──────────────────────────────────────────────────────
 
@@ -106,9 +105,10 @@ const getBotLastActive = (uuid: string, totalConvs: number, status: string) => {
 export default function Dashboard() {
   const [, setLocation] = useLocation();
   const { isDark } = useTheme();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const { userMe } = useAuth();
+
+  useLayoutConfig({ searchPlaceholder: "Search agents, workflows, knowledge..." });
 
   // Dynamic States
   const [kpis, setKpis] = useState<KPIResponseData | null>(null);
@@ -263,32 +263,25 @@ export default function Dashboard() {
 
   if (error) {
     return (
-      <div
-        className={`min-h-screen flex font-sans selection:bg-[#EBDCFF] selection:text-[#1c1c1e] transition-colors duration-300 ${
-          isDark ? "bg-[#131317] text-[#e4e1e7]" : "bg-[#F5F5F7] text-[#1c1c1e]"
-        }`}
-      >
-        <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-        <div className="flex-1 flex flex-col justify-center items-center p-6 text-center z-10 relative">
-          <div
-            className={`absolute top-0 right-0 w-[400px] h-[400px] rounded-full blur-3xl pointer-events-none transition-opacity duration-500 ${
-              isDark ? "bg-[#EBDCFF] opacity-5 mix-blend-screen" : "bg-[#EBDCFF] opacity-20 mix-blend-multiply"
+      <div className="flex-1 flex flex-col justify-center items-center p-6 text-center z-10 relative">
+        <div
+          className={`absolute top-0 right-0 w-[400px] h-[400px] rounded-full blur-3xl pointer-events-none transition-opacity duration-500 ${
+            isDark ? "bg-[#EBDCFF] opacity-5 mix-blend-screen" : "bg-[#EBDCFF] opacity-20 mix-blend-multiply"
+          }`}
+        />
+        <div className={`p-8 md:p-10 rounded-[2rem] border max-w-md ${isDark ? "bg-[#1f1f23] border-white/[0.06]" : "bg-white border-black/5 shadow-lg"}`}>
+          <span className="material-symbols-outlined text-[64px] text-red-500 mb-4">error</span>
+          <h2 className="text-2xl font-serif font-bold mb-3" style={{ fontFamily: "'Playfair Display', serif" }}>Unable to Load Dashboard</h2>
+          <p className={`text-sm mb-6 ${isDark ? "text-white/50" : "text-black/60"}`}>{error}</p>
+          <button
+            onClick={fetchDashboardData}
+            className={`px-6 py-2.5 rounded-xl font-bold text-[14px] transition-all flex items-center justify-center gap-2 mx-auto ${
+              isDark ? "bg-[#EBDCFF] text-[#1c1c1e] hover:bg-[#d8bfff]" : "bg-[#1c1c1e] text-[#F5F5F7] hover:bg-black"
             }`}
-          />
-          <div className={`p-8 md:p-10 rounded-[2rem] border max-w-md ${isDark ? "bg-[#1f1f23] border-white/[0.06]" : "bg-white border-black/5 shadow-lg"}`}>
-            <span className="material-symbols-outlined text-[64px] text-red-500 mb-4">error</span>
-            <h2 className="text-2xl font-serif font-bold mb-3" style={{ fontFamily: "'Playfair Display', serif" }}>Unable to Load Dashboard</h2>
-            <p className={`text-sm mb-6 ${isDark ? "text-white/50" : "text-black/60"}`}>{error}</p>
-            <button
-              onClick={fetchDashboardData}
-              className={`px-6 py-2.5 rounded-xl font-bold text-[14px] transition-all flex items-center justify-center gap-2 mx-auto ${
-                isDark ? "bg-[#EBDCFF] text-[#1c1c1e] hover:bg-[#d8bfff]" : "bg-[#1c1c1e] text-[#F5F5F7] hover:bg-black"
-              }`}
-            >
-              <span className="material-symbols-outlined text-[18px]">refresh</span>
-              Retry Connection
-            </button>
-          </div>
+          >
+            <span className="material-symbols-outlined text-[18px]">refresh</span>
+            Retry Connection
+          </button>
         </div>
       </div>
     );
@@ -297,32 +290,7 @@ export default function Dashboard() {
   const activeBots = chatbots.filter((b) => b.status === "active");
 
   return (
-    <div
-      className={`min-h-screen flex font-sans selection:bg-[#EBDCFF] selection:text-[#1c1c1e] transition-colors duration-300 ${
-        isDark ? "bg-[#131317] text-[#e4e1e7]" : "bg-[#F5F5F7] text-[#1c1c1e]"
-      }`}
-    >
-      <Sidebar
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-      />
-
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-        {/* Ambient glow */}
-        <div
-          className={`absolute top-0 right-0 w-[400px] h-[400px] rounded-full blur-3xl pointer-events-none transition-opacity duration-500 ${
-            isDark
-              ? "bg-[#EBDCFF] opacity-5 mix-blend-screen"
-              : "bg-[#EBDCFF] opacity-20 mix-blend-multiply"
-          }`}
-        />
-
-        <TopBar
-          searchPlaceholder="Search agents, workflows, knowledge..."
-          onMenuToggle={() => setSidebarOpen((v) => !v)}
-        />
-
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-10 z-10">
+    <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-10 z-10">
 
           {/* ── Welcome Header ── */}
           <div className="mb-8 md:mb-12">
@@ -389,8 +357,8 @@ export default function Dashboard() {
                     <span
                       className={`text-[11px] font-bold px-2 py-1 md:px-3 md:py-1.5 rounded-full border shadow-sm ${
                         isDark
-                          ? (card.deltaPositive ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : "bg-rose-500/10 border-rose-500/20 text-rose-400")
-                          : (card.deltaPositive ? "bg-emerald-50 border-emerald-100 text-emerald-800" : "bg-rose-50 border-rose-100 text-rose-800")
+                          ? "bg-white/5 border-white/10 text-white"
+                          : "bg-white border-black/5 text-[#1c1c1e]"
                       }`}
                     >
                       {card.delta}
@@ -712,7 +680,5 @@ export default function Dashboard() {
           </div>
 
         </main>
-      </div>
-    </div>
   );
 }

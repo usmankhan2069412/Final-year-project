@@ -7,6 +7,8 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { AuthProvider } from "./contexts/AuthContext";
 import { lazy, Suspense } from "react";
 import PageLoader from "./components/PageLoader";
+import { LayoutProvider } from "./contexts/LayoutContext";
+import DashboardLayout from "./components/DashboardLayout";
 
 // Lazy-loaded pages
 const Home = lazy(() => import("./pages/Home"));
@@ -21,6 +23,41 @@ const Settings = lazy(() => import("./pages/Settings"));
 const Models = lazy(() => import("./pages/Models"));
 const Inbox = lazy(() => import("./pages/Inbox"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+
+function ProtectedRoutes() {
+  return (
+    <ProtectedRoute>
+      <LayoutProvider>
+        <DashboardLayout>
+          <Switch>
+            <Route path="/dashboard">
+              <Suspense fallback={<PageLoader page="dashboard" contentOnly />}><Dashboard /></Suspense>
+            </Route>
+            <Route path="/inbox">
+              <Suspense fallback={<PageLoader page="inbox" contentOnly />}><Inbox /></Suspense>
+            </Route>
+            <Route path="/builder">
+              <Suspense fallback={<PageLoader page="builder" contentOnly />}><Builder /></Suspense>
+            </Route>
+            <Route path="/analytics">
+              <Suspense fallback={<PageLoader page="analytics" contentOnly />}><Analytics /></Suspense>
+            </Route>
+            <Route path="/settings">
+              <Suspense fallback={<PageLoader page="settings" contentOnly />}><Settings /></Suspense>
+            </Route>
+            <Route path="/models">
+              <Suspense fallback={<PageLoader page="models" contentOnly />}><Models /></Suspense>
+            </Route>
+            {/* Fallback inside Layout */}
+            <Route>
+              <Suspense fallback={<PageLoader page="public" />}><NotFound /></Suspense>
+            </Route>
+          </Switch>
+        </DashboardLayout>
+      </LayoutProvider>
+    </ProtectedRoute>
+  );
+}
 
 function Router() {
   return (
@@ -42,37 +79,13 @@ function Router() {
         <Suspense fallback={<PageLoader page="public" />}><ResetPassword /></Suspense>
       </Route>
 
-      {/* Protected routes */}
-      <Route path={"/dashboard"}>
-        <ProtectedRoute>
-          <Suspense fallback={<PageLoader page="dashboard" />}><Dashboard /></Suspense>
-        </ProtectedRoute>
-      </Route>
-      <Route path={"/inbox"}>
-        <ProtectedRoute>
-          <Suspense fallback={<PageLoader page="inbox" />}><Inbox /></Suspense>
-        </ProtectedRoute>
-      </Route>
-      <Route path={"/builder"}>
-        <ProtectedRoute>
-          <Suspense fallback={<PageLoader page="builder" />}><Builder /></Suspense>
-        </ProtectedRoute>
-      </Route>
-      <Route path={"/analytics"}>
-        <ProtectedRoute>
-          <Suspense fallback={<PageLoader page="analytics" />}><Analytics /></Suspense>
-        </ProtectedRoute>
-      </Route>
-      <Route path={"/settings"}>
-        <ProtectedRoute>
-          <Suspense fallback={<PageLoader page="settings" />}><Settings /></Suspense>
-        </ProtectedRoute>
-      </Route>
-      <Route path={"/models"}>
-        <ProtectedRoute>
-          <Suspense fallback={<PageLoader page="models" />}><Models /></Suspense>
-        </ProtectedRoute>
-      </Route>
+      {/* Protected routes wrapped in common component for mounting persistence */}
+      <Route path="/dashboard" component={ProtectedRoutes} />
+      <Route path="/inbox" component={ProtectedRoutes} />
+      <Route path="/builder" component={ProtectedRoutes} />
+      <Route path="/analytics" component={ProtectedRoutes} />
+      <Route path="/settings" component={ProtectedRoutes} />
+      <Route path="/models" component={ProtectedRoutes} />
 
       <Route path={"/404"}>
         <Suspense fallback={<PageLoader page="public" />}><NotFound /></Suspense>

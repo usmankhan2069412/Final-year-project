@@ -58,7 +58,7 @@ export default function Sidebar({ onNewBot, isOpen = false, onClose }: SidebarPr
 
   const sidebarContent = (
     <aside
-      className={`relative h-full flex flex-col font-sans transition-all duration-300 ease-in-out ${
+      className={`relative h-full flex flex-col font-sans transition-all duration-200 ease-in-out ${
         isCollapsed ? "w-[76px]" : "w-64"
       } ${
         isDark
@@ -68,7 +68,7 @@ export default function Sidebar({ onNewBot, isOpen = false, onClose }: SidebarPr
     >
       {/* Brand */}
       <div
-        className={`h-16 flex items-center border-b border-white/5 cursor-pointer flex-shrink-0 group transition-all duration-300 ${
+        className={`h-16 flex items-center border-b border-white/5 cursor-pointer flex-shrink-0 group transition-all duration-200 ${
           isCollapsed ? "justify-center px-0" : "px-5"
         }`}
         onClick={() => setLocation("/")}
@@ -89,7 +89,7 @@ export default function Sidebar({ onNewBot, isOpen = false, onClose }: SidebarPr
         </div>
         
         <div
-          className={`flex flex-col transition-all duration-300 overflow-hidden ${
+          className={`flex flex-col transition-all duration-200 overflow-hidden ${
             isCollapsed ? "opacity-0 w-0 scale-95 pointer-events-none ml-0" : "opacity-100 w-auto ml-2.5"
           }`}
         >
@@ -117,9 +117,9 @@ export default function Sidebar({ onNewBot, isOpen = false, onClose }: SidebarPr
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-3.5 space-y-1 overflow-y-auto no-scrollbar">
+      <nav className="flex-1 p-3.5 space-y-1 overflow-y-auto overflow-x-hidden no-scrollbar">
         <p
-          className={`text-[9px] uppercase tracking-widest text-white/30 font-bold px-3 pt-2.5 pb-1.5 transition-all duration-300 overflow-hidden ${
+          className={`text-[9px] uppercase tracking-widest text-white/30 font-bold px-3 pt-2.5 pb-1.5 transition-all duration-200 overflow-hidden ${
             isCollapsed ? "opacity-0 h-0 py-0" : "opacity-100"
           }`}
         >
@@ -150,7 +150,7 @@ export default function Sidebar({ onNewBot, isOpen = false, onClose }: SidebarPr
               </span>
               
               <span
-                className={`transition-all duration-300 overflow-hidden whitespace-nowrap ${
+                className={`inline-block transition-all duration-200 overflow-hidden whitespace-nowrap ${
                   isCollapsed ? "opacity-0 w-0 scale-95 pointer-events-none" : "opacity-100 w-auto ml-3"
                 }`}
               >
@@ -173,7 +173,7 @@ export default function Sidebar({ onNewBot, isOpen = false, onClose }: SidebarPr
       </nav>
 
       {/* Bottom Section */}
-      <div className={`p-3.5 border-t border-white/5 space-y-1 flex-shrink-0 transition-all duration-300 ${isCollapsed ? "items-center" : ""}`}>
+      <div className={`p-3.5 border-t border-white/5 space-y-1 flex-shrink-0 transition-all duration-200 overflow-x-hidden ${isCollapsed ? "items-center" : ""}`}>
         <button
           onClick={() => setLocation("/builder")}
           className={`bg-[#EBDCFF] hover:bg-[#d8bfff] text-[#1c1c1e] font-bold rounded-xl flex items-center justify-center text-[13px] transition-all mb-2.5 shadow-sm overflow-hidden ${
@@ -183,7 +183,7 @@ export default function Sidebar({ onNewBot, isOpen = false, onClose }: SidebarPr
         >
           <span className="material-symbols-outlined text-[16px] flex-shrink-0">add</span>
           <span
-            className={`transition-all duration-300 overflow-hidden whitespace-nowrap ${
+            className={`inline-block transition-all duration-200 overflow-hidden whitespace-nowrap ${
               isCollapsed ? "opacity-0 w-0 scale-95 pointer-events-none" : "opacity-100 w-auto"
             }`}
           >
@@ -201,7 +201,7 @@ export default function Sidebar({ onNewBot, isOpen = false, onClose }: SidebarPr
             help_outline
           </span>
           <span
-            className={`transition-all duration-300 overflow-hidden whitespace-nowrap ${
+            className={`inline-block transition-all duration-200 overflow-hidden whitespace-nowrap ${
               isCollapsed ? "opacity-0 w-0 scale-95 pointer-events-none" : "opacity-100 w-auto ml-3"
             }`}
           >
@@ -226,7 +226,7 @@ export default function Sidebar({ onNewBot, isOpen = false, onClose }: SidebarPr
             logout
           </span>
           <span
-            className={`transition-all duration-300 overflow-hidden whitespace-nowrap ${
+            className={`inline-block transition-all duration-200 overflow-hidden whitespace-nowrap ${
               isCollapsed ? "opacity-0 w-0 scale-95 pointer-events-none" : "opacity-100 w-auto ml-3"
             }`}
           >
@@ -249,9 +249,13 @@ export default function Sidebar({ onNewBot, isOpen = false, onClose }: SidebarPr
           setIsCollapsed(!isCollapsed);
         }}
         aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        className="hidden md:flex absolute -right-3 top-20 w-6 h-6 rounded-full items-center justify-center cursor-pointer shadow-md z-30 transition-all hover:scale-110 active:scale-95 border bg-[#1c1c1e] border-white/10 text-white/60 hover:text-white"
+        className={`hidden md:flex absolute -right-3 top-20 w-6 h-6 rounded-full items-center justify-center cursor-pointer shadow-md z-30 transition-all duration-200 hover:scale-110 active:scale-95 border ${
+          isDark
+            ? "bg-[#1c1c1e] border-white/10 text-white/60 hover:text-white"
+            : "bg-white border-black/10 text-black/60 hover:text-black"
+        }`}
       >
-        <span className="material-symbols-outlined text-[14px] transition-transform duration-300">
+        <span className="material-symbols-outlined text-[14px] transition-transform duration-200">
           {isCollapsed ? "chevron_right" : "chevron_left"}
         </span>
       </button>
@@ -262,7 +266,7 @@ export default function Sidebar({ onNewBot, isOpen = false, onClose }: SidebarPr
     <>
       {/* ── Desktop: always-visible sticky sidebar ── */}
       <div
-        className={`hidden md:flex h-screen sticky top-0 flex-shrink-0 transition-all duration-300 ease-in-out ${
+        className={`hidden md:flex h-screen sticky top-0 flex-shrink-0 transition-all duration-200 ease-in-out z-20 ${
           isCollapsed ? "w-[76px]" : "w-64"
         }`}
       >
