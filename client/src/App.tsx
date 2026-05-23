@@ -1,56 +1,86 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AuthProvider } from "./contexts/AuthContext";
-import Home from "./pages/Home";
-import Login from "./pages/Login";
-import Signup from "./pages/Signup";
-import ForgotPassword from "./pages/ForgotPassword";
-import ResetPassword from "./pages/ResetPassword";
-import Dashboard from "./pages/Dashboard";
-import Builder from "./pages/Builder";
-import Analytics from "./pages/Analytics";
-import Settings from "./pages/Settings";
-import Models from "./pages/Models";
-import Inbox from "./pages/Inbox";
+import { lazy, Suspense } from "react";
+import PageLoader from "./components/PageLoader";
+
+// Lazy-loaded pages
+const Home = lazy(() => import("./pages/Home"));
+const Login = lazy(() => import("./pages/Login"));
+const Signup = lazy(() => import("./pages/Signup"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Builder = lazy(() => import("./pages/Builder"));
+const Analytics = lazy(() => import("./pages/Analytics"));
+const Settings = lazy(() => import("./pages/Settings"));
+const Models = lazy(() => import("./pages/Models"));
+const Inbox = lazy(() => import("./pages/Inbox"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 
 function Router() {
   return (
     <Switch>
       {/* Public routes */}
-      <Route path={"/"} component={Home} />
-      <Route path={"/login"} component={Login} />
-      <Route path={"/signup"} component={Signup} />
-      <Route path={"/forgot-password"} component={ForgotPassword} />
-      <Route path={"/reset-password"} component={ResetPassword} />
+      <Route path={"/"}>
+        <Suspense fallback={<PageLoader page="public" />}><Home /></Suspense>
+      </Route>
+      <Route path={"/login"}>
+        <Suspense fallback={<PageLoader page="public" />}><Login /></Suspense>
+      </Route>
+      <Route path={"/signup"}>
+        <Suspense fallback={<PageLoader page="public" />}><Signup /></Suspense>
+      </Route>
+      <Route path={"/forgot-password"}>
+        <Suspense fallback={<PageLoader page="public" />}><ForgotPassword /></Suspense>
+      </Route>
+      <Route path={"/reset-password"}>
+        <Suspense fallback={<PageLoader page="public" />}><ResetPassword /></Suspense>
+      </Route>
 
       {/* Protected routes */}
       <Route path={"/dashboard"}>
-        <ProtectedRoute><Dashboard /></ProtectedRoute>
+        <ProtectedRoute>
+          <Suspense fallback={<PageLoader page="dashboard" />}><Dashboard /></Suspense>
+        </ProtectedRoute>
       </Route>
       <Route path={"/inbox"}>
-        <ProtectedRoute><Inbox /></ProtectedRoute>
+        <ProtectedRoute>
+          <Suspense fallback={<PageLoader page="inbox" />}><Inbox /></Suspense>
+        </ProtectedRoute>
       </Route>
       <Route path={"/builder"}>
-        <ProtectedRoute><Builder /></ProtectedRoute>
+        <ProtectedRoute>
+          <Suspense fallback={<PageLoader page="builder" />}><Builder /></Suspense>
+        </ProtectedRoute>
       </Route>
       <Route path={"/analytics"}>
-        <ProtectedRoute><Analytics /></ProtectedRoute>
+        <ProtectedRoute>
+          <Suspense fallback={<PageLoader page="analytics" />}><Analytics /></Suspense>
+        </ProtectedRoute>
       </Route>
       <Route path={"/settings"}>
-        <ProtectedRoute><Settings /></ProtectedRoute>
+        <ProtectedRoute>
+          <Suspense fallback={<PageLoader page="settings" />}><Settings /></Suspense>
+        </ProtectedRoute>
       </Route>
       <Route path={"/models"}>
-        <ProtectedRoute><Models /></ProtectedRoute>
+        <ProtectedRoute>
+          <Suspense fallback={<PageLoader page="models" />}><Models /></Suspense>
+        </ProtectedRoute>
       </Route>
 
-      <Route path={"/404"} component={NotFound} />
+      <Route path={"/404"}>
+        <Suspense fallback={<PageLoader page="public" />}><NotFound /></Suspense>
+      </Route>
       {/* Final fallback route */}
-      <Route component={NotFound} />
+      <Route>
+        <Suspense fallback={<PageLoader page="public" />}><NotFound /></Suspense>
+      </Route>
     </Switch>
   );
 }

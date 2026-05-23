@@ -92,6 +92,29 @@ export default function KPIs() {
     },
   ];
 
+  if (loading) {
+    return (
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-10">
+        {[1, 2, 3, 4].map((i) => (
+          <div
+            key={i}
+            className={`rounded-3xl border p-4 sm:p-6 relative overflow-hidden animate-pulse ${
+              isDark ? "bg-[#1f1f23] border-white/[0.06]" : "bg-white border-black/5"
+            }`}
+          >
+            <div className="flex justify-between items-start mb-6">
+              <div className={`w-12 h-12 rounded-xl ${isDark ? "bg-white/5" : "bg-black/5"}`} />
+              <div className={`w-12 h-6 rounded-full ${isDark ? "bg-white/5" : "bg-black/5"}`} />
+            </div>
+            <div className={`w-2/3 h-3 rounded-full mb-3 ${isDark ? "bg-white/5" : "bg-black/5"}`} />
+            <div className={`w-1/2 h-8 rounded-lg mb-4 ${isDark ? "bg-white/5" : "bg-black/5"}`} />
+            <div className={`w-full h-1.5 rounded-full ${isDark ? "bg-white/5" : "bg-black/5"}`} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-10">
       {kpis.map((card) => (

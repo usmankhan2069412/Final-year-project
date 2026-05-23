@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
 import { useTheme } from "../contexts/ThemeContext";
+import { useAuth } from "../contexts/AuthContext";
 
 // ── Types & Interfaces ──────────────────────────────────────────────────────
 
@@ -107,8 +108,9 @@ export default function Dashboard() {
   const { isDark } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  const { userMe } = useAuth();
+
   // Dynamic States
-  const [userMe, setUserMe] = useState<UserMeResponse | null>(null);
   const [kpis, setKpis] = useState<KPIResponseData | null>(null);
   const [chatbots, setChatbots] = useState<Chatbot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -128,21 +130,18 @@ export default function Dashboard() {
         headers["Authorization"] = `Bearer ${token}`;
       }
 
-      const [userRes, kpiRes, chatbotsRes] = await Promise.all([
-        fetch("http://localhost:8000/api/v1/users/me", { headers }),
+      const [kpiRes, chatbotsRes] = await Promise.all([
         fetch("http://localhost:8000/api/v1/analytics/kpi", { headers }),
         fetch("http://localhost:8000/api/v1/chatbots", { headers }),
       ]);
 
-      if (!userRes.ok || !kpiRes.ok || !chatbotsRes.ok) {
+      if (!kpiRes.ok || !chatbotsRes.ok) {
         throw new Error("Failed to load platform dashboard metrics.");
       }
 
-      const userData = await userRes.json();
       const kpiData = await kpiRes.json();
       const chatbotsData = await chatbotsRes.json();
 
-      setUserMe(userData);
       setKpis(kpiData);
       setChatbots(chatbotsData);
     } catch (err: any) {

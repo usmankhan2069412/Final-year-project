@@ -119,11 +119,31 @@ export default function InteractionsTable() {
           </thead>
           <tbody className={isDark ? "divide-y divide-white/[0.04]" : "divide-y divide-black/5"}>
             {loading ? (
-              <tr>
-                <td colSpan={6} className={`px-8 py-8 text-center text-[14px] ${c("text-[#1c1c1e]/50", "text-white/40")}`}>
-                  Loading...
-                </td>
-              </tr>
+              [1, 2, 3, 4].map((i) => (
+                <tr key={i} className="animate-pulse">
+                  <td className="px-4 sm:px-8 py-4 sm:py-5">
+                    <div className={`h-4.5 w-16 rounded ${isDark ? "bg-white/5" : "bg-black/5"}`} />
+                  </td>
+                  <td className="px-4 sm:px-8 py-4 sm:py-5">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-2.5 h-2.5 rounded-full ${isDark ? "bg-white/5" : "bg-black/5"}`} />
+                      <div className={`h-4.5 w-16 rounded ${isDark ? "bg-white/5" : "bg-black/5"}`} />
+                    </div>
+                  </td>
+                  <td className="px-4 sm:px-8 py-4 sm:py-5">
+                    <div className={`h-4.5 w-28 rounded ${isDark ? "bg-white/5" : "bg-black/5"}`} />
+                  </td>
+                  <td className="px-4 sm:px-8 py-4 sm:py-5">
+                    <div className={`h-4 w-6 rounded ${isDark ? "bg-white/5" : "bg-black/5"}`} />
+                  </td>
+                  <td className="px-4 sm:px-8 py-4 sm:py-5">
+                    <div className={`h-4.5 w-20 rounded ${isDark ? "bg-white/5" : "bg-black/5"}`} />
+                  </td>
+                  <td className="px-4 sm:px-8 py-4 sm:py-5 text-right">
+                    <div className={`h-8 w-8 rounded-lg ml-auto ${isDark ? "bg-white/5" : "bg-black/5"}`} />
+                  </td>
+                </tr>
+              ))
             ) : data.length === 0 ? (
               <tr>
                 <td colSpan={6} className={`px-8 py-8 text-center text-[14px] ${c("text-[#1c1c1e]/50", "text-white/40")}`}>

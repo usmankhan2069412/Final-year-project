@@ -95,3 +95,22 @@ class ResetPasswordRequest(BaseModel):
 class GoogleLoginRequest(BaseModel):
     token: str = Field(..., description="The ID token received from Google")
 
+
+class UserUpdateRequest(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    org_slug: Optional[str] = None
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        return _validate_and_normalize_email(v)
+
+
+class PasswordUpdateRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(..., min_length=8, description="Password must be at least 8 characters long")
+
+

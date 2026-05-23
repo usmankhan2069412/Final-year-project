@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useTheme } from "../contexts/ThemeContext";
+import { useAuth } from "../contexts/AuthContext";
 
 interface TopBarProps {
   title?: string;
@@ -9,10 +10,103 @@ interface TopBarProps {
   onMenuToggle?: () => void;
 }
 
+interface NotificationItem {
+  id: string;
+  title: string;
+  details: string;
+  timestamp: string;
+  read: boolean;
+}
+
 export default function TopBar({ title, searchPlaceholder, actions, onMenuToggle }: TopBarProps) {
   const [, setLocation] = useLocation();
   const { isDark, toggleTheme } = useTheme();
   const [searchOpen, setSearchOpen] = useState(false);
+
+  const { userMe, isLoadingProfile } = useAuth();
+
+  // Dynamic user profile state derived from global auth context
+  const fullName = userMe?.user.full_name || "Admin User";
+  const isOwner = userMe ? (userMe.user.id === userMe.active_organization?.owner_id) : false;
+  const avatarUrl = userMe?.user.full_name
+    ? `https://ui-avatars.com/api/?name=${encodeURIComponent(
+        userMe.user.full_name
+      )}&background=EBDCFF&color=1c1c1e&bold=true&size=100`
+    : "https://i.pravatar.cc/150?u=admin";
+
+  // Notifications state loaded from localStorage
+  const [notifications, setNotifications] = useState<NotificationItem[]>(() => {
+    const saved = localStorage.getItem("aina-notifications");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error("Error parsing saved notifications:", e);
+      }
+    }
+    return [
+      {
+        id: "default-1",
+        title: "Welcome to Aina AI",
+        details: "Your workspace has been successfully created.",
+        timestamp: "1 hour ago",
+        read: false,
+      },
+      {
+        id: "default-2",
+        title: "Billing Activated",
+        details: "Free trial plan active with 10,000 complimentary credits.",
+        timestamp: "2 hours ago",
+        read: true,
+      },
+    ];
+  });
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  // Save notifications to localStorage
+  useEffect(() => {
+    localStorage.setItem("aina-notifications", JSON.stringify(notifications));
+  }, [notifications]);
+
+  // Handle incoming notifications
+  useEffect(() => {
+    const handleNewNotif = (e: Event) => {
+      const customEvent = e as CustomEvent<{ title: string; details: string }>;
+      if (customEvent.detail) {
+        const { title, details } = customEvent.detail;
+        const newNotif: NotificationItem = {
+          id: Math.random().toString(36).substring(2, 9),
+          title,
+          details,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          read: false,
+        };
+        setNotifications((prev) => [newNotif, ...prev]);
+      }
+    };
+
+    window.addEventListener("new-notification", handleNewNotif);
+    return () => {
+      window.removeEventListener("new-notification", handleNewNotif);
+    };
+  }, []);
+
+  // Close notifications panel on outside click
+  useEffect(() => {
+    if (!notificationsOpen) return;
+
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest(".notification-container")) {
+        setNotificationsOpen(false);
+      }
+    };
+
+    document.addEventListener("click", handleOutsideClick);
+    return () => {
+      document.removeEventListener("click", handleOutsideClick);
+    };
+  }, [notificationsOpen]);
 
   return (
     <header
@@ -127,17 +221,100 @@ export default function TopBar({ title, searchPlaceholder, actions, onMenuToggle
           </span>
         </button>
 
-        {/* Notification */}
-        <button
-          aria-label="Notifications"
-          className={`hidden sm:flex w-9 h-9 md:w-10 md:h-10 rounded-full items-center justify-center transition-all outline-none shadow-sm border ${
-            isDark
-              ? "bg-white/5 border-white/10 text-white/50 hover:text-white hover:bg-white/10"
-              : "bg-white border-black/5 text-[#1c1c1e]/50 hover:text-[#1c1c1e] hover:bg-black/5"
-          }`}
-        >
-          <span className="material-symbols-outlined text-[18px] md:text-[20px]">notifications</span>
-        </button>
+        {/* Notification bell and dropdown container */}
+        <div className="relative notification-container hidden sm:block">
+          <button
+            onClick={() => setNotificationsOpen((prev) => !prev)}
+            aria-label="Notifications"
+            className={`flex w-9 h-9 md:w-10 md:h-10 rounded-full items-center justify-center transition-all outline-none shadow-sm border relative ${
+              isDark
+                ? "bg-white/5 border-white/10 text-white/50 hover:text-white hover:bg-white/10"
+                : "bg-white border-black/5 text-[#1c1c1e]/50 hover:text-[#1c1c1e] hover:bg-black/5"
+            }`}
+          >
+            <span className="material-symbols-outlined text-[18px] md:text-[20px]">notifications</span>
+
+            {/* Unread badge count indicator */}
+            {notifications.some((n) => !n.read) && (
+              <span
+                className={`absolute top-1 right-1 w-2.5 h-2.5 bg-[#EBDCFF] rounded-full border ${
+                  isDark ? "border-[#111115]" : "border-white"
+                }`}
+              />
+            )}
+          </button>
+
+          {/* Notifications Popover List */}
+          {notificationsOpen && (
+            <div
+              className={`absolute right-0 mt-2 w-80 rounded-2xl shadow-2xl border overflow-hidden transition-all duration-300 z-50 ${
+                isDark
+                  ? "bg-[#1f1f23] border-white/[0.06] text-white"
+                  : "bg-white border-black/5 text-[#1c1c1e]"
+              }`}
+            >
+              {/* Popover Header */}
+              <div
+                className={`px-4 py-3 flex items-center justify-between border-b ${
+                  isDark ? "border-white/5" : "border-black/5"
+                }`}
+              >
+                <span className="font-bold text-[14px]">Notifications</span>
+                {notifications.some((n) => !n.read) && (
+                  <button
+                    onClick={() =>
+                      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+                    }
+                    className="text-[11px] font-bold uppercase tracking-wider text-[#d0beed] hover:text-[#EBDCFF] transition-colors"
+                  >
+                    Mark all read
+                  </button>
+                )}
+              </div>
+
+              {/* Popover List Items */}
+              <div className="max-h-64 overflow-y-auto divide-y divide-white/[0.04]">
+                {notifications.length === 0 ? (
+                  <div className="px-4 py-8 text-center text-[12px] opacity-40">
+                    No notifications
+                  </div>
+                ) : (
+                  notifications.map((notif) => (
+                    <div
+                      key={notif.id}
+                      onClick={() =>
+                        setNotifications((prev) =>
+                          prev.map((n) => (n.id === notif.id ? { ...n, read: true } : n))
+                        )
+                      }
+                      className={`px-4 py-3 text-left transition-colors cursor-pointer ${
+                        !notif.read
+                          ? isDark
+                            ? "bg-white/[0.02] hover:bg-white/[0.04]"
+                            : "bg-black/[0.01] hover:bg-black/[0.03]"
+                          : isDark
+                          ? "hover:bg-white/[0.02]"
+                          : "hover:bg-black/[0.01]"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span className={`text-[13px] font-bold ${!notif.read ? "text-[#EBDCFF]" : ""}`}>
+                          {notif.title}
+                        </span>
+                        <span className="text-[10px] opacity-45 whitespace-nowrap mt-0.5">
+                          {notif.timestamp}
+                        </span>
+                      </div>
+                      <p className="text-[12px] opacity-70 mt-0.5 leading-relaxed">
+                        {notif.details}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
 
         <div className={`hidden sm:block w-px h-6 ${isDark ? "bg-white/10" : "bg-black/10"}`}></div>
 
@@ -146,36 +323,57 @@ export default function TopBar({ title, searchPlaceholder, actions, onMenuToggle
           className="flex items-center gap-3 group text-left"
           onClick={() => setLocation("/settings")}
           aria-label="Go to settings"
+          disabled={isLoadingProfile}
         >
-          <div
-            className={`w-9 h-9 md:w-10 md:h-10 rounded-full overflow-hidden border-2 shadow-sm transition-all flex-shrink-0 ${
-              isDark
-                ? "border-white/10 group-hover:border-[#EBDCFF]/60"
-                : "border-white group-hover:border-[#EBDCFF]"
-            }`}
-          >
-            <img
-              src="https://i.pravatar.cc/150?u=admin"
-              alt="User avatar"
-              className="w-full h-full object-cover"
-            />
-          </div>
-          <div className="hidden lg:block">
-            <p
-              className={`text-[14px] font-bold leading-tight ${
-                isDark ? "text-[#F5F5F7]" : "text-[#1c1c1e]"
-              }`}
-            >
-              Admin User
-            </p>
-            <p
-              className={`text-[11px] uppercase tracking-widest font-bold mt-0.5 ${
-                isDark ? "text-white/40" : "text-[#1c1c1e]/50"
-              }`}
-            >
-              Architect
-            </p>
-          </div>
+          {isLoadingProfile ? (
+            <>
+              <div
+                className={`w-9 h-9 md:w-10 md:h-10 rounded-full animate-pulse flex-shrink-0 ${
+                  isDark ? "bg-white/10" : "bg-black/10"
+                }`}
+              />
+              <div className="hidden lg:block space-y-1">
+                <div
+                  className={`h-3.5 w-24 rounded animate-pulse ${
+                    isDark ? "bg-white/10" : "bg-black/10"
+                  }`}
+                />
+                <div
+                  className={`h-2.5 w-12 rounded animate-pulse ${
+                    isDark ? "bg-white/5" : "bg-black/5"
+                  }`}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div
+                className={`w-9 h-9 md:w-10 md:h-10 rounded-full overflow-hidden border-2 shadow-sm transition-all flex-shrink-0 ${
+                  isDark
+                    ? "border-white/10 group-hover:border-[#EBDCFF]/60"
+                    : "border-white group-hover:border-[#EBDCFF]"
+                }`}
+              >
+                <img src={avatarUrl} alt="User avatar" className="w-full h-full object-cover" />
+              </div>
+              <div className="hidden lg:block">
+                <p
+                  className={`text-[14px] font-bold leading-tight ${
+                    isDark ? "text-[#F5F5F7]" : "text-[#1c1c1e]"
+                  }`}
+                >
+                  {fullName}
+                </p>
+                <p
+                  className={`text-[11px] uppercase tracking-widest font-bold mt-0.5 ${
+                    isDark ? "text-white/40" : "text-[#1c1c1e]/50"
+                  }`}
+                >
+                  {isOwner ? "Owner" : "Member"}
+                </p>
+              </div>
+            </>
+          )}
         </button>
       </div>
 

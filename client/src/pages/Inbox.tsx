@@ -321,6 +321,33 @@ export default function Inbox() {
       conv.last_message.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Chats Skeleton Loader
+  const ChatsSkeleton = () => (
+    <div className="space-y-1">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <div
+          key={i}
+          className={`p-4 rounded-2xl flex items-start gap-3.5 border animate-pulse ${
+            isDark ? "bg-[#1f1f23]/40 border-white/[0.04]" : "bg-white border-black/5"
+          }`}
+        >
+          {/* Avatar Icon */}
+          <div className={`w-10 h-10 rounded-xl flex-shrink-0 ${isDark ? "bg-white/5" : "bg-black/5"}`} />
+
+          {/* Snippet info */}
+          <div className="flex-1 min-w-0 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className={`h-3 w-16 rounded ${isDark ? "bg-white/5" : "bg-black/5"}`} />
+              <div className={`h-2.5 w-12 rounded ${isDark ? "bg-white/5" : "bg-black/5"}`} />
+            </div>
+            <div className={`h-4 w-32 rounded ${isDark ? "bg-white/5" : "bg-black/5"}`} />
+            <div className={`h-3 w-40 rounded ${isDark ? "bg-white/5" : "bg-black/5"}`} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <div
       className={`min-h-screen flex font-sans selection:bg-[#EBDCFF] selection:text-[#1c1c1e] transition-colors duration-300 ${
@@ -424,9 +451,7 @@ export default function Inbox() {
             {/* Chats List */}
             <div className="flex-1 overflow-y-auto no-scrollbar divide-y divide-white/[0.04] p-2 space-y-1">
               {loading ? (
-                <div className={`text-center py-10 text-[13px] ${c("text-black/40", "text-white/30")}`}>
-                  Loading sessions...
-                </div>
+                <ChatsSkeleton />
               ) : filteredConversations.length === 0 ? (
                 <div className={`text-center py-10 text-[13px] ${c("text-black/40", "text-white/30")}`}>
                   No active escalated chats found

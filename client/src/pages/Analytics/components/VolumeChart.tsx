@@ -172,8 +172,12 @@ export default function VolumeChart() {
             </div>
           ))}
         </div>
-        <div className="absolute inset-0 pl-10 sm:pl-12">
-          {data.length > 0 && (
+        <div className="absolute inset-0 pl-10 sm:pl-12 animate-pulse">
+          {loading ? (
+            <div className="w-full h-full flex flex-col justify-end">
+              <div className={`w-full h-3/4 bg-gradient-to-t from-transparent ${isDark ? "to-white/[0.03]" : "to-black/[0.03]"} rounded-t-3xl`} />
+            </div>
+          ) : data.length > 0 && (
             <svg
               className="w-full h-full"
               preserveAspectRatio="none"
@@ -215,7 +219,11 @@ export default function VolumeChart() {
       </div>
 
       <div className="flex justify-between mt-5 pl-10 sm:pl-12">
-        {xTicks.map((d, i) => (
+        {loading ? (
+          [1, 2, 3, 4, 5].map((i) => (
+            <span key={i} className={`h-4 w-12 rounded animate-pulse ${isDark ? "bg-white/5" : "bg-black/5"}`} />
+          ))
+        ) : xTicks.map((d, i) => (
           <span
             key={i}
             className={`text-[11px] font-medium ${

@@ -70,6 +70,44 @@ export default function LanguageMix() {
     };
   });
 
+  if (loading) {
+    return (
+      <div
+        className={`rounded-[2rem] border p-4 sm:p-8 animate-pulse ${
+          isDark
+            ? "bg-[#1f1f23] border-white/[0.06]"
+            : "bg-white border-black/5 shadow-[0_8px_30px_rgb(0,0,0,0.02)]"
+        }`}
+      >
+        <h3
+          className={`text-[18px] font-serif font-bold mb-8 ${
+            c("text-[#1c1c1e]", "text-white")
+          }`}
+          style={{ fontFamily: "'Playfair Display', serif" }}
+        >
+          Language Mix
+        </h3>
+        <div className="flex flex-col sm:flex-row items-center sm:items-start md:items-center gap-6 sm:gap-10">
+          <div className={`relative w-32 h-32 rounded-full flex-shrink-0 ${isDark ? "bg-white/5" : "bg-black/5"}`} />
+          <div className="flex-1 w-full space-y-5">
+            {[1, 2].map((i) => (
+              <div key={i} className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-2.5">
+                    <div className={`w-2.5 h-2.5 rounded-full ${isDark ? "bg-white/5" : "bg-black/5"}`} />
+                    <div className={`h-4.5 w-16 rounded ${isDark ? "bg-white/5" : "bg-black/5"}`} />
+                  </div>
+                  <div className={`h-4 w-8 rounded ${isDark ? "bg-white/5" : "bg-black/5"}`} />
+                </div>
+                <div className={`w-full h-1.5 rounded-full ${isDark ? "bg-white/5" : "bg-black/5"}`} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const activeLangsCount = data.filter((l) => l.count > 0).length;
 
   return (

@@ -82,8 +82,19 @@ export default function ChannelPerf() {
       </div>
       <div className="space-y-6">
         {loading ? (
-          <div className={`text-center py-4 text-[14px] ${c("text-[#1c1c1e]/50", "text-white/40")}`}>
-            Loading...
+          <div className="space-y-6 animate-pulse">
+            {[1, 2].map((i) => (
+              <div key={i} className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-[18px] h-[18px] rounded-full ${isDark ? "bg-white/5" : "bg-black/5"}`} />
+                    <div className={`h-4.5 w-20 rounded ${isDark ? "bg-white/5" : "bg-black/5"}`} />
+                  </div>
+                  <div className={`h-4 w-8 rounded ${isDark ? "bg-white/5" : "bg-black/5"}`} />
+                </div>
+                <div className={`w-full h-1.5 rounded-full ${isDark ? "bg-white/5" : "bg-black/5"}`} />
+              </div>
+            ))}
           </div>
         ) : channels.length === 0 ? (
           <div className={`text-center py-4 text-[14px] ${c("text-[#1c1c1e]/50", "text-white/40")}`}>

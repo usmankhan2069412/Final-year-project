@@ -2,6 +2,7 @@ import { useLocation } from "wouter";
 import { useState, useRef } from "react";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
+import { Button } from "../components/ui/button";
 
 gsap.registerPlugin(useGSAP);
 
@@ -246,26 +247,13 @@ export default function ForgotPassword() {
 
                 {/* Submit Button */}
                 <div className="auth-item w-full mt-2">
-                  <button
+                  <Button
                     type="submit"
-                    disabled={loading}
-                    className="w-full bg-[#EBDCFF] hover:bg-[#d8bfff] text-[#1c1c1e] py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-sm border border-[#1c1c1e]/5 hover:shadow-md hover:scale-[1.01] active:scale-[0.99] text-[15px] cursor-pointer disabled:opacity-75 disabled:pointer-events-none"
+                    loading={loading}
+                    className="w-full bg-[#EBDCFF] hover:bg-[#d8bfff] text-[#1c1c1e] py-4 h-auto rounded-xl font-bold flex items-center justify-center gap-2 border border-[#1c1c1e]/5 text-[15px] hover:shadow-md hover:scale-[1.01] active:scale-[0.99]"
                   >
-                    {loading ? (
-                      <div className="flex items-center gap-2">
-                        <svg className="animate-spin h-5 w-5 text-[#1c1c1e]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <span>Transmitting key...</span>
-                      </div>
-                    ) : (
-                      <>
-                        Send Reset Link
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-                      </>
-                    )}
-                  </button>
+                    {loading ? "Transmitting key…" : "Send Reset Link"}
+                  </Button>
                 </div>
               </form>
 
