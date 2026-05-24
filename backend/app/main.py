@@ -75,12 +75,15 @@ from app.api.v1.deployments import router as deployments_router
 from app.api.v1.billing import router as billing_router
 from app.api.v1.team import router as team_router
 from app.api.v1.api_keys import router as api_keys_router
+from app.api.v1.notifications import router as notifications_router
 
 app.include_router(channels_router, prefix=f"{settings.API_V1_STR}/channels", tags=["channels"])
 app.include_router(deployments_router, prefix=f"{settings.API_V1_STR}/deployments", tags=["deployments"])
 app.include_router(billing_router, prefix=f"{settings.API_V1_STR}")
 app.include_router(team_router, prefix=f"{settings.API_V1_STR}")
 app.include_router(api_keys_router, prefix=f"{settings.API_V1_STR}")
+app.include_router(notifications_router, prefix=f"{settings.API_V1_STR}")
+
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from app.tasks.analytics_aggregation import run_nightly_aggregation

@@ -245,6 +245,12 @@
     font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
     display: inline-block;
     line-height: 1;
+    /* Prevent FOUT layout shift on slow connections */
+    width: 1em;
+    height: 1em;
+    overflow: hidden;
+    white-space: nowrap;
+    vertical-align: middle;
   }
   
   /* Typography System */

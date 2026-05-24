@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useTheme } from "../contexts/ThemeContext";
 import { useAuth } from "../contexts/AuthContext";
+import { useNotifications } from "../contexts/NotificationContext";
 
 interface TopBarProps {
   title?: string;
@@ -34,62 +35,42 @@ export default function TopBar({ title, searchPlaceholder, actions, onMenuToggle
       )}&background=EBDCFF&color=1c1c1e&bold=true&size=100`
     : "https://i.pravatar.cc/150?u=admin";
 
-  // Notifications state loaded from localStorage
-  const [notifications, setNotifications] = useState<NotificationItem[]>(() => {
-    const saved = localStorage.getItem("aina-notifications");
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error("Error parsing saved notifications:", e);
-      }
-    }
-    return [
-      {
-        id: "default-1",
-        title: "Welcome to Aina AI",
-        details: "Your workspace has been successfully created.",
-        timestamp: "1 hour ago",
-        read: false,
-      },
-      {
-        id: "default-2",
-        title: "Billing Activated",
-        details: "Free trial plan active with 10,000 complimentary credits.",
-        timestamp: "2 hours ago",
-        read: true,
-      },
-    ];
-  });
+  const {
+    notifications,
+    markAsRead,
+    markAllAsRead,
+    dismissNotification,
+    clearAllNotifications
+  } = useNotifications();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 
-  // Save notifications to localStorage
-  useEffect(() => {
-    localStorage.setItem("aina-notifications", JSON.stringify(notifications));
-  }, [notifications]);
+  function formatRelativeTime(dateString: string): string {
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return dateString;
 
-  // Handle incoming notifications
-  useEffect(() => {
-    const handleNewNotif = (e: Event) => {
-      const customEvent = e as CustomEvent<{ title: string; details: string }>;
-      if (customEvent.detail) {
-        const { title, details } = customEvent.detail;
-        const newNotif: NotificationItem = {
-          id: Math.random().toString(36).substring(2, 9),
-          title,
-          details,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          read: false,
-        };
-        setNotifications((prev) => [newNotif, ...prev]);
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffSecs = Math.floor(diffMs / 1000);
+      const diffMins = Math.floor(diffSecs / 60);
+      const diffHours = Math.floor(diffMins / 60);
+      const diffDays = Math.floor(diffHours / 24);
+
+      if (diffSecs < 60) {
+        return "Just now";
+      } else if (diffMins < 60) {
+        return `${diffMins}m ago`;
+      } else if (diffHours < 24) {
+        return `${diffHours}h ago`;
+      } else if (diffDays === 1) {
+        return "Yesterday";
+      } else {
+        return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
       }
-    };
-
-    window.addEventListener("new-notification", handleNewNotif);
-    return () => {
-      window.removeEventListener("new-notification", handleNewNotif);
-    };
-  }, []);
+    } catch (e) {
+      return dateString;
+    }
+  }
 
   // Close notifications panel on outside click
   useEffect(() => {
@@ -110,7 +91,7 @@ export default function TopBar({ title, searchPlaceholder, actions, onMenuToggle
 
   return (
     <header
-      className={`h-16 flex items-center justify-between px-4 md:px-8 flex-shrink-0 z-10 sticky top-0 transition-colors duration-300 gap-3 ${
+      className={`h-16 flex items-center justify-between px-4 md:px-8 flex-shrink-0 z-30 sticky top-0 transition-colors duration-300 gap-3 ${
         isDark
           ? "bg-[#111115]/90 backdrop-blur-md border-b border-white/5"
           : "bg-[#F5F5F7]/80 backdrop-blur-md border-b border-black/5"
@@ -222,17 +203,17 @@ export default function TopBar({ title, searchPlaceholder, actions, onMenuToggle
         </button>
 
         {/* Notification bell and dropdown container */}
-        <div className="relative notification-container hidden sm:block">
+        <div className="relative notification-container">
           <button
             onClick={() => setNotificationsOpen((prev) => !prev)}
             aria-label="Notifications"
-            className={`flex w-9 h-9 md:w-10 md:h-10 rounded-full items-center justify-center transition-all outline-none shadow-sm border relative ${
+            className={`flex w-9 h-9 md:w-10 md:h-10 rounded-full items-center justify-center transition-all outline-none focus-visible:ring-2 focus-visible:ring-[#EBDCFF] focus-visible:ring-offset-2 dark:focus-visible:ring-offset-[#131317] shadow-sm border relative cursor-pointer ${
               isDark
                 ? "bg-white/5 border-white/10 text-white/50 hover:text-white hover:bg-white/10"
                 : "bg-white border-black/5 text-[#1c1c1e]/50 hover:text-[#1c1c1e] hover:bg-black/5"
             }`}
           >
-            <span className="material-symbols-outlined text-[18px] md:text-[20px]">notifications</span>
+            <span className="material-symbols-outlined text-[18px] md:text-[20px]" aria-hidden="true">notifications</span>
 
             {/* Unread badge count indicator */}
             {notifications.some((n) => !n.read) && (
@@ -247,7 +228,7 @@ export default function TopBar({ title, searchPlaceholder, actions, onMenuToggle
           {/* Notifications Popover List */}
           {notificationsOpen && (
             <div
-              className={`absolute right-0 mt-2 w-80 rounded-2xl shadow-2xl border overflow-hidden transition-all duration-300 z-50 ${
+              className={`absolute right-[-40px] sm:right-0 mt-2 w-[280px] sm:w-80 rounded-2xl shadow-2xl border overflow-hidden transition-all duration-300 z-50 ${
                 isDark
                   ? "bg-[#1f1f23] border-white/[0.06] text-white"
                   : "bg-white border-black/5 text-[#1c1c1e]"
@@ -260,16 +241,24 @@ export default function TopBar({ title, searchPlaceholder, actions, onMenuToggle
                 }`}
               >
                 <span className="font-bold text-[14px]">Notifications</span>
-                {notifications.some((n) => !n.read) && (
-                  <button
-                    onClick={() =>
-                      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
-                    }
-                    className="text-[11px] font-bold uppercase tracking-wider text-[#d0beed] hover:text-[#EBDCFF] transition-colors"
-                  >
-                    Mark all read
-                  </button>
-                )}
+                <div className="flex gap-2">
+                  {notifications.some((n) => !n.read) && (
+                    <button
+                      onClick={markAllAsRead}
+                      className="text-[11px] font-bold uppercase tracking-wider text-[#d0beed] hover:text-[#EBDCFF] transition-colors cursor-pointer"
+                    >
+                      Mark all read
+                    </button>
+                  )}
+                  {notifications.length > 0 && (
+                    <button
+                      onClick={clearAllNotifications}
+                      className="text-[11px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 transition-colors cursor-pointer"
+                    >
+                      Clear all
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Popover List Items */}
@@ -282,12 +271,8 @@ export default function TopBar({ title, searchPlaceholder, actions, onMenuToggle
                   notifications.map((notif) => (
                     <div
                       key={notif.id}
-                      onClick={() =>
-                        setNotifications((prev) =>
-                          prev.map((n) => (n.id === notif.id ? { ...n, read: true } : n))
-                        )
-                      }
-                      className={`px-4 py-3 text-left transition-colors cursor-pointer ${
+                      onClick={() => markAsRead(notif.id)}
+                      className={`px-4 py-3 text-left transition-colors cursor-pointer relative group/item ${
                         !notif.read
                           ? isDark
                             ? "bg-white/[0.02] hover:bg-white/[0.04]"
@@ -301,11 +286,24 @@ export default function TopBar({ title, searchPlaceholder, actions, onMenuToggle
                         <span className={`text-[13px] font-bold ${!notif.read ? "text-[#EBDCFF]" : ""}`}>
                           {notif.title}
                         </span>
-                        <span className="text-[10px] opacity-45 whitespace-nowrap mt-0.5">
-                          {notif.timestamp}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <span className="text-[10px] opacity-45 whitespace-nowrap">
+                            {formatRelativeTime(notif.created_at)}
+                          </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              dismissNotification(notif.id);
+                            }}
+                            aria-label={`Dismiss notification: ${notif.title}`}
+                            className="opacity-0 group-hover/item:opacity-100 p-0.5 rounded-full hover:bg-white/10 dark:hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-[#EBDCFF] text-[14px] transition-all flex items-center justify-center cursor-pointer outline-none"
+                            title="Dismiss notification"
+                          >
+                            <span className="material-symbols-outlined text-[14px] opacity-60 hover:opacity-100" aria-hidden="true">close</span>
+                          </button>
+                        </div>
                       </div>
-                      <p className="text-[12px] opacity-70 mt-0.5 leading-relaxed">
+                      <p className="text-[12px] opacity-70 mt-0.5 leading-relaxed pr-4">
                         {notif.details}
                       </p>
                     </div>

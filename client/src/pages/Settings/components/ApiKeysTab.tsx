@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { toast } from "sonner";
+import { useNotifications } from "../../../contexts/NotificationContext";
 import gsap from "gsap";
 import { Button } from "../../../components/ui/button";
 
@@ -15,6 +16,7 @@ interface ApiKey {
 
 export default function ApiKeysTab() {
   const { isDark } = useTheme();
+  const { fetchNotifications } = useNotifications();
   const c = (light: string, dark: string) => (isDark ? dark : light);
 
   const [loading, setLoading] = useState(true);
@@ -86,14 +88,7 @@ export default function ApiKeysTab() {
       const createdKeyName = newKeyName.trim();
       setCreatedKey(data.key);
       toast.success("API key created successfully!");
-      window.dispatchEvent(
-        new CustomEvent("new-notification", {
-          detail: {
-            title: "API Key Created",
-            details: `API key "${createdKeyName}" was created.`,
-          },
-        })
-      );
+      fetchNotifications();
       setNewKeyName("");
       fetchKeys();
     } catch (err: any) {
@@ -129,14 +124,7 @@ export default function ApiKeysTab() {
       }
 
       toast.success(`API key "${keyName}" has been revoked.`);
-      window.dispatchEvent(
-        new CustomEvent("new-notification", {
-          detail: {
-            title: "API Key Revoked",
-            details: `API key "${keyName}" has been revoked.`,
-          },
-        })
-      );
+      fetchNotifications();
       fetchKeys();
     } catch (err: any) {
       console.error(err);
@@ -350,15 +338,19 @@ export default function ApiKeysTab() {
             {!createdKey ? (
               <form onSubmit={handleCreateKey} className="space-y-5">
                 <div>
-                  <label className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ${c("text-[#1c1c1e]/50", "text-[#85948b]")}`}>
+                  <label htmlFor="keyName" className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ${c("text-[#1c1c1e]/50", "text-[#85948b]")}`}>
                     Key Name
                   </label>
                   <input
+                    id="keyName"
+                    name="key_name"
+                    autoComplete="off"
+                    spellCheck={false}
                     type="text"
                     required
                     value={newKeyName}
                     onChange={(e) => setNewKeyName(e.target.value)}
-                    placeholder="e.g. Production_Main_V2"
+                    placeholder="e.g. Production_Main_V2…"
                     className={`w-full rounded-xl px-4 py-3 text-[14px] font-medium outline-none transition-all shadow-inner ${
                       isDark
                         ? "bg-[#131317] border border-white/[0.06] text-white focus:border-[#EBDCFF]/50"
@@ -400,11 +392,15 @@ export default function ApiKeysTab() {
                 </div>
 
                 <div>
-                  <label className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ${c("text-[#1c1c1e]/50", "text-[#85948b]")}`}>
+                  <label htmlFor="plaintextKey" className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ${c("text-[#1c1c1e]/50", "text-[#85948b]")}`}>
                     Plaintext API Key
                   </label>
                   <div className="flex gap-2">
                     <input
+                      id="plaintextKey"
+                      name="plaintext_key"
+                      autoComplete="off"
+                      spellCheck={false}
                       type="text"
                       readOnly
                       value={createdKey}

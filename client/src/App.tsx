@@ -5,6 +5,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AuthProvider } from "./contexts/AuthContext";
+import { NotificationProvider } from "./contexts/NotificationContext";
 import { lazy, Suspense } from "react";
 import PageLoader from "./components/PageLoader";
 import { LayoutProvider } from "./contexts/LayoutContext";
@@ -64,13 +65,13 @@ function Router() {
     <Switch>
       {/* Public routes */}
       <Route path={"/"}>
-        <Suspense fallback={<PageLoader page="public" />}><Home /></Suspense>
+        <Suspense fallback={<PageLoader page="home" />}><Home /></Suspense>
       </Route>
       <Route path={"/login"}>
-        <Suspense fallback={<PageLoader page="public" />}><Login /></Suspense>
+        <Suspense fallback={<PageLoader page="login" />}><Login /></Suspense>
       </Route>
       <Route path={"/signup"}>
-        <Suspense fallback={<PageLoader page="public" />}><Signup /></Suspense>
+        <Suspense fallback={<PageLoader page="signup" />}><Signup /></Suspense>
       </Route>
       <Route path={"/forgot-password"}>
         <Suspense fallback={<PageLoader page="public" />}><ForgotPassword /></Suspense>
@@ -102,12 +103,14 @@ function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <ThemeProvider defaultTheme="light" switchable>
-          <TooltipProvider>
-            <Toaster />
-            <Router />
-          </TooltipProvider>
-        </ThemeProvider>
+        <NotificationProvider>
+          <ThemeProvider defaultTheme="light" switchable>
+            <TooltipProvider>
+              <Toaster />
+              <Router />
+            </TooltipProvider>
+          </ThemeProvider>
+        </NotificationProvider>
       </AuthProvider>
     </ErrorBoundary>
   );

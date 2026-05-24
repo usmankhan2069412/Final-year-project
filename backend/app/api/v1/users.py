@@ -82,6 +82,15 @@ def update_user_me(
     db.refresh(current_user)
     db.refresh(active_org)
 
+    # Save notification to DB
+    from app.services.notification import NotificationService
+    NotificationService.create_notification(
+        db,
+        user_id=current_user.id,
+        title="Profile Updated",
+        details="Your profile details have been saved successfully."
+    )
+
     return UserMeResponse(
         user=UserResponse.model_validate(current_user),
         active_organization=OrgResponse.model_validate(active_org)
@@ -103,5 +112,14 @@ def update_user_password(
     current_user.password_hash = get_password_hash(payload.new_password)
     db.commit()
     
+    # Save notification to DB
+    from app.services.notification import NotificationService
+    NotificationService.create_notification(
+        db,
+        user_id=current_user.id,
+        title="Password Updated",
+        details="Your password was changed successfully."
+    )
+
     return {"status": "success", "message": "Password updated successfully"}
 

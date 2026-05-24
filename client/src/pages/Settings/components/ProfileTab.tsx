@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { toast } from "sonner";
+import { useNotifications } from "../../../contexts/NotificationContext";
 import gsap from "gsap";
 import { Button } from "../../../components/ui/button";
 
@@ -20,6 +21,7 @@ interface UserMeResponse {
 
 export default function ProfileTab() {
   const { isDark } = useTheme();
+  const { fetchNotifications } = useNotifications();
   const c = (light: string, dark: string) => (isDark ? dark : light);
 
   const [loading, setLoading] = useState(true);
@@ -138,14 +140,7 @@ export default function ProfileTab() {
       toast.success("Profile updated successfully!");
 
       window.dispatchEvent(new Event("profile-updated"));
-      window.dispatchEvent(
-        new CustomEvent("new-notification", {
-          detail: {
-            title: "Profile Updated",
-            details: "Your profile details have been saved successfully.",
-          },
-        })
-      );
+      fetchNotifications();
 
       // Premium success micro-animation
       gsap.fromTo(
@@ -278,6 +273,7 @@ export default function ProfileTab() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label
+              htmlFor="fullName"
               className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ${c(
                 "text-[#1c1c1e]/50",
                 "text-[#85948b]"
@@ -286,6 +282,9 @@ export default function ProfileTab() {
               Full Name
             </label>
             <input
+              id="fullName"
+              name="full_name"
+              autoComplete="name"
               type="text"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
@@ -298,6 +297,7 @@ export default function ProfileTab() {
           </div>
           <div>
             <label
+              htmlFor="email"
               className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ${c(
                 "text-[#1c1c1e]/50",
                 "text-[#85948b]"
@@ -306,6 +306,10 @@ export default function ProfileTab() {
               Email Address
             </label>
             <input
+              id="email"
+              name="email"
+              autoComplete="email"
+              spellCheck={false}
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -318,6 +322,7 @@ export default function ProfileTab() {
           </div>
           <div className="md:col-span-2">
             <label
+              htmlFor="orgSlug"
               className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ${c(
                 "text-[#1c1c1e]/50",
                 "text-[#85948b]"
@@ -326,10 +331,14 @@ export default function ProfileTab() {
               Organization Slug (Workspace)
             </label>
             <input
+              id="orgSlug"
+              name="org_slug"
+              autoComplete="off"
+              spellCheck={false}
               type="text"
               value={orgSlug}
               onChange={(e) => setOrgSlug(e.target.value)}
-              placeholder="e.g. aina-ai"
+              placeholder="e.g. aina-ai…"
               className={`w-full rounded-xl px-5 py-3.5 text-[14px] font-medium outline-none transition-all shadow-inner ${
                 isDark
                   ? "bg-[#131317] border border-white/[0.06] text-white focus:border-[#EBDCFF]/50"

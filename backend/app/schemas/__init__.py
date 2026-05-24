@@ -11,6 +11,7 @@ from app.schemas.document import KnowledgeSourceCreate, KnowledgeChunkResponse, 
 from app.schemas.billing import SubscriptionPlanResponse, SubscriptionUsage, SubscriptionResponse, SubscribeRequest, BillingHistoryItem
 from app.schemas.team import TeamMemberResponse, InviteMemberRequest, UpdateRoleRequest
 from app.schemas.api_key import ApiKeyResponse, ApiKeyCreateRequest, ApiKeyCreateResponse
+from app.schemas.notification import NotificationResponse, NotificationCreate
 
 __all__ = [
     "UserBase",
@@ -57,4 +58,7 @@ __all__ = [
     "ApiKeyResponse",
     "ApiKeyCreateRequest",
     "ApiKeyCreateResponse",
+    "NotificationResponse",
+    "NotificationCreate",
 ]
+

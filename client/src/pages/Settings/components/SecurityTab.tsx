@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { toast } from "sonner";
+import { useNotifications } from "../../../contexts/NotificationContext";
 import gsap from "gsap";
 
 const getDeviceFromUA = () => {
@@ -46,6 +47,7 @@ const getDeviceFromUA = () => {
 
 export default function SecurityTab() {
   const { isDark } = useTheme();
+  const { fetchNotifications } = useNotifications();
   const c = (light: string, dark: string) => (isDark ? dark : light);
 
   // States
@@ -131,14 +133,7 @@ export default function SecurityTab() {
       }
 
       toast.success("Password changed successfully!");
-      window.dispatchEvent(
-        new CustomEvent("new-notification", {
-          detail: {
-            title: "Password Updated",
-            details: "Your password was changed successfully.",
-          },
-        })
-      );
+      fetchNotifications();
       setIsModalOpen(false);
     } catch (err: any) {
       console.error(err);
@@ -343,10 +338,13 @@ export default function SecurityTab() {
 
             <form onSubmit={handlePasswordSubmit} className="space-y-5">
               <div>
-                <label className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ${c("text-[#1c1c1e]/50", "text-[#85948b]")}`}>
+                <label htmlFor="currentPassword" className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ${c("text-[#1c1c1e]/50", "text-[#85948b]")}`}>
                   Current Password
                 </label>
                 <input
+                  id="currentPassword"
+                  name="current_password"
+                  autoComplete="current-password"
                   type="password"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
@@ -359,10 +357,13 @@ export default function SecurityTab() {
               </div>
 
               <div>
-                <label className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ${c("text-[#1c1c1e]/50", "text-[#85948b]")}`}>
+                <label htmlFor="newPassword" className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ${c("text-[#1c1c1e]/50", "text-[#85948b]")}`}>
                   New Password
                 </label>
                 <input
+                  id="newPassword"
+                  name="new_password"
+                  autoComplete="new-password"
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
@@ -375,10 +376,13 @@ export default function SecurityTab() {
               </div>
 
               <div>
-                <label className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ${c("text-[#1c1c1e]/50", "text-[#85948b]")}`}>
+                <label htmlFor="confirmPassword" className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ${c("text-[#1c1c1e]/50", "text-[#85948b]")}`}>
                   Confirm New Password
                 </label>
                 <input
+                  id="confirmPassword"
+                  name="confirm_password"
+                  autoComplete="new-password"
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
@@ -409,7 +413,7 @@ export default function SecurityTab() {
                       : "bg-[#1c1c1e] text-[#F5F5F7] hover:bg-black"
                   }`}
                 >
-                  {submitting ? "Updating..." : "Update Password"}
+                  {submitting ? "Updating…" : "Update Password"}
                 </button>
               </div>
             </form>

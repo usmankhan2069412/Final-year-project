@@ -3,6 +3,7 @@ from app.models.organization import Organization, OrgMember, OrgRole
 from app.models.document import KnowledgeSource, Document, KnowledgeChunk, SourceType, SourceStatus, FileType, ChunkStatus
 from app.models.subscription import SubscriptionPlan, Subscription
 from app.models.api_key import ApiKey
+from app.models.notification import Notification
 
 __all__ = [
     "User",
@@ -20,4 +21,6 @@ __all__ = [
     "SubscriptionPlan",
     "Subscription",
     "ApiKey",
+    "Notification",
 ]
+

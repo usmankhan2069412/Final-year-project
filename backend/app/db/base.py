@@ -10,6 +10,8 @@ from app.models.document import KnowledgeSource, Document, KnowledgeChunk  # noq
 from app.models.conversation import Deployment, Conversation, Message, ProcessedEvent  # noqa
 from app.models.subscription import SubscriptionPlan, Subscription  # noqa
 from app.models.api_key import ApiKey  # noqa
+from app.models.notification import Notification  # noqa
 from app.models.analytics import AnalyticsDaily, AnalyticsByChannel, AnalyticsByLang  # noqa
+
 
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { toast } from "sonner";
+import { useNotifications } from "../../../contexts/NotificationContext";
 
 interface SubscriptionPlan {
   id: string;
@@ -38,6 +39,7 @@ interface BillingHistoryItem {
 
 export default function UsageBillingTab() {
   const { isDark } = useTheme();
+  const { fetchNotifications } = useNotifications();
   const c = (light: string, dark: string) => (isDark ? dark : light);
 
   const [loading, setLoading] = useState(true);
@@ -116,14 +118,7 @@ export default function UsageBillingTab() {
       const updatedSub: Subscription = await res.json();
       setSubscription(updatedSub);
       toast.success(`Successfully switched to the ${updatedSub.plan.name} plan!`);
-      window.dispatchEvent(
-        new CustomEvent("new-notification", {
-          detail: {
-            title: "Plan Upgraded",
-            details: `Successfully switched to the ${updatedSub.plan.name} plan.`,
-          },
-        })
-      );
+      fetchNotifications();
       setIsModalOpen(false);
 
       // Refresh billing history after plan change
@@ -461,7 +456,7 @@ export default function UsageBillingTab() {
                           : (isDark ? "bg-[#EBDCFF] text-[#1c1c1e] hover:bg-[#d8bfff]" : "bg-[#1c1c1e] text-[#F5F5F7] hover:bg-black")
                       }`}
                     >
-                      {isCurrent ? "Current Plan" : isSubmittingThis ? "Switching..." : "Choose Plan"}
+                      {isCurrent ? "Current Plan" : isSubmittingThis ? "Switching…" : "Choose Plan"}
                     </button>
                   </div>
                 );

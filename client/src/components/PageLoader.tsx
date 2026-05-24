@@ -1,7 +1,7 @@
 import { useTheme } from "../contexts/ThemeContext";
 
 interface PageLoaderProps {
-  page?: "dashboard" | "inbox" | "builder" | "settings" | "models" | "analytics" | "public";
+  page?: "dashboard" | "inbox" | "builder" | "settings" | "models" | "analytics" | "public" | "home" | "login" | "signup";
   contentOnly?: boolean;
 }
 
@@ -11,7 +11,230 @@ export default function PageLoader({ page = "dashboard", contentOnly = false }: 
   // Dynamic light/dark theme color helper
   const c = (light: string, dark: string) => (isDark ? dark : light);
 
-  // ── Public Pages Skeleton (Auth flow: login, signup, reset password) ──
+  // ── Home/Landing Page Skeleton ──
+  if (page === "home") {
+    return (
+      <div
+        className="min-h-screen bg-[#F5F5F7] text-[#1c1c1e] font-sans overflow-x-hidden transition-colors duration-300 relative"
+      >
+        {/* Navigation Skeleton */}
+        <nav className="fixed top-0 w-full z-50 bg-[#F5F5F7]/80 backdrop-blur-md">
+          <div className="flex justify-between items-center w-full px-6 py-4 max-w-[1400px] mx-auto">
+            <div className="flex items-center gap-2 animate-pulse">
+              <div className="w-10 h-10 bg-black/10 rounded-xl" />
+              <div className="w-16 h-6 bg-black/10 rounded-lg" />
+            </div>
+            
+            <div className="hidden md:flex gap-8 items-center bg-white/50 backdrop-blur-lg px-8 py-3 rounded-full border border-black/5 shadow-sm">
+              <div className="w-16 h-4 bg-black/5 rounded" />
+              <div className="w-20 h-4 bg-black/5 rounded" />
+              <div className="w-16 h-4 bg-black/5 rounded" />
+              <div className="w-20 h-4 bg-black/5 rounded" />
+            </div>
+
+            <div className="flex gap-4 items-center animate-pulse">
+              <div className="w-16 h-9 rounded-full bg-black/5" />
+              <div className="w-32 h-9 rounded-full bg-[#EBDCFF]" />
+            </div>
+          </div>
+        </nav>
+
+        {/* Hero Section Skeleton */}
+        <main className="pt-32 pb-10">
+          <section className="relative pt-16 pb-24 px-6 md:px-12 animate-pulse">
+            <div className="max-w-[1200px] mx-auto text-center relative">
+              {/* Rotating badge outline */}
+              <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 lg:-translate-x-12 hidden md:flex items-center justify-center w-64 h-64">
+                <div className="w-64 h-64 rounded-full border border-dashed border-black/10" />
+              </div>
+
+              {/* Huge heading */}
+              <div className="space-y-4 mb-8">
+                <div className="h-16 md:h-24 w-80 sm:w-2/3 md:w-[680px] mx-auto rounded-2xl bg-black/10" />
+                <div className="h-16 md:h-24 w-60 sm:w-1/2 md:w-[480px] mx-auto rounded-2xl bg-[#EBDCFF]" />
+              </div>
+              
+              {/* Description */}
+              <div className="space-y-2.5 mb-12">
+                <div className="h-5 w-4/5 sm:w-2/3 md:w-[600px] mx-auto rounded-lg bg-black/5" />
+                <div className="h-5 w-3/5 sm:w-1/2 md:w-[450px] mx-auto rounded-lg bg-black/5" />
+              </div>
+              
+              {/* CTA button */}
+              <div className="h-14 w-44 mx-auto rounded-xl bg-[#EBDCFF] border border-black/10 shadow-sm" />
+              
+              {/* Info text */}
+              <div className="h-4 w-72 mx-auto rounded bg-black/5 mt-6" />
+            </div>
+          </section>
+        </main>
+      </div>
+    );
+  }
+
+  // ── Login Split Screen Page Skeleton ──
+  if (page === "login") {
+    return (
+      <div className="min-h-screen bg-white text-[#1c1c1e] font-sans flex relative overflow-hidden">
+        {/* Left Panel */}
+        <div className="hidden lg:flex flex-col justify-between w-1/2 p-12 bg-[#1c1c1e] text-[#F5F5F7] relative overflow-hidden animate-pulse">
+          <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#EBDCFF] rounded-full mix-blend-overlay opacity-5 blur-3xl" />
+          
+          {/* Logo */}
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-[#EBDCFF]/30 rounded-xl" />
+            <div className="w-16 h-6 bg-white/10 rounded-lg" />
+          </div>
+
+          {/* Graphics Text */}
+          <div className="space-y-4 my-12">
+            <div className="h-12 w-64 rounded-xl bg-white/10" />
+            <div className="h-12 w-48 rounded-xl bg-[#EBDCFF]/30" />
+            <div className="space-y-2 pt-4">
+              <div className="h-4.5 w-80 rounded-lg bg-white/5" />
+              <div className="h-4.5 w-64 rounded-lg bg-white/5" />
+            </div>
+          </div>
+
+          {/* Bottom spacer */}
+          <div className="w-12 h-1 bg-white/10 rounded-full" />
+        </div>
+
+        {/* Right Panel */}
+        <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 bg-[#F5F5F7] animate-pulse">
+          <div className="w-full max-w-[420px] space-y-8">
+            <div className="space-y-3">
+              <div className="h-10 w-44 rounded-xl bg-black/10" />
+              <div className="h-5 w-64 rounded-lg bg-black/5" />
+            </div>
+
+            <div className="space-y-6">
+              {/* Email */}
+              <div className="space-y-2">
+                <div className="h-3.5 w-24 rounded bg-black/5" />
+                <div className="h-12 w-full rounded-xl bg-white border border-black/5 shadow-sm" />
+              </div>
+
+              {/* Password */}
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <div className="h-3.5 w-20 rounded bg-black/5" />
+                  <div className="h-3 w-28 rounded bg-black/5" />
+                </div>
+                <div className="h-12 w-full rounded-xl bg-white border border-black/5 shadow-sm" />
+              </div>
+
+              {/* Button */}
+              <div className="h-12 w-full rounded-xl bg-[#EBDCFF] border border-black/5 shadow-sm" />
+              
+              {/* Divider */}
+              <div className="flex items-center gap-3">
+                <div className="h-[1px] flex-1 bg-black/5" />
+                <div className="h-3.5 w-32 rounded bg-black/5" />
+                <div className="h-[1px] flex-1 bg-black/5" />
+              </div>
+
+              {/* Google Button */}
+              <div className="h-12 w-full rounded-xl bg-white border border-black/10 shadow-sm" />
+            </div>
+
+            <div className="h-4 w-48 mx-auto rounded bg-black/5 mt-10" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Signup Split Screen Page Skeleton ──
+  if (page === "signup") {
+    return (
+      <div className="min-h-screen bg-white text-[#1c1c1e] font-sans flex relative overflow-hidden">
+        {/* Left Panel */}
+        <div className="hidden lg:flex flex-col justify-between w-1/2 p-12 bg-[#1c1c1e] text-[#F5F5F7] relative overflow-hidden animate-pulse">
+          <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-[#EBDCFF] rounded-full mix-blend-overlay opacity-10 blur-3xl" />
+          
+          {/* Logo */}
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-[#EBDCFF]/30 rounded-xl" />
+            <div className="w-16 h-6 bg-white/10 rounded-lg" />
+          </div>
+
+          {/* Graphics Text */}
+          <div className="space-y-4 my-12">
+            <div className="h-12 w-64 rounded-xl bg-white/10" />
+            <div className="h-12 w-48 rounded-xl bg-[#EBDCFF]/30" />
+            <div className="space-y-2 pt-4">
+              <div className="h-4.5 w-80 rounded-lg bg-white/5" />
+              <div className="h-4.5 w-64 rounded-lg bg-white/5" />
+            </div>
+            
+            {/* Tag bubbles */}
+            <div className="flex flex-wrap gap-2.5 pt-6">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="h-9 w-24 rounded-full bg-white/5 border border-white/10" />
+              ))}
+            </div>
+          </div>
+
+          {/* Bottom spacer */}
+          <div className="w-12 h-1 bg-white/10 rounded-full" />
+        </div>
+
+        {/* Right Panel */}
+        <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 bg-[#F5F5F7] animate-pulse">
+          <div className="w-full max-w-[420px] space-y-6">
+            <div className="space-y-3">
+              <div className="h-10 w-44 rounded-xl bg-black/10" />
+              <div className="h-5 w-60 rounded-lg bg-black/5" />
+            </div>
+
+            <div className="space-y-5">
+              {/* Name */}
+              <div className="space-y-2">
+                <div className="h-3.5 w-20 rounded bg-black/5" />
+                <div className="h-12 w-full rounded-xl bg-white border border-black/5 shadow-sm" />
+              </div>
+
+              {/* Email */}
+              <div className="space-y-2">
+                <div className="h-3.5 w-24 rounded bg-black/5" />
+                <div className="h-12 w-full rounded-xl bg-white border border-black/5 shadow-sm" />
+              </div>
+
+              {/* Password */}
+              <div className="space-y-2">
+                <div className="h-3.5 w-20 rounded bg-black/5" />
+                <div className="h-12 w-full rounded-xl bg-white border border-black/5 shadow-sm" />
+                <div className="flex gap-1.5 pt-1.5">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="h-1.5 flex-1 rounded-full bg-black/5" />
+                  ))}
+                </div>
+                <div className="h-3 w-24 rounded bg-black/5 mt-1" />
+              </div>
+
+              {/* Button */}
+              <div className="h-12 w-full rounded-xl bg-[#EBDCFF] border border-black/5 shadow-sm" />
+              
+              {/* Divider */}
+              <div className="flex items-center gap-3">
+                <div className="h-[1px] flex-1 bg-black/5" />
+                <div className="h-3.5 w-32 rounded bg-black/5" />
+                <div className="h-[1px] flex-1 bg-black/5" />
+              </div>
+
+              {/* Google Button */}
+              <div className="h-12 w-full rounded-xl bg-white border border-black/10 shadow-sm" />
+            </div>
+
+            <div className="h-4.5 w-52 mx-auto rounded bg-black/5 mt-8" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Public Pages Skeleton (Auth flow fallback: reset password etc.) ──
   if (page === "public") {
     return (
       <div

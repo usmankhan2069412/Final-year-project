@@ -79,6 +79,21 @@ class AuthService:
         else:
             logger.warning("Starter plan not found in database; subscription auto-assignment skipped.")
 
+        # Seed welcome notifications in DB
+        from app.services.notification import NotificationService
+        NotificationService.create_notification(
+            db,
+            user_id=db_user.id,
+            title="Welcome to Aina AI",
+            details="Your workspace has been successfully created."
+        )
+        NotificationService.create_notification(
+            db,
+            user_id=db_user.id,
+            title="Billing Activated",
+            details="Free trial plan active with 10,000 complimentary credits."
+        )
+
         db.commit()
         db.refresh(db_user)
         return db_user
@@ -229,6 +244,21 @@ class AuthService:
                 db.add(subscription)
             else:
                 logger.warning("Starter plan not found in database; subscription auto-assignment skipped.")
+
+            # Seed welcome notifications in DB
+            from app.services.notification import NotificationService
+            NotificationService.create_notification(
+                db,
+                user_id=db_user.id,
+                title="Welcome to Aina AI",
+                details="Your workspace has been successfully created."
+            )
+            NotificationService.create_notification(
+                db,
+                user_id=db_user.id,
+                title="Billing Activated",
+                details="Free trial plan active with 10,000 complimentary credits."
+            )
 
             db.commit()
             db.refresh(db_user)
