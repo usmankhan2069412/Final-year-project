@@ -7,6 +7,7 @@ from typing import List, Dict, Any, Optional, TypedDict
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.language import detect_message_language
 from app.db.base_repository import MessageRepository, ConversationRepository
 from app.models.chatbot import Chatbot
 from app.models.persona import Persona, PersonaTrait
@@ -118,6 +119,9 @@ class AgentGraphExecutor:
     @staticmethod
     def agent_handoff_node(state: AgentState) -> AgentState:
         lang = state["persona"].language
+        if lang == "multilingual":
+            lang = detect_message_language(state["user_message"], state.get("history"))
+            
         if lang == "urdu":
             text = "میں آپ کی درخواست کو کسٹمر سپورٹ ایجنٹ کو منتقل کر رہا ہوں۔ ہماری ٹیم جلد ہی آپ سے رابطہ کرے گی۔"
         elif lang == "english":
@@ -130,15 +134,25 @@ class AgentGraphExecutor:
     @staticmethod
     def conversational_node(state: AgentState) -> AgentState:
         llm = AgentGraphExecutor._get_llm(state, temperature=0.7)
-        greeting = state["persona"].greeting or "Hello! How can I help you today?"
+        greeting = getattr(state["persona"], "greeting", None) or "Hello! How can I help you today?"
         
         if llm:
             try:
+                detected_lang = detect_message_language(state["user_message"], state.get("history"))
+                lang_name = {
+                    "urdu": "Urdu Script",
+                    "roman_urdu": "Roman Urdu (Urdu written in English alphabets)",
+                    "english": "English"
+                }.get(detected_lang, "English")
+
+                desc = getattr(state["persona"], "description", None) or ""
+                desc_str = f"Description/Role: {desc}\n" if desc else ""
                 sys_msg = SystemMessage(content=(
                     f"You are {state['persona'].name or 'Aina Bot'}, an AI agent. "
                     f"Your traits are: {', '.join(state['traits'])}. "
+                    f"{desc_str}"
                     f"Greet the user and chat politely. Your main greeting is: '{greeting}'. "
-                    "Speak in the language style requested by the user's message (English, Urdu, or Roman Urdu)."
+                    f"You MUST strictly speak and reply in: {lang_name}."
                 ))
                 messages = [sys_msg]
                 for m in state["history"][-6:]:
@@ -241,13 +255,10 @@ class AgentGraphExecutor:
                     matched_sentence = s.strip()
                     break
 
-        q_lower = query.lower()
-        is_roman = any(w in q_lower for w in ["hai", "kya", "hain", "haan", "nahin", "nhi", "batao", "mujhe", "acha", "shukriya"])
-        is_urdu = any(ord(c) >= 0x0600 and ord(c) <= 0x06FF for c in query)
-
-        if is_urdu:
+        lang = detect_message_language(query)
+        if lang == "urdu":
             ans = f"معلومات کے مطابق: {matched_sentence}۔" if matched_sentence else "معاف کیجئے گا، میرے پاس اس کے متعلق معلومات نہیں ہیں۔"
-        elif is_roman:
+        elif lang == "roman_urdu":
             ans = f"Knowledge base ke mutabiq, {matched_sentence}." if matched_sentence else "I'm sorry, is ke baare mein mere paas information nahi hai."
         else:
             ans = f"Based on the knowledge base: {matched_sentence}." if matched_sentence else "I'm sorry, I couldn't find that specific information."
@@ -263,19 +274,33 @@ class AgentGraphExecutor:
     def rag_answer_node(state: AgentState) -> AgentState:
         if not state.get("is_relevant") or not state.get("context_text"):
             lang = state["persona"].language
+            if lang == "multilingual":
+                lang = detect_message_language(state["user_message"], state.get("history"))
+                
             if lang == "urdu":
                 ans = "معاف کیجئے گا، میری نالج بیس میں یہ معلومات موجود نہیں ہیں۔ کیا میں آپ کا رابطہ نمائندے سے کروا دوں؟"
-            elif any(w in state["user_message"].lower() for w in ["hai", "kya", "nhi", "yaar"]):
+            elif lang == "roman_urdu":
                 ans = "I'm sorry, mere paas is ke baare mein info nahi hai. Kya main support team se connect karoon?"
-            else:
+            elif lang == "english":
                 ans = "I'm sorry, I don't have that information in my knowledge base. Would you like me to connect you to an agent?"
+            else:
+                detected = detect_message_language(state["user_message"], state.get("history"))
+                if detected == "urdu":
+                    ans = "معاف کیجئے گا، میری نالج بیس میں یہ معلومات موجود نہیں ہیں۔ کیا میں آپ کا رابطہ نمائندے سے کروا دوں؟"
+                elif detected == "roman_urdu":
+                    ans = "I'm sorry, mere paas is ke baare mein info nahi hai. Kya main support team se connect karoon?"
+                else:
+                    ans = "I'm sorry, I don't have that information in my knowledge base. Would you like me to connect you to an agent?"
             return {"response": ans}
 
         llm = AgentGraphExecutor._get_llm(state)
         if llm:
             try:
+                desc = getattr(state["persona"], "description", None) or ""
+                desc_str = f"Description/Role: {desc}\n" if desc else ""
                 sys_msg = SystemMessage(content=(
                     f"You are {state['persona'].name or 'Aina Bot'}, an AI agent. Traits: {', '.join(state['traits'])}. "
+                    f"{desc_str}"
                     "Use ONLY the following context to answer the user's query. If you do not know the answer, say you do not know. "
                     "Generate the response in the user's input language (English, Urdu script, or Roman Urdu).\n\n"
                     f"Context:\n{state['context_text']}"

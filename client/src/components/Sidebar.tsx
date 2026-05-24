@@ -191,30 +191,7 @@ export default function Sidebar({ onNewBot, isOpen = false, onClose }: SidebarPr
           </span>
         </button>
 
-        <a
-          href="mailto:support@aina.ai"
-          className={`flex items-center rounded-xl text-[13px] font-semibold text-white/60 hover:text-[#F5F5F7] hover:bg-white/5 transition-all group relative ${
-            isCollapsed ? "justify-center p-2.5" : "px-3.5 py-2"
-          }`}
-        >
-          <span className="material-symbols-outlined text-[18px] text-white/40 flex-shrink-0">
-            help_outline
-          </span>
-          <span
-            className={`inline-block transition-all duration-200 overflow-hidden whitespace-nowrap ${
-              isCollapsed ? "opacity-0 w-0 scale-95 pointer-events-none" : "opacity-100 w-auto ml-3"
-            }`}
-          >
-            Help &amp; Support
-          </span>
-
-          {/* Tooltip */}
-          {isCollapsed && (
-            <span className="absolute left-16 bg-[#1c1c1e] text-white text-[11px] font-bold px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 whitespace-nowrap z-50 shadow-md border border-white/10">
-              Help &amp; Support
-            </span>
-          )}
-        </a>
+        
 
         <button
           onClick={() => { logout(); setLocation("/login"); }}
@@ -348,13 +325,7 @@ export default function Sidebar({ onNewBot, isOpen = false, onClose }: SidebarPr
               <span className="material-symbols-outlined text-[16px]">add</span>
               New Agent
             </button>
-            <a
-              href="mailto:support@aina.ai"
-              className="flex items-center gap-3 px-3.5 py-2 rounded-xl text-[13px] font-semibold text-white/60 hover:text-[#F5F5F7] hover:bg-white/5 transition-all"
-            >
-              <span className="material-symbols-outlined text-[18px] text-white/40">help_outline</span>
-              Help &amp; Support
-            </a>
+          
             <button
               onClick={() => { logout(); setLocation("/login"); }}
               className="flex items-center gap-3 px-3.5 py-2 rounded-xl text-[13px] font-semibold text-white/60 hover:text-white hover:bg-white/5 transition-all w-full"

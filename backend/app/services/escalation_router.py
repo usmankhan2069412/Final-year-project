@@ -5,6 +5,8 @@ from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
+from app.core.language import detect_message_language
+
 from app.models.conversation import Conversation, ConversationStatus, Message as DBMessage, MessageRole
 from app.models.organization import OrgMember, OrgRole, Organization
 from app.models.user import User
@@ -14,8 +16,11 @@ logger = logging.getLogger(__name__)
 
 class EscalationRouter:
     @staticmethod
-    def get_escalation_message(language: Optional[str]) -> str:
+    def get_escalation_message(language: Optional[str], user_message: Optional[str] = None) -> str:
         """Get standard handoff message based on persona language."""
+        if language == "multilingual" and user_message:
+            language = detect_message_language(user_message)
+            
         if language == "urdu":
             return "سپورٹ ایجنٹ آپ کے پیغام کا جائزہ لے رہے ہیں اور جلد ہی جواب دیں گے۔"
         elif language == "english":
@@ -158,7 +163,7 @@ class EscalationRouter:
         import asyncio
         from app.services.sse_manager import sse_manager
         
-        response_text = cls.get_escalation_message(language)
+        response_text = cls.get_escalation_message(language, user_message=user_message)
         
         db.add(DBMessage(
             conversation_id=conversation.id,

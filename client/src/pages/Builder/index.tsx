@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useLayoutConfig, useLayout } from "../../contexts/LayoutContext";
 import StepBar from "./components/StepBar";
-import Step1Persona, { BUILT_IN_PERSONAS } from "./components/Step1Persona";
+import Step1Persona from "./components/Step1Persona";
 import Step2Knowledge from "./components/Step2Knowledge";
 import Step3Test from "./components/Step3Test";
 import Step4Deploy from "./components/Step4Deploy";
@@ -22,20 +22,35 @@ export default function BotBuilder() {
   const c = (light: string, dark: string) => (isDark ? dark : light);
 
   const [step, setStep] = useState(1);
-  const [selectedPersona, setSelectedPersona] = useState("saraa");
+  const [selectedPersona, setSelectedPersona] = useState("custom");
   const [botName, setBotName] = useState("");
-  const [language, setLanguage] = useState("urdu");
+  const [language, setLanguage] = useState("multilingual");
 
   // Custom persona state
-  const [customName, setCustomName] = useState("");
   const [customRole, setCustomRole] = useState("");
   const [customTone, setCustomTone] = useState("friendly");
   const [customGreeting, setCustomGreeting] = useState("");
+  const [customFallback, setCustomFallback] = useState("");
+  const [customDescription, setCustomDescription] = useState("");
 
   // Knowledge base
   const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>([]);
 
-  const persona = BUILT_IN_PERSONAS.find((p) => p.id === selectedPersona);
+  // Dynamic persona object construction to ensure state integrity
+  const persona = {
+    id: "custom",
+    name: botName || "Aina Bot",
+    role: customRole || "AI Assistant",
+    emoji: customTone === "formal" ? "🎩" : customTone === "casual" ? "😎" : customTone === "empathetic" ? "💙" : "😊",
+    color: isDark ? "#c2ffdf" : "#5c3ea3",
+    bgDark: "#c2ffdf15",
+    bgLight: "#5c3ea310",
+    traits: [customTone],
+    greeting: customGreeting || `Assalam-o-Alaikum! Main ${botName || "Aina Bot"} hoon. Aap ki kya madad kar sakti hoon? 😊`,
+    fallback: customFallback,
+    description: customDescription || "Custom brand persona",
+    custom: true,
+  };
 
   const canProceed = () => {
     if (step === 1) return botName.trim().length > 0;
@@ -47,8 +62,8 @@ export default function BotBuilder() {
         <div
           className={`absolute top-0 right-0 w-[600px] h-[600px] rounded-full blur-3xl pointer-events-none transition-opacity duration-500 ${
             isDark
-              ? "bg-[#EBDCFF] opacity-5 mix-blend-screen"
-              : "bg-[#EBDCFF] opacity-10 mix-blend-multiply"
+              ? "bg-[#59eeb4]/5 mix-blend-screen"
+              : "bg-[#5c3ea3]/5 mix-blend-multiply"
           }`}
         ></div>
 
@@ -95,7 +110,7 @@ export default function BotBuilder() {
                 <span
                   className={`text-[11px] font-bold tracking-[0.2em] uppercase px-3 py-1 rounded-full border shadow-sm ${c(
                     "border-black/5 bg-white text-[#1c1c1e]",
-                    "bg-white/5 border-white/10 text-[#EBDCFF]"
+                    "bg-white/5 border-white/10 text-primary"
                   )}`}
                 >
                   Step {step} of {STEPS.length}
@@ -118,7 +133,7 @@ export default function BotBuilder() {
               </h1>
               <p className={`text-[14px] sm:text-[15px] max-w-2xl font-medium ${c("text-[#1c1c1e]/60", "text-white/50")}`}>
                 {step === 1 &&
-                  "Choose or customize a persona that represents your brand. A well-defined personality makes your bot feel human, not robotic."}
+                  "Customize a brand persona that represents your business identity. A well-defined personality builds trust and customer connection."}
                 {step === 2 &&
                   "Upload documents, add your website, contact info, guidelines — everything your bot needs to answer accurately and confidently."}
                 {step === 3 &&
@@ -131,20 +146,18 @@ export default function BotBuilder() {
             {/* Step components */}
             {step === 1 && (
               <Step1Persona
-                selected={selectedPersona}
-                onSelect={setSelectedPersona}
-                customName={customName}
-                setCustomName={setCustomName}
                 customRole={customRole}
                 setCustomRole={setCustomRole}
                 customTone={customTone}
                 setCustomTone={setCustomTone}
                 customGreeting={customGreeting}
                 setCustomGreeting={setCustomGreeting}
+                customFallback={customFallback}
+                setCustomFallback={setCustomFallback}
+                customDescription={customDescription}
+                setCustomDescription={setCustomDescription}
                 botName={botName}
                 setBotName={setBotName}
-                language={language}
-                setLanguage={setLanguage}
               />
             )}
             {step === 2 && <Step2Knowledge items={knowledgeItems} setItems={setKnowledgeItems} />}
@@ -173,9 +186,9 @@ export default function BotBuilder() {
                     key={s.num}
                     className={`h-2 rounded-full transition-all duration-500 ${
                       s.num === step
-                        ? c("w-6 sm:w-8 bg-[#1c1c1e] shadow-sm", "w-6 sm:w-8 bg-[#EBDCFF] shadow-glow")
+                        ? "w-6 sm:w-8 bg-primary shadow-sm"
                         : s.num < step
-                        ? c("w-3 sm:w-4 bg-[#1c1c1e]/30", "w-3 sm:w-4 bg-[#EBDCFF]/40")
+                        ? "w-3 sm:w-4 bg-primary/40"
                         : c("w-2.5 sm:w-3 bg-black/10", "w-2.5 sm:w-3 bg-[#2a2a2e]")
                     }`}
                   ></div>
@@ -186,22 +199,14 @@ export default function BotBuilder() {
                 <button
                   onClick={() => setStep((s) => Math.min(4, s + 1))}
                   disabled={step === 1 && !canProceed()}
-                  className={`flex items-center gap-2 px-5 sm:px-8 py-3.5 rounded-xl font-bold text-[14px] transition-all shadow-md disabled:opacity-40 disabled:cursor-not-allowed ${
-                    isDark
-                      ? "bg-[#EBDCFF] hover:bg-[#d8bfff] text-[#1c1c1e]"
-                      : "bg-[#1c1c1e] hover:bg-black text-[#F5F5F7]"
-                  }`}
+                  className="flex items-center gap-2 px-5 sm:px-8 py-3.5 rounded-xl font-bold text-[14px] transition-all shadow-md disabled:opacity-40 disabled:cursor-not-allowed bg-primary text-primary-foreground hover:opacity-90 active:scale-[0.98]"
                 >
                   {step === 2 && knowledgeItems.length === 0 ? "Skip & Continue" : "Continue"}
                   <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
                 </button>
               ) : (
                 <button
-                  className={`flex items-center gap-2 px-5 sm:px-8 py-3.5 rounded-xl font-bold text-[14px] transition-all shadow-md active:scale-[0.98] ${
-                    isDark
-                      ? "bg-[#EBDCFF] hover:bg-[#d8bfff] text-[#1c1c1e]"
-                      : "bg-[#1c1c1e] hover:bg-black text-[#F5F5F7]"
-                  }`}
+                  className="flex items-center gap-2 px-5 sm:px-8 py-3.5 rounded-xl font-bold text-[14px] transition-all shadow-md active:scale-[0.98] bg-primary text-primary-foreground hover:opacity-90"
                 >
                   <span className="material-symbols-outlined text-[18px]">rocket_launch</span>
                   Publish Bot

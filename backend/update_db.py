@@ -40,6 +40,25 @@ def update():
             print("Adding webhook_verified_at to deployments...")
             conn.execute(text("ALTER TABLE deployments ADD COLUMN webhook_verified_at TIMESTAMP WITH TIME ZONE;"))
             
+        print("Checking personas table columns...")
+        result = conn.execute(text("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'personas';
+        """))
+        persona_columns = [row[0] for row in result.fetchall()]
+        print("Existing columns in personas:", persona_columns)
+        
+        if 'greeting' not in persona_columns:
+            print("Adding greeting to personas...")
+            conn.execute(text("ALTER TABLE personas ADD COLUMN greeting VARCHAR(500);"))
+        if 'fallback' not in persona_columns:
+            print("Adding fallback to personas...")
+            conn.execute(text("ALTER TABLE personas ADD COLUMN fallback VARCHAR(500);"))
+        if 'description' not in persona_columns:
+            print("Adding description to personas...")
+            conn.execute(text("ALTER TABLE personas ADD COLUMN description VARCHAR(1000);"))
+            
         print("Checking conversations table columns...")
         result = conn.execute(text("""
             SELECT column_name 

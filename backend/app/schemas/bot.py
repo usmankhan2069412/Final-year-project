@@ -21,6 +21,9 @@ class PersonaTraitResponse(PersonaTraitBase):
 class PersonaBase(BaseModel):
     name: str
     language: str
+    greeting: Optional[str] = None
+    fallback: Optional[str] = None
+    description: Optional[str] = None
 
 class PersonaCreate(PersonaBase):
     traits: List[str] = []
@@ -28,6 +31,9 @@ class PersonaCreate(PersonaBase):
 class PersonaUpdate(BaseModel):
     name: Optional[str] = None
     language: Optional[str] = None
+    greeting: Optional[str] = None
+    fallback: Optional[str] = None
+    description: Optional[str] = None
     traits: Optional[List[str]] = None
 
 class PersonaResponse(PersonaBase):

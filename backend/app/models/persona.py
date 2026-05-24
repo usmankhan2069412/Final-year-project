@@ -11,6 +11,9 @@ class Persona(Base):
     org_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True)  # NULL = Built-in system persona
     name = Column(String(80), nullable=False)
     language = Column(String(30), nullable=False)
+    greeting = Column(String(500), nullable=True)
+    fallback = Column(String(500), nullable=True)
+    description = Column(String(1000), nullable=True)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
 
     # Relationships

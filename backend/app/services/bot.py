@@ -31,7 +31,10 @@ class BotService:
         db_persona = Persona(
             org_id=org_id,
             name=persona_in.name,
-            language=persona_in.language
+            language=persona_in.language,
+            greeting=persona_in.greeting,
+            fallback=persona_in.fallback,
+            description=persona_in.description
         )
         db.add(db_persona)
         db.flush()
@@ -79,6 +82,12 @@ class BotService:
             db_persona.name = persona_in.name
         if persona_in.language is not None:
             db_persona.language = persona_in.language
+        if persona_in.greeting is not None:
+            db_persona.greeting = persona_in.greeting
+        if persona_in.fallback is not None:
+            db_persona.fallback = persona_in.fallback
+        if persona_in.description is not None:
+            db_persona.description = persona_in.description
 
         if persona_in.traits is not None:
             # Remove old traits
