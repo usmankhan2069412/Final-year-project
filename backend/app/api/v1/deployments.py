@@ -23,16 +23,6 @@ def create_deployment(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/{chatbot_id}", response_model=List[DeploymentResponse])
-def get_deployments(
-    chatbot_id: uuid.UUID,
-    db: Session = Depends(get_tenant_db),
-    org_id: uuid.UUID = Depends(get_current_org_id)
-):
-    """List all deployments for a chatbot."""
-    return DeploymentService.get_deployments(db=db, org_id=org_id, chatbot_id=chatbot_id)
-
-
 @router.get("/details/{deployment_id}", response_model=DeploymentResponse)
 def get_deployment(
     deployment_id: uuid.UUID,
@@ -47,6 +37,16 @@ def get_deployment(
             detail="Deployment not found or access denied."
         )
     return deployment
+
+
+@router.get("/{chatbot_id}", response_model=List[DeploymentResponse])
+def get_deployments(
+    chatbot_id: uuid.UUID,
+    db: Session = Depends(get_tenant_db),
+    org_id: uuid.UUID = Depends(get_current_org_id)
+):
+    """List all deployments for a chatbot."""
+    return DeploymentService.get_deployments(db=db, org_id=org_id, chatbot_id=chatbot_id)
 
 
 @router.patch("/{deployment_id}/activate", response_model=DeploymentResponse)

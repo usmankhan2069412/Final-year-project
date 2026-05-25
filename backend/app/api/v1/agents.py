@@ -191,6 +191,7 @@ def resolve_conversation(
 
 
 @router.get("/stream")
+@router.get("/conversations/stream")
 async def sse_stream(
     org_id: uuid.UUID = Depends(get_current_org_id),
 ):

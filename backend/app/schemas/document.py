@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict
-from app.models.document import SourceType, SourceStatus, ChunkStatus
+from app.models.document import SourceType, SourceStatus, ChunkStatus, KnowledgeJobStatus
 
 class KnowledgeSourceCreate(BaseModel):
     chatbot_id: uuid.UUID
@@ -25,7 +25,23 @@ class KnowledgeSourceResponse(BaseModel):
     status: SourceStatus
     error_message: Optional[str] = None
     created_at: datetime
+    updated_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
 class KnowledgeSourceDetailResponse(KnowledgeSourceResponse):
     chunks: List[KnowledgeChunkResponse] = []
+
+class KnowledgeJobResponse(BaseModel):
+    id: uuid.UUID
+    source_id: uuid.UUID
+    chatbot_id: uuid.UUID
+    status: KnowledgeJobStatus
+    attempts: int
+    max_attempts: int
+    error_message: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)

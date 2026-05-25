@@ -1,6 +1,6 @@
 import uuid
 from enum import Enum as PyEnum
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, String, Text, DateTime, Enum, ForeignKey, Index, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -37,6 +37,7 @@ class Deployment(Base):
     whatsapp_business_account_id = Column(String(50), nullable=True)  # WABA ID
     is_active = Column(Boolean, nullable=False, default=False)
     webhook_verified_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     chatbot = relationship("Chatbot")
@@ -55,7 +56,7 @@ class Conversation(Base):
         default=ConversationStatus.ONGOING
     )
     sender_phone = Column(String(20), nullable=True)  # WhatsApp sender phone number
-    started_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    started_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     deleted_at = Column(DateTime(timezone=True), nullable=True)
 
     # Relationships
@@ -79,7 +80,7 @@ class Message(Base):
         nullable=False
     )
     content = Column(Text, nullable=False)
-    created_at = Column(DateTime(timezone=True), primary_key=True, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), primary_key=True, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     conversation = relationship("Conversation")
@@ -92,5 +93,4 @@ class ProcessedEvent(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     event_id = Column(String(255), nullable=False, unique=True)
     event_type = Column(String(80), nullable=False)
-    processed_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
-
+    processed_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))

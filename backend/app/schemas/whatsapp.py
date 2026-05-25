@@ -36,6 +36,7 @@ class DeploymentResponse(BaseModel):
     whatsapp_phone_number_id: Optional[str] = None
     whatsapp_business_account_id: Optional[str] = None
     webhook_verified_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 

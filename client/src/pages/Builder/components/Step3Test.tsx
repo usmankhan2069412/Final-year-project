@@ -2,13 +2,16 @@ import { useState } from "react";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { ChatMessage } from "../types";
 import ChatSimulator from "./ChatSimulator";
+import { api, ChatResponse } from "../../../lib/api";
 
 interface Step3TestProps {
   persona: any;
   botName: string;
+  chatbotId: string | null;
+  onRequireDraft: () => Promise<string | null>;
 }
 
-export default function Step3Test({ persona, botName }: Step3TestProps) {
+export default function Step3Test({ persona, botName, chatbotId, onRequireDraft }: Step3TestProps) {
   const { isDark } = useTheme();
   const c = (light: string, dark: string) => (isDark ? dark : light);
 
@@ -20,43 +23,40 @@ export default function Step3Test({ persona, botName }: Step3TestProps) {
   ]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [lastSources, setLastSources] = useState<ChatResponse["sources"]>([]);
+  const [testError, setTestError] = useState("");
 
-  const DEMO_RESPONSES: Record<string, string> = {
-    hello: `${persona?.greeting ?? "Hello! How can I help?"}`,
-    hi: `Hello there! 😊 Main ${botName || "AI Bot"} hoon. Kya madad kar sakta hoon?`,
-    price:
-      "Hamari Professional plan sirf PKR 8,500/month mein available hai — jisme 5 bots, 5,000 messages, aur WhatsApp integration shamil hai! Kya aap free trial start karna chahte hain?",
-    pricing:
-      "Hamari pricing plans: Free (0/mo), Professional (PKR 8,500/mo), aur Enterprise (custom). Kaunsa aap ke liye best hai?",
-    help: "Main aap ki poori madad karne ke liye yahan hoon! Aap mujhse kuch bhi pooch sakte hain — products, pricing, ya technical support. Kya chahiye?",
-    whatsapp:
-      "Bilkul! Aap ka bot WhatsApp pe deploy ho sakta hai. Setup mein sirf 5 minute lagte hain. Kya main aap ko guide karoon? 🚀",
-    contact:
-      "Aap humse rabta kar sakte hain:\n📧 Email: support@aina.ai\n📞 Phone: +92 300 1234567\n🌐 Website: aina.ai",
-    default:
-      "That's a great question! Main is ke baare mein check kar raha hoon... 🔍 Meri knowledge base ke mutabiq, main chahta hoon ke aap ko best answer milein. Kya aap thoda aur detail de sakte hain?",
-  };
-
-  const sendMessage = () => {
+  const sendMessage = async () => {
     if (!input.trim()) return;
     const userMsg = input.trim();
     setInput("");
+    setTestError("");
     setMessages((prev) => [...prev, { role: "user", text: userMsg }]);
     setIsTyping(true);
-    setTimeout(() => {
-      const lower = userMsg.toLowerCase();
-      const key = Object.keys(DEMO_RESPONSES).find((k) => lower.includes(k)) ?? "default";
-      const response = DEMO_RESPONSES[key];
-      setMessages((prev) => [...prev, { role: "bot", text: response }]);
-      setIsTyping(false);
-    }, 1200 + Math.random() * 800);
-  };
 
-  const displayName = botName || persona?.name || "Aina Bot";
+    try {
+      const id = chatbotId || (await onRequireDraft());
+      if (!id) throw new Error("Save the bot before testing.");
+
+      const result = await api.sendBuilderMessage(id, {
+        message: userMsg,
+        conversation_id: conversationId,
+      });
+      setConversationId(result.conversation_id);
+      setLastSources(result.sources || []);
+      setMessages((prev) => [...prev, { role: "bot", text: result.response }]);
+    } catch (err: any) {
+      const message = err?.message || "Failed to test chatbot";
+      setTestError(message);
+      setMessages((prev) => [...prev, { role: "bot", text: message }]);
+    } finally {
+      setIsTyping(false);
+    }
+  };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-in fade-in duration-300">
-      {/* Left: Build status */}
       <div className="lg:col-span-5 space-y-6">
         <div
           className={`rounded-[2rem] border p-4 sm:p-8 shadow-sm ${
@@ -76,21 +76,21 @@ export default function Step3Test({ persona, botName }: Step3TestProps) {
                 className={`text-[20px] font-serif font-bold ${c("text-[#1c1c1e]", "text-white")}`}
                 style={{ fontFamily: "'Playfair Display', serif" }}
               >
-                Bot is Ready!
+                Test Live Behavior
               </h3>
               <p className={`text-[13px] font-medium mt-1 ${c("text-[#1c1c1e]/60", "text-[#85948b]")}`}>
-                All systems trained and deployed
+                Uses your saved persona and indexed knowledge sources
               </p>
             </div>
           </div>
 
           <div className="space-y-3">
             {[
-              { label: "Persona Training", detail: "Identity & voice configured" },
-              { label: "Knowledge Indexing", detail: "All sources processed" },
-              { label: "Language Model", detail: "Bilingual mode active" },
-              { label: "Safety Filters", detail: "Guardrails enabled" },
-              { label: "Response Tuning", detail: "Optimized for accuracy" },
+              { label: "Persona", detail: persona?.name ? "Identity saved for testing" : "Save persona before testing" },
+              { label: "Knowledge Retrieval", detail: "Queries the real RAG endpoint" },
+              { label: "Language Mode", detail: "Backend detects English, Urdu, and Roman Urdu" },
+              { label: "Conversation Memory", detail: conversationId ? "Current test session active" : "Starts on first message" },
+              { label: "Sources", detail: lastSources.length ? `${lastSources.length} source chunks returned` : "No sources returned yet" },
             ].map((item) => (
               <div
                 key={item.label}
@@ -116,7 +116,6 @@ export default function Step3Test({ persona, botName }: Step3TestProps) {
           </div>
         </div>
 
-        {/* Quick test prompts */}
         <div
           className={`rounded-[2rem] border p-4 sm:p-8 shadow-sm ${
             isDark ? "bg-[#1f1f23] border-white/[0.06]" : "bg-white border-black/5"
@@ -142,10 +141,24 @@ export default function Step3Test({ persona, botName }: Step3TestProps) {
               )
             )}
           </div>
+
+          {testError && <p className="text-[12px] font-semibold text-red-500 mt-4">{testError}</p>}
+
+          {lastSources.length > 0 && (
+            <div className={`mt-5 border-t pt-4 space-y-2 ${c("border-black/5", "border-white/[0.06]")}`}>
+              <h5 className={`text-[11px] font-bold uppercase tracking-widest ${c("text-[#1c1c1e]/50", "text-[#85948b]")}`}>
+                Returned Sources
+              </h5>
+              {lastSources.slice(0, 3).map((source) => (
+                <p key={source.chunk_id} className={`text-[11px] leading-relaxed line-clamp-2 ${c("text-[#1c1c1e]/60", "text-[#85948b]")}`}>
+                  {source.text || "Source text unavailable"}
+                </p>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Right: Chat preview */}
       <div className="lg:col-span-7 h-[660px]">
         <ChatSimulator
           botName={botName || persona?.name || "Aina Bot"}

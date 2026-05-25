@@ -133,6 +133,8 @@ class BotService:
         db_chatbot = Chatbot(
             org_id=org_id,
             persona_id=chatbot_in.persona_id,
+            name=chatbot_in.name.strip() or "Aina Bot",
+            description=chatbot_in.description,
             status=chatbot_in.status
         )
         db.add(db_chatbot)
@@ -181,6 +183,15 @@ class BotService:
             if not persona:
                 raise ValueError("Accessible Persona not found")
             db_chatbot.persona_id = chatbot_in.persona_id
+
+        if chatbot_in.name is not None:
+            cleaned_name = chatbot_in.name.strip()
+            if not cleaned_name:
+                raise ValueError("Chatbot name cannot be empty")
+            db_chatbot.name = cleaned_name
+
+        if chatbot_in.description is not None:
+            db_chatbot.description = chatbot_in.description
 
         if chatbot_in.status is not None:
             db_chatbot.status = chatbot_in.status

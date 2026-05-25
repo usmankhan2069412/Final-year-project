@@ -39,6 +39,31 @@ def update():
         if 'webhook_verified_at' not in columns:
             print("Adding webhook_verified_at to deployments...")
             conn.execute(text("ALTER TABLE deployments ADD COLUMN webhook_verified_at TIMESTAMP WITH TIME ZONE;"))
+        if 'created_at' not in columns:
+            print("Adding created_at to deployments...")
+            conn.execute(text("ALTER TABLE deployments ADD COLUMN created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW();"))
+            
+        print("Checking chatbots table columns...")
+        result = conn.execute(text("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'chatbots';
+        """))
+        chatbot_columns = [row[0] for row in result.fetchall()]
+        print("Existing columns in chatbots:", chatbot_columns)
+        
+        if 'name' not in chatbot_columns:
+            print("Adding name to chatbots...")
+            conn.execute(text("ALTER TABLE chatbots ADD COLUMN name VARCHAR(160) NOT NULL DEFAULT 'Aina Bot';"))
+        if 'description' not in chatbot_columns:
+            print("Adding description to chatbots...")
+            conn.execute(text("ALTER TABLE chatbots ADD COLUMN description TEXT;"))
+        if 'created_at' not in chatbot_columns:
+            print("Adding created_at to chatbots...")
+            conn.execute(text("ALTER TABLE chatbots ADD COLUMN created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW();"))
+        if 'updated_at' not in chatbot_columns:
+            print("Adding updated_at to chatbots...")
+            conn.execute(text("ALTER TABLE chatbots ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW();"))
             
         print("Checking personas table columns...")
         result = conn.execute(text("""
@@ -58,6 +83,54 @@ def update():
         if 'description' not in persona_columns:
             print("Adding description to personas...")
             conn.execute(text("ALTER TABLE personas ADD COLUMN description VARCHAR(1000);"))
+
+        print("Checking knowledge_sources table columns...")
+        result = conn.execute(text("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'knowledge_sources';
+        """))
+        source_columns = [row[0] for row in result.fetchall()]
+        print("Existing columns in knowledge_sources:", source_columns)
+        if 'updated_at' not in source_columns:
+            print("Adding updated_at to knowledge_sources...")
+            conn.execute(text("ALTER TABLE knowledge_sources ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW();"))
+
+        print("Checking knowledge_jobs table...")
+        result = conn.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_name = 'knowledge_jobs'
+            );
+        """))
+        jobs_exists = result.scalar()
+        if not jobs_exists:
+            print("Creating knowledge_jobs table...")
+            conn.execute(text("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'enum_knowledge_job_status') THEN
+                        CREATE TYPE enum_knowledge_job_status AS ENUM ('QUEUED', 'PROCESSING', 'COMPLETED', 'FAILED');
+                    END IF;
+                END
+                $$;
+            """))
+            conn.execute(text("""
+                CREATE TABLE knowledge_jobs (
+                    id UUID PRIMARY KEY,
+                    source_id UUID NOT NULL REFERENCES knowledge_sources(id) ON DELETE CASCADE,
+                    chatbot_id UUID NOT NULL REFERENCES chatbots(id) ON DELETE CASCADE,
+                    org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+                    status enum_knowledge_job_status NOT NULL DEFAULT 'QUEUED',
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    max_attempts INTEGER NOT NULL DEFAULT 3,
+                    error_message TEXT,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                    started_at TIMESTAMP WITH TIME ZONE,
+                    completed_at TIMESTAMP WITH TIME ZONE
+                );
+            """))
             
         print("Checking conversations table columns...")
         result = conn.execute(text("""

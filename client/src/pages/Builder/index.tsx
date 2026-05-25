@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useLayoutConfig, useLayout } from "../../contexts/LayoutContext";
 import StepBar from "./components/StepBar";
@@ -7,6 +8,7 @@ import Step2Knowledge from "./components/Step2Knowledge";
 import Step3Test from "./components/Step3Test";
 import Step4Deploy from "./components/Step4Deploy";
 import { KnowledgeItem } from "./types";
+import { api, KnowledgeSourceResponse, SourceType } from "../../lib/api";
 
 const STEPS = [
   { num: 1, label: "Persona", icon: "face" },
@@ -22,9 +24,11 @@ export default function BotBuilder() {
   const c = (light: string, dark: string) => (isDark ? dark : light);
 
   const [step, setStep] = useState(1);
-  const [selectedPersona, setSelectedPersona] = useState("custom");
   const [botName, setBotName] = useState("");
-  const [language, setLanguage] = useState("multilingual");
+  const [personaId, setPersonaId] = useState<string | null>(null);
+  const [chatbotId, setChatbotId] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "failed">("idle");
+  const [saveError, setSaveError] = useState("");
 
   // Custom persona state
   const [customRole, setCustomRole] = useState("");
@@ -35,6 +39,15 @@ export default function BotBuilder() {
 
   // Knowledge base
   const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>([]);
+
+  const toKnowledgeItem = (source: KnowledgeSourceResponse): KnowledgeItem => ({
+    id: source.id,
+    type: source.source_type,
+    label: source.label,
+    value: source.source_type === "text" && source.value.length > 80 ? `${source.value.slice(0, 80)}...` : source.value,
+    status: source.status,
+    error_message: source.error_message,
+  });
 
   // Dynamic persona object construction to ensure state integrity
   const persona = {
@@ -55,6 +68,115 @@ export default function BotBuilder() {
   const canProceed = () => {
     if (step === 1) return botName.trim().length > 0;
     return true;
+  };
+
+  const saveDraft = async () => {
+    if (!botName.trim()) {
+      toast.error("Bot name is required before saving.");
+      return null;
+    }
+
+    setSaveStatus("saving");
+    setSaveError("");
+    try {
+      const personaPayload = {
+        name: botName.trim(),
+        language: "multilingual",
+        greeting: customGreeting.trim() || null,
+        fallback: customFallback.trim() || null,
+        description: customDescription.trim() || customRole.trim() || null,
+        traits: [customTone],
+      };
+
+      const savedPersona = personaId
+        ? await api.updatePersona(personaId, personaPayload)
+        : await api.createPersona(personaPayload);
+
+      setPersonaId(savedPersona.id);
+
+      const chatbotPayload = {
+        persona_id: savedPersona.id,
+        name: botName.trim(),
+        description: customDescription.trim() || customRole.trim() || null,
+        status: "draft" as const,
+      };
+
+      const savedChatbot = chatbotId
+        ? await api.updateChatbot(chatbotId, chatbotPayload)
+        : await api.createChatbot(chatbotPayload);
+
+      setChatbotId(savedChatbot.id);
+      setSaveStatus("saved");
+      return savedChatbot.id;
+    } catch (err: any) {
+      const message = err?.message || "Failed to save draft";
+      setSaveStatus("failed");
+      setSaveError(message);
+      toast.error(message);
+      return null;
+    }
+  };
+
+  const ensureDraft = async () => chatbotId || (await saveDraft());
+
+  const refreshKnowledge = async (id = chatbotId) => {
+    if (!id) return;
+    try {
+      const sources = await api.listKnowledge(id);
+      setKnowledgeItems(sources.map(toKnowledgeItem));
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to refresh knowledge sources");
+    }
+  };
+
+  useEffect(() => {
+    if (!chatbotId || step !== 2) return;
+    refreshKnowledge(chatbotId);
+    const timer = window.setInterval(() => refreshKnowledge(chatbotId), 3000);
+    return () => window.clearInterval(timer);
+  }, [chatbotId, step]);
+
+  const addKnowledgeItem = async (type: Exclude<SourceType, "file">, value: string, label: string) => {
+    const id = await ensureDraft();
+    if (!id) return;
+    try {
+      await api.createKnowledge({ chatbot_id: id, source_type: type, value, label });
+      await refreshKnowledge(id);
+      toast.success(type === "text" || type === "website" ? "Knowledge source queued for indexing." : "Knowledge source saved.");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to add knowledge source");
+    }
+  };
+
+  const uploadKnowledgeFiles = async (files: FileList | File[]) => {
+    const id = await ensureDraft();
+    if (!id) return;
+    const selected = Array.from(files);
+    for (const file of selected) {
+      try {
+        await api.uploadKnowledgeFile(id, file);
+      } catch (err: any) {
+        toast.error(`${file.name}: ${err?.message || "Upload failed"}`);
+      }
+    }
+    await refreshKnowledge(id);
+  };
+
+  const removeKnowledgeItem = async (sourceId: string) => {
+    try {
+      await api.deleteKnowledge(sourceId);
+      setKnowledgeItems((prev) => prev.filter((item) => item.id !== sourceId));
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to remove source");
+    }
+  };
+
+  const goNext = async () => {
+    if (step === 1) {
+      const savedId = await saveDraft();
+      if (!savedId) return;
+    }
+    setStep((s) => Math.min(4, s + 1));
   };
 
   return (
@@ -90,13 +212,15 @@ export default function BotBuilder() {
           </div>
           <div className="flex items-center gap-4 ml-4 flex-shrink-0">
             <button
+              onClick={saveDraft}
+              disabled={saveStatus === "saving"}
               className={`px-4 sm:px-5 py-2.5 rounded-xl border font-bold text-[13px] transition-all shadow-sm ${
                 isDark
                   ? "border-white/[0.06] text-white/70 hover:text-white hover:bg-white/[0.04]"
                   : "border-black/10 text-[#1c1c1e]/70 hover:text-[#1c1c1e] hover:bg-white"
               }`}
             >
-              Save Draft
+              {saveStatus === "saving" ? "Saving..." : saveStatus === "saved" ? "Saved" : "Save Draft"}
             </button>
           </div>
         </header>
@@ -141,6 +265,9 @@ export default function BotBuilder() {
                 {step === 4 &&
                   "Deploy your bot to WhatsApp or embed it on your website. Goes live instantly with zero downtime."}
               </p>
+              {saveStatus === "failed" && saveError && (
+                <p className="mt-3 text-[13px] font-semibold text-red-500">{saveError}</p>
+              )}
             </div>
 
             {/* Step components */}
@@ -160,9 +287,16 @@ export default function BotBuilder() {
                 setBotName={setBotName}
               />
             )}
-            {step === 2 && <Step2Knowledge items={knowledgeItems} setItems={setKnowledgeItems} />}
-            {step === 3 && <Step3Test persona={persona} botName={botName} />}
-            {step === 4 && <Step4Deploy botName={botName} />}
+            {step === 2 && (
+              <Step2Knowledge
+                items={knowledgeItems}
+                onAddItem={addKnowledgeItem}
+                onUploadFiles={uploadKnowledgeFiles}
+                onRemoveItem={removeKnowledgeItem}
+              />
+            )}
+            {step === 3 && <Step3Test persona={persona} botName={botName} chatbotId={chatbotId} onRequireDraft={ensureDraft} />}
+            {step === 4 && <Step4Deploy botName={botName} chatbotId={chatbotId} onRequireDraft={ensureDraft} knowledgeItems={knowledgeItems} />}
 
             {/* Navigation buttons */}
             <div className={`flex items-center justify-between mt-8 pt-6 border-t ${c("border-black/5", "border-white/[0.06]")}`}>
@@ -197,7 +331,7 @@ export default function BotBuilder() {
 
               {step < 4 ? (
                 <button
-                  onClick={() => setStep((s) => Math.min(4, s + 1))}
+                  onClick={goNext}
                   disabled={step === 1 && !canProceed()}
                   className="flex items-center gap-2 px-5 sm:px-8 py-3.5 rounded-xl font-bold text-[14px] transition-all shadow-md disabled:opacity-40 disabled:cursor-not-allowed bg-primary text-primary-foreground hover:opacity-90 active:scale-[0.98]"
                 >

@@ -47,6 +47,8 @@ class PersonaResponse(PersonaBase):
 # --- Chatbots ---
 class ChatbotBase(BaseModel):
     persona_id: uuid.UUID
+    name: str = "Aina Bot"
+    description: Optional[str] = None
     status: ChatbotStatus = ChatbotStatus.DRAFT
 
 class ChatbotCreate(ChatbotBase):
@@ -54,6 +56,8 @@ class ChatbotCreate(ChatbotBase):
 
 class ChatbotUpdate(BaseModel):
     persona_id: Optional[uuid.UUID] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
     status: Optional[ChatbotStatus] = None
 
 class ChatbotResponse(ChatbotBase):

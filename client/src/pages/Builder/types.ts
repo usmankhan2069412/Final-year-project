@@ -3,7 +3,8 @@ export interface KnowledgeItem {
   type: "file" | "text" | "website" | "email" | "phone" | "app";
   label: string;
   value: string;
-  status: "indexed" | "processing" | "queued";
+  status: "indexed" | "processing" | "queued" | "failed";
+  error_message?: string | null;
 }
 
 export interface ChatMessage {

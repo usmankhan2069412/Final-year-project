@@ -2,21 +2,51 @@ import os
 import faiss
 import numpy as np
 import json
+import re
+from contextlib import contextmanager
 from typing import List, Dict, Any
 from app.core.config import settings
 
 class VectorStoreService:
+    _bm25_cache: Dict[str, Dict[str, Any]] = {}
+
     @staticmethod
     def _get_index_paths(chatbot_id: str):
         chatbot_dir = os.path.join(settings.FAISS_DIR, str(chatbot_id))
         os.makedirs(chatbot_dir, exist_ok=True)
         index_file = os.path.join(chatbot_dir, "index.faiss")
         meta_file_json = os.path.join(chatbot_dir, "metadata.json")
-        return index_file, meta_file_json
+        lock_file = os.path.join(chatbot_dir, ".index.lock")
+        return index_file, meta_file_json, lock_file
+
+    @staticmethod
+    @contextmanager
+    def _index_lock(lock_file: str):
+        os.makedirs(os.path.dirname(lock_file), exist_ok=True)
+        handle = open(lock_file, "a+", encoding="utf-8")
+        try:
+            try:
+                import msvcrt
+                msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+            except ImportError:
+                import fcntl
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            yield
+        finally:
+            try:
+                try:
+                    import msvcrt
+                    handle.seek(0)
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+                except ImportError:
+                    import fcntl
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            finally:
+                handle.close()
 
     @classmethod
     def load_index(cls, chatbot_id: str):
-        index_file, meta_file_json = cls._get_index_paths(chatbot_id)
+        index_file, meta_file_json, _ = cls._get_index_paths(chatbot_id)
         if os.path.exists(index_file):
             index = faiss.read_index(index_file)
             metadata = None
@@ -34,33 +64,56 @@ class VectorStoreService:
 
     @classmethod
     def save_index(cls, chatbot_id: str, index, metadata):
-        index_file, meta_file_json = cls._get_index_paths(chatbot_id)
+        index_file, meta_file_json, lock_file = cls._get_index_paths(chatbot_id)
+        with cls._index_lock(lock_file):
+            cls._save_index_unlocked(index_file, meta_file_json, index, metadata)
+            cls._bm25_cache.pop(str(chatbot_id), None)
+
+    @staticmethod
+    def _save_index_unlocked(index_file: str, meta_file_json: str, index, metadata):
         faiss.write_index(index, index_file)
         with open(meta_file_json, "w", encoding="utf-8") as f:
             json.dump(metadata, f, ensure_ascii=False, indent=2)
 
     @classmethod
     def add_vectors(cls, chatbot_id: str, vectors: np.ndarray, chunk_ids: List[str], source_id: str, chunk_texts: List[str]):
-        index, metadata = cls.load_index(chatbot_id)
-        
-        faiss_vectors = np.array(vectors, dtype=np.float32)
-        faiss.normalize_L2(faiss_vectors)
-        
-        index.add(faiss_vectors)
-        
-        if "chunk_texts" not in metadata:
-            metadata["chunk_texts"] = {}
-            
-        for i, chunk_id in enumerate(chunk_ids):
-            metadata["ids"].append(chunk_id)
-            metadata["source_map"][chunk_id] = str(source_id)
-            metadata["chunk_texts"][chunk_id] = chunk_texts[i]
-            
-        cls.save_index(chatbot_id, index, metadata)
+        if not chunk_ids:
+            return
+        if len(chunk_ids) != len(chunk_texts):
+            raise ValueError("chunk_ids and chunk_texts must have the same length")
+
+        _, _, lock_file = cls._get_index_paths(chatbot_id)
+        with cls._index_lock(lock_file):
+            index, metadata = cls.load_index(chatbot_id)
+            faiss_vectors = np.array(vectors, dtype=np.float32)
+            if faiss_vectors.ndim != 2:
+                raise ValueError("vectors must be a 2-dimensional array")
+            if faiss_vectors.shape[0] != len(chunk_ids):
+                raise ValueError("vector count must match chunk count")
+            if faiss_vectors.shape[1] != settings.EMBEDDING_DIM:
+                raise ValueError(f"embedding dimension mismatch: expected {settings.EMBEDDING_DIM}, got {faiss_vectors.shape[1]}")
+            faiss.normalize_L2(faiss_vectors)
+            index.add(faiss_vectors)
+            if "chunk_texts" not in metadata:
+                metadata["chunk_texts"] = {}
+            for i, chunk_id in enumerate(chunk_ids):
+                metadata["ids"].append(chunk_id)
+                metadata["source_map"][chunk_id] = str(source_id)
+                metadata["chunk_texts"][chunk_id] = chunk_texts[i]
+            index_file, meta_file_json, _ = cls._get_index_paths(chatbot_id)
+            cls._save_index_unlocked(index_file, meta_file_json, index, metadata)
+            cls._bm25_cache.pop(str(chatbot_id), None)
 
     @classmethod
     def remove_by_source(cls, chatbot_id: str, source_id: str):
-        index, metadata = cls.load_index(chatbot_id)
+        _, _, lock_file = cls._get_index_paths(chatbot_id)
+        with cls._index_lock(lock_file):
+            index, metadata = cls.load_index(chatbot_id)
+            cls._remove_by_source_locked(chatbot_id, source_id, index, metadata)
+            cls._bm25_cache.pop(str(chatbot_id), None)
+
+    @classmethod
+    def _remove_by_source_locked(cls, chatbot_id: str, source_id: str, index, metadata):
         if index.ntotal == 0:
             return
             
@@ -84,7 +137,8 @@ class VectorStoreService:
             
         if not keep_indices:
             new_index = faiss.IndexFlatIP(settings.EMBEDDING_DIM)
-            cls.save_index(chatbot_id, new_index, {"ids": [], "source_map": {}, "chunk_texts": {}})
+            index_file, meta_file_json, _ = cls._get_index_paths(chatbot_id)
+            cls._save_index_unlocked(index_file, meta_file_json, new_index, {"ids": [], "source_map": {}, "chunk_texts": {}})
             return
  
         vectors = []
@@ -96,19 +150,57 @@ class VectorStoreService:
         faiss.normalize_L2(new_vectors)
         new_index.add(new_vectors)
         
-        cls.save_index(chatbot_id, new_index, {
+        index_file, meta_file_json, _ = cls._get_index_paths(chatbot_id)
+        cls._save_index_unlocked(index_file, meta_file_json, new_index, {
             "ids": new_ids, 
             "source_map": new_source_map, 
             "chunk_texts": new_chunk_texts
         })
+
+    @staticmethod
+    def _tokenize(text: str) -> List[str]:
+        return re.findall(r"\w+", text.lower())
+
+    @classmethod
+    def _get_bm25_index(cls, chatbot_id: str, chunk_ids: List[str], chunk_texts: Dict[str, str]):
+        from rank_bm25 import BM25Okapi
+
+        corpus = []
+        for cid in chunk_ids:
+            text = chunk_texts.get(cid)
+            if not text:
+                continue
+            tokens = cls._tokenize(text)
+            if tokens:
+                corpus.append((cid, tokens))
+
+        if not corpus:
+            return [], None
+
+        signature = tuple((cid, len(chunk_texts.get(cid, "")), hash(chunk_texts.get(cid, ""))) for cid, _ in corpus)
+        cached = cls._bm25_cache.get(str(chatbot_id))
+        if cached and cached.get("signature") == signature:
+            return cached["corpus_ids"], cached["bm25"]
+
+        corpus_ids = [cid for cid, _ in corpus]
+        corpus_tokens = [tokens for _, tokens in corpus]
+        bm25 = BM25Okapi(corpus_tokens)
+        cls._bm25_cache[str(chatbot_id)] = {
+            "signature": signature,
+            "corpus_ids": corpus_ids,
+            "bm25": bm25,
+        }
+        return corpus_ids, bm25
 
     @classmethod
     def search_hybrid(cls, chatbot_id: str, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
         """
         Runs hybrid search combining FAISS (Dense) and BM25 (Sparse) with Reciprocal Rank Fusion (RRF).
         """
-        # Load index and metadata
-        index, metadata = cls.load_index(chatbot_id)
+        # Load a consistent snapshot while writers are excluded.
+        _, _, lock_file = cls._get_index_paths(chatbot_id)
+        with cls._index_lock(lock_file):
+            index, metadata = cls.load_index(chatbot_id)
         if index.ntotal == 0 or not metadata.get("ids"):
             return []
 
@@ -138,20 +230,10 @@ class VectorStoreService:
             dense_results.append(cid)
 
         # --- SPARSE RETRIEVAL BM25 ---
-        from rank_bm25 import BM25Okapi
-        import re
-        
-        def tokenize(text: str) -> List[str]:
-            return re.findall(r'\w+', text.lower())
-
-        # Build BM25 index on the fly from metadata
-        corpus_ids = [cid for cid in chunk_ids if cid in chunk_texts]
-        corpus_tokens = [tokenize(chunk_texts[cid]) for cid in corpus_ids]
-        
         sparse_results = []
-        if corpus_tokens:
-            bm25 = BM25Okapi(corpus_tokens)
-            query_tokens = tokenize(query)
+        corpus_ids, bm25 = cls._get_bm25_index(chatbot_id, chunk_ids, chunk_texts)
+        if bm25:
+            query_tokens = cls._tokenize(query)
             scores = bm25.get_scores(query_tokens)
             
             # Pair IDs with scores, filter out zero/negative scores
@@ -186,4 +268,3 @@ class VectorStoreService:
             })
             
         return results
-

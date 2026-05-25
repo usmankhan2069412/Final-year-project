@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, ReactNode, useEffect } from "react";
+import { apiRequest } from "../lib/api";
 
 export interface UserResponse {
   id: string;
@@ -58,17 +59,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`,
-      };
-
-      const res = await fetch("http://localhost:8000/api/v1/users/me", { headers });
-      if (res.ok) {
-        const data = await res.json();
-        setUserMe(data);
-        localStorage.setItem("aina-user-me", JSON.stringify(data));
-      }
+      const data = await apiRequest<UserMeResponse>("/api/v1/users/me");
+      setUserMe(data);
+      localStorage.setItem("aina-user-me", JSON.stringify(data));
     } catch (err) {
       console.error("Error loading user profile in AuthProvider:", err);
     } finally {

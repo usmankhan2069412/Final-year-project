@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { KnowledgeItem } from "../types";
+import { SourceType } from "../../../lib/api";
 
 const KNOWLEDGE_TYPES = [
   { type: "file", icon: "upload_file", label: "Documents", hint: "PDF, DOCX, TXT, CSV", color: "#b0c6ff" },
@@ -13,36 +14,32 @@ const KNOWLEDGE_TYPES = [
 
 interface Step2KnowledgeProps {
   items: KnowledgeItem[];
-  setItems: React.Dispatch<React.SetStateAction<KnowledgeItem[]>>;
+  onAddItem: (type: Exclude<SourceType, "file">, value: string, label: string) => Promise<void>;
+  onUploadFiles: (files: FileList | File[]) => Promise<void>;
+  onRemoveItem: (id: string) => Promise<void>;
 }
 
-export default function Step2Knowledge({ items, setItems }: Step2KnowledgeProps) {
+export default function Step2Knowledge({ items, onAddItem, onUploadFiles, onRemoveItem }: Step2KnowledgeProps) {
   const [activeType, setActiveType] = useState<string>("file");
   const [inputValue, setInputValue] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const { isDark } = useTheme();
   const c = (light: string, dark: string) => (isDark ? dark : light);
 
-  const addItem = () => {
+  const addItem = async () => {
     if (!inputValue.trim() && activeType !== "file") return;
     const typeInfo = KNOWLEDGE_TYPES.find((k) => k.type === activeType);
-    const newItem: KnowledgeItem = {
-      id: Date.now().toString(),
-      type: activeType as KnowledgeItem["type"],
-      label: typeInfo?.label ?? activeType,
-      value: inputValue.trim() || "Uploaded document",
-      status: "processing",
-    };
-    setItems([...items, newItem]);
-    setInputValue("");
-    setTimeout(() => {
-      setItems((prev: KnowledgeItem[]) =>
-        prev.map((i) => (i.id === newItem.id ? { ...i, status: "indexed" } : i))
-      );
-    }, 2000);
+    if (activeType === "file") return;
+    setIsSubmitting(true);
+    try {
+      await onAddItem(activeType as Exclude<SourceType, "file">, inputValue.trim(), typeInfo?.label ?? activeType);
+      setInputValue("");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const removeItem = (id: string) => setItems(items.filter((i: KnowledgeItem) => i.id !== id));
   const activeTypeInfo = KNOWLEDGE_TYPES.find((k) => k.type === activeType);
 
   return (
@@ -129,20 +126,16 @@ export default function Step2Knowledge({ items, setItems }: Step2KnowledgeProps)
                   className="hidden"
                   multiple
                   accept=".pdf,.docx,.txt,.csv"
-                  onChange={() => {
-                    const newItem: KnowledgeItem = {
-                      id: Date.now().toString(),
-                      type: "file",
-                      label: "Documents",
-                      value: "Uploaded document",
-                      status: "processing",
-                    };
-                    setItems([...items, newItem]);
-                    setTimeout(() => {
-                      setItems((prev: KnowledgeItem[]) =>
-                        prev.map((i) => (i.id === newItem.id ? { ...i, status: "indexed" } : i))
-                      );
-                    }, 2000);
+                  onChange={async (event) => {
+                    const files = event.target.files;
+                    if (!files?.length) return;
+                    setIsSubmitting(true);
+                    try {
+                      await onUploadFiles(files);
+                    } finally {
+                      setIsSubmitting(false);
+                      event.target.value = "";
+                    }
                   }}
                 />
               </div>
@@ -184,6 +177,7 @@ export default function Step2Knowledge({ items, setItems }: Step2KnowledgeProps)
             {activeType !== "file" && (
               <button
                 onClick={addItem}
+                disabled={isSubmitting}
                 className={`w-full py-4 rounded-xl font-bold text-[14px] transition-all flex items-center justify-center gap-2 shadow-md active:scale-[0.98] mt-2 ${
                   isDark
                     ? "bg-[#EBDCFF] hover:bg-[#d8bfff] text-[#1c1c1e]"
@@ -191,7 +185,7 @@ export default function Step2Knowledge({ items, setItems }: Step2KnowledgeProps)
                 }`}
               >
                 <span className="material-symbols-outlined text-[18px]">add_circle</span>
-                Add to Knowledge Base
+                {isSubmitting ? "Saving..." : "Add to Knowledge Base"}
               </button>
             )}
           </div>
@@ -285,11 +279,17 @@ export default function Step2Knowledge({ items, setItems }: Step2KnowledgeProps)
                       <p className={`text-[11px] font-medium mt-0.5 ${c("text-[#1c1c1e]/50", "text-[#55635a]")}`}>{item.label}</p>
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">
-                      {item.status === "processing" ? (
+                      {item.status === "failed" ? (
+                        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${
+                          isDark ? "text-red-300 bg-red-300/10 border-red-300/20" : "text-red-700 bg-red-100 border-red-200"
+                        }`} title={item.error_message || "Indexing failed"}>
+                          Failed
+                        </span>
+                      ) : item.status === "processing" || item.status === "queued" ? (
                         <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full animate-pulse border ${
                           isDark ? "text-yellow-300 bg-yellow-300/10 border-yellow-300/20" : "text-yellow-700 bg-yellow-100 border-yellow-200"
                         }`}>
-                          Processing
+                          {item.status === "queued" ? "Queued" : "Processing"}
                         </span>
                       ) : (
                         <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border shadow-sm ${
@@ -299,7 +299,7 @@ export default function Step2Knowledge({ items, setItems }: Step2KnowledgeProps)
                         </span>
                       )}
                       <button
-                        onClick={() => removeItem(item.id)}
+                        onClick={() => onRemoveItem(item.id)}
                         aria-label="Remove source"
                         className={`opacity-0 group-hover:opacity-100 transition-all ${
                           c("text-red-400 hover:text-red-600", "text-white/30 hover:text-red-400")

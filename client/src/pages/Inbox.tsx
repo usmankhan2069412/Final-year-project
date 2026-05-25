@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "../contexts/ThemeContext";
 import { useLayoutConfig } from "../contexts/LayoutContext";
+import { api } from "../lib/api";
 
 interface Message {
   id: string;
@@ -21,10 +22,10 @@ interface Conversation {
 }
 
 const CANNED_RESPONSES = [
-  { label: "👋 Intro Handoff", text: "Hello! I am a support agent taking over this conversation. How can I help you today?" },
-  { label: "⏳ Looking Into It", text: "Please give me a moment while I review your account details and investigate this request." },
-  { label: "⚙️ Fixed / Applied", text: "I have successfully resolved the issue on our end. Could you please double-check if it is working now?" },
-  { label: "🚪 Resolution Closing", text: "Glad I could help! I will mark this conversation as resolved now. Feel free to reach out if you need anything else." },
+  { label: "Intro Handoff", text: "Hello! I am a support agent taking over this conversation. How can I help you today?" },
+  { label: "Looking Into It", text: "Please give me a moment while I review your account details and investigate this request." },
+  { label: "Fixed / Applied", text: "I have successfully resolved the issue on our end. Could you please double-check if it is working now?" },
+  { label: "Resolution Closing", text: "Glad I could help! I will mark this conversation as resolved now. Feel free to reach out if you need anything else." },
 ];
 
 export default function Inbox() {
@@ -55,7 +56,7 @@ export default function Inbox() {
         headers["Authorization"] = `Bearer ${token}`;
       }
       const response = await fetch(
-        `http://localhost:8000/api/v1/agents/conversations?assigned_only=${filterAssigned}`,
+        `${api.baseUrl}/api/v1/agents/conversations?assigned_only=${filterAssigned}`,
         { headers }
       );
       if (response.ok) {
@@ -90,7 +91,7 @@ export default function Inbox() {
       if (!token) return;
 
       try {
-        const response = await fetch("http://localhost:8000/api/v1/agents/conversations/stream", {
+        const response = await fetch(`${api.baseUrl}/api/v1/agents/stream`, {
           signal: controller.signal,
           headers: {
             "Authorization": `Bearer ${token}`,
@@ -175,9 +176,7 @@ export default function Inbox() {
       const resolvedId = data.conversation_id;
       if (resolvedId) {
         setConversations((prev) => prev.filter((conv) => conv.id !== resolvedId));
-        if (selectedId === resolvedId) {
-          setSelectedId(null);
-        }
+        setSelectedId((current) => (current === resolvedId ? null : current));
       }
     } else if (event === "message") {
       const msgData = data.message;
@@ -188,7 +187,7 @@ export default function Inbox() {
         prev.map((conv) => {
           if (conv.id === convId) {
             // Append message if not duplicate
-            const alreadyExists = conv.messages.some((m) => m.id === msgData.id);
+            const alreadyExists = Boolean(msgData.id) && conv.messages.some((m) => m.id === msgData.id);
             const updatedMessages = alreadyExists
               ? conv.messages
               : [...conv.messages, msgData];
@@ -223,7 +222,7 @@ export default function Inbox() {
       }
 
       const response = await fetch(
-        `http://localhost:8000/api/v1/agents/conversations/${selectedId}/reply`,
+        `${api.baseUrl}/api/v1/agents/conversations/${selectedId}/reply`,
         {
           method: "POST",
           headers,
@@ -276,7 +275,7 @@ export default function Inbox() {
       }
 
       const response = await fetch(
-        `http://localhost:8000/api/v1/agents/conversations/${selectedId}/resolve`,
+        `${api.baseUrl}/api/v1/agents/conversations/${selectedId}/resolve`,
         {
           method: "POST",
           headers,
@@ -350,7 +349,7 @@ export default function Inbox() {
   return (
     <div className="flex-1 flex overflow-hidden relative z-10">
           
-          {/* ── Left Column: Conversations Sidebar ── */}
+          {/* Left Column: Conversations Sidebar */}
           <div
             className={`w-full md:w-80 lg:w-96 flex flex-col border-r flex-shrink-0 transition-colors ${
               c("bg-white border-black/5", "bg-[#17171a] border-white/[0.06]")
@@ -495,11 +494,11 @@ export default function Inbox() {
             </div>
           </div>
 
-          {/* ── Middle/Right Columns: Chat Viewport & Details Panel ── */}
+          {/* Middle/Right Columns: Chat Viewport & Details Panel */}
           {activeChat ? (
             <div className="flex-1 flex overflow-hidden">
               
-              {/* ── Middle Column: Chat Workspace ── */}
+              {/* Middle Column: Chat Workspace */}
               <div className="flex-1 flex flex-col overflow-hidden bg-transparent">
                 
                 {/* Chat Top Header */}
@@ -575,7 +574,7 @@ export default function Inbox() {
                               c("bg-white border-black/5 text-[#1c1c1e]", "bg-[#1f1f23] border-white/5 text-white")
                             }`}
                           >
-                            👤
+                            <span className="material-symbols-outlined text-[16px]">person</span>
                           </div>
                         )}
 
@@ -651,7 +650,7 @@ export default function Inbox() {
                 </div>
               </div>
 
-              {/* ── Right Column: Chat Metadata & Quick Answers ── */}
+              {/* Right Column: Chat Metadata & Quick Answers */}
               <div
                 className={`hidden lg:flex w-80 flex-col border-l flex-shrink-0 overflow-y-auto no-scrollbar transition-colors ${
                   c("bg-white border-black/5", "bg-[#17171a] border-white/[0.06]")

@@ -1,6 +1,6 @@
 import logging
 from fastapi import FastAPI, Request, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import settings
@@ -18,14 +18,6 @@ logger = logging.getLogger(__name__)
 from fastapi.middleware.cors import CORSMiddleware
 
 # 🗄️ Auto-create database tables on startup if they don't exist
-from app.db.session import engine
-from app.db.base import Base
-try:
-    Base.metadata.create_all(bind=engine)
-    logger.info("Database tables verified/created successfully.")
-except Exception as e:
-    logger.error("Could not automatically create/verify database tables on boot: %s", str(e))
-
 app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json"
@@ -104,3 +96,86 @@ def root():
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
+
+
+@app.get("/widget.js", include_in_schema=False)
+def widget_script():
+    script = """
+(function () {
+  var config = window.AinaConfig || {};
+  if (!config.deploymentId || document.getElementById("aina-widget-root")) return;
+
+  var apiBaseUrl = config.apiBaseUrl || "";
+  var root = document.createElement("div");
+  root.id = "aina-widget-root";
+  root.style.cssText = "position:fixed;right:20px;bottom:20px;z-index:2147483647;font-family:Inter,system-ui,sans-serif";
+
+  var panel = document.createElement("div");
+  panel.style.cssText = "display:none;width:320px;max-width:calc(100vw - 40px);height:420px;margin-bottom:12px;border:1px solid #ddd;border-radius:16px;background:#fff;box-shadow:0 16px 48px rgba(0,0,0,.18);overflow:hidden";
+
+  var header = document.createElement("div");
+  header.textContent = config.name || "Aina Bot";
+  header.style.cssText = "padding:14px 16px;background:" + (config.primaryColor || "#1c1c1e") + ";color:#fff;font-weight:700";
+
+  var messages = document.createElement("div");
+  messages.style.cssText = "height:295px;overflow:auto;padding:14px;font-size:13px;line-height:1.45;background:#f7f7f8";
+
+  var form = document.createElement("form");
+  form.style.cssText = "display:flex;gap:8px;padding:10px;border-top:1px solid #eee";
+  var input = document.createElement("input");
+  input.placeholder = "Type a message...";
+  input.style.cssText = "flex:1;border:1px solid #ddd;border-radius:10px;padding:10px;outline:none";
+  var send = document.createElement("button");
+  send.textContent = "Send";
+  send.type = "submit";
+  send.style.cssText = "border:0;border-radius:10px;padding:0 12px;background:" + (config.primaryColor || "#1c1c1e") + ";color:#fff;font-weight:700";
+  form.appendChild(input);
+  form.appendChild(send);
+
+  var launcher = document.createElement("button");
+  launcher.textContent = "Chat";
+  launcher.style.cssText = "float:right;border:0;border-radius:999px;padding:14px 18px;background:" + (config.primaryColor || "#1c1c1e") + ";color:#fff;font-weight:700;box-shadow:0 10px 30px rgba(0,0,0,.2);cursor:pointer";
+
+  function addMessage(role, text) {
+    var node = document.createElement("div");
+    node.textContent = text;
+    node.style.cssText = "margin:8px 0;padding:10px 12px;border-radius:12px;white-space:pre-wrap;" + (role === "user" ? "background:#1c1c1e;color:#fff;margin-left:40px" : "background:#fff;color:#1c1c1e;margin-right:40px");
+    messages.appendChild(node);
+    messages.scrollTop = messages.scrollHeight;
+  }
+
+  var conversationId = null;
+  launcher.onclick = function () {
+    panel.style.display = panel.style.display === "none" ? "block" : "none";
+  };
+  form.onsubmit = function (event) {
+    event.preventDefault();
+    var text = input.value.trim();
+    if (!text) return;
+    input.value = "";
+    addMessage("user", text);
+    fetch(apiBaseUrl + "/api/v1/chat/public/deployments/" + config.deploymentId + "/message", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({message: text, conversation_id: conversationId})
+    }).then(function (res) {
+      if (!res.ok) throw new Error("Chat request failed");
+      return res.json();
+    }).then(function (data) {
+      conversationId = data.conversation_id;
+      addMessage("bot", data.response || "I could not generate a response.");
+    }).catch(function () {
+      addMessage("bot", "Sorry, the chatbot is unavailable right now.");
+    });
+  };
+
+  panel.appendChild(header);
+  panel.appendChild(messages);
+  panel.appendChild(form);
+  root.appendChild(panel);
+  root.appendChild(launcher);
+  document.body.appendChild(root);
+  addMessage("bot", "Hi! How can I help you today?");
+})();
+"""
+    return Response(content=script, media_type="application/javascript")

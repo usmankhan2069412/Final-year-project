@@ -3,7 +3,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 
-from app.models.chatbot import Chatbot
+from app.models.chatbot import Chatbot, ChatbotStatus
 from app.models.conversation import Deployment, Channel
 from app.schemas.whatsapp import DeploymentCreate
 
@@ -73,6 +73,8 @@ class DeploymentService:
             return None
             
         deployment.is_active = True
+        if deployment.chatbot:
+            deployment.chatbot.status = ChatbotStatus.ACTIVE
         db.commit()
         db.refresh(deployment)
         return deployment

@@ -1,27 +1,25 @@
 import uuid
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_tenant_db, get_current_org_id
 from app.services.document import KnowledgeService
-from app.schemas.document import KnowledgeSourceCreate, KnowledgeSourceResponse, KnowledgeSourceDetailResponse
-from app.models.document import KnowledgeSource, SourceType
+from app.schemas.document import KnowledgeSourceCreate, KnowledgeSourceResponse, KnowledgeSourceDetailResponse, KnowledgeJobResponse
+from app.models.document import KnowledgeSource, KnowledgeJob, SourceType
 
 router = APIRouter()
 
 @router.post("/upload", response_model=KnowledgeSourceResponse, status_code=status.HTTP_201_CREATED)
 def upload_file(
     chatbot_id: uuid.UUID,
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     db: Session = Depends(get_tenant_db),
     org_id: uuid.UUID = Depends(get_current_org_id)
 ):
-    """Upload a file as a knowledge source (PDF, DOCX, TXT, CSV) and trigger background embedding."""
+    """Upload a file as a knowledge source (PDF, DOCX, TXT, CSV) and enqueue indexing."""
     try:
         source = KnowledgeService.upload_file(db=db, org_id=org_id, chatbot_id=chatbot_id, file=file)
-        background_tasks.add_task(KnowledgeService.process_source_background, source.id)
         return source
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -29,7 +27,6 @@ def upload_file(
 @router.post("", response_model=KnowledgeSourceResponse, status_code=status.HTTP_201_CREATED)
 def create_knowledge_source(
     source_in: KnowledgeSourceCreate,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_tenant_db),
     org_id: uuid.UUID = Depends(get_current_org_id)
 ):
@@ -52,25 +49,21 @@ def create_knowledge_source(
         )
         
     if source_in.source_type == SourceType.TEXT:
-        source = KnowledgeService.create_text_source(
+        return KnowledgeService.create_text_source(
             db=db,
             org_id=org_id,
             chatbot_id=source_in.chatbot_id,
             text=source_in.value,
             label=source_in.label
         )
-        background_tasks.add_task(KnowledgeService.process_source_background, source.id, source_in.value)
-        return source
         
     if source_in.source_type == SourceType.WEBSITE:
-        source = KnowledgeService.create_website_source(
+        return KnowledgeService.create_website_source(
             db=db,
             org_id=org_id,
             chatbot_id=source_in.chatbot_id,
             url=source_in.value
         )
-        background_tasks.add_task(KnowledgeService.process_source_background, source.id)
-        return source
 
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported source type")
 
@@ -81,11 +74,31 @@ def list_knowledge_sources(
     org_id: uuid.UUID = Depends(get_current_org_id)
 ):
     """List all knowledge sources for a chatbot."""
+    try:
+        KnowledgeService.ensure_chatbot_access(db=db, org_id=org_id, chatbot_id=chatbot_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     sources = db.query(KnowledgeSource).filter(
         KnowledgeSource.chatbot_id == chatbot_id,
         KnowledgeSource.org_id == org_id
     ).all()
     return sources
+
+@router.get("/jobs/{chatbot_id}", response_model=List[KnowledgeJobResponse])
+def list_knowledge_jobs(
+    chatbot_id: uuid.UUID,
+    db: Session = Depends(get_tenant_db),
+    org_id: uuid.UUID = Depends(get_current_org_id)
+):
+    """List indexing jobs for a chatbot so clients can poll durable processing state."""
+    try:
+        KnowledgeService.ensure_chatbot_access(db=db, org_id=org_id, chatbot_id=chatbot_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    return db.query(KnowledgeJob).filter(
+        KnowledgeJob.chatbot_id == chatbot_id,
+        KnowledgeJob.org_id == org_id
+    ).order_by(KnowledgeJob.created_at.desc()).all()
 
 @router.get("/{source_id}", response_model=KnowledgeSourceDetailResponse)
 def get_knowledge_source(

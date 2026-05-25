@@ -1,5 +1,6 @@
 import uuid
 from enum import Enum as PyEnum
+from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, DateTime, Enum, ForeignKey, Index, Text, BigInteger
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -31,6 +32,12 @@ class ChunkStatus(str, PyEnum):
     COMPLETED = "completed"
     FAILED = "failed"
 
+class KnowledgeJobStatus(str, PyEnum):
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
 class KnowledgeSource(Base):
     __tablename__ = "knowledge_sources"
 
@@ -42,11 +49,18 @@ class KnowledgeSource(Base):
     value = Column(Text, nullable=False)
     status = Column(Enum(SourceStatus, name="enum_source_status"), nullable=False, default=SourceStatus.QUEUED)
     error_message = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=uuid.uuid4)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
 
     # Relationships
     chunks = relationship("KnowledgeChunk", back_populates="source", cascade="all, delete-orphan")
     document = relationship("Document", uselist=False, back_populates="source", cascade="all, delete-orphan")
+    jobs = relationship("KnowledgeJob", back_populates="source", cascade="all, delete-orphan")
 
 class Document(Base):
     __tablename__ = "documents"
@@ -74,3 +88,27 @@ class KnowledgeChunk(Base):
     index_status = Column(Enum(ChunkStatus, name="enum_chunk_status"), nullable=False, default=ChunkStatus.QUEUED)
 
     source = relationship("KnowledgeSource", back_populates="chunks")
+
+
+class KnowledgeJob(Base):
+    __tablename__ = "knowledge_jobs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    source_id = Column(UUID(as_uuid=True), ForeignKey("knowledge_sources.id", ondelete="CASCADE"), nullable=False)
+    chatbot_id = Column(UUID(as_uuid=True), ForeignKey("chatbots.id", ondelete="CASCADE"), nullable=False)
+    org_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    status = Column(Enum(KnowledgeJobStatus, name="enum_knowledge_job_status"), nullable=False, default=KnowledgeJobStatus.QUEUED)
+    attempts = Column(Integer, nullable=False, default=0)
+    max_attempts = Column(Integer, nullable=False, default=3)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+    source = relationship("KnowledgeSource", back_populates="jobs")

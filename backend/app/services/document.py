@@ -1,12 +1,27 @@
 import os
 import uuid
 import logging
+import ipaddress
+import socket
+from pathlib import Path
+from urllib.parse import urlparse
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from fastapi import UploadFile
 
 from app.core.config import settings
-from app.models.document import KnowledgeSource, Document, KnowledgeChunk, SourceType, SourceStatus, FileType, ChunkStatus
+from app.models.chatbot import Chatbot
+from app.models.document import (
+    KnowledgeSource,
+    Document,
+    KnowledgeChunk,
+    KnowledgeJob,
+    SourceType,
+    SourceStatus,
+    FileType,
+    ChunkStatus,
+    KnowledgeJobStatus,
+)
 from app.services.text_extractor import TextExtractor
 from app.services.chunker import TextChunker
 from app.services.embedding import embedding_service
@@ -15,14 +30,63 @@ from app.services.vector_store import VectorStoreService
 logger = logging.getLogger(__name__)
 
 class KnowledgeService:
+    ALLOWED_EXTENSIONS = {"pdf", "docx", "txt", "csv"}
+
+    @staticmethod
+    def ensure_chatbot_access(db: Session, org_id: uuid.UUID, chatbot_id: uuid.UUID) -> Chatbot:
+        chatbot = db.query(Chatbot).filter(
+            Chatbot.id == chatbot_id,
+            Chatbot.org_id == org_id,
+            Chatbot.deleted_at == None,
+        ).first()
+        if not chatbot:
+            raise ValueError("Chatbot not found or inaccessible")
+        return chatbot
+
+    @staticmethod
+    def _clean_label(label: str | None, fallback: str) -> str:
+        cleaned = (label or fallback).strip()
+        return cleaned[:120] or fallback
+
+    @classmethod
+    def _enqueue_job(cls, db: Session, source: KnowledgeSource) -> KnowledgeJob:
+        job = KnowledgeJob(
+            source_id=source.id,
+            chatbot_id=source.chatbot_id,
+            org_id=source.org_id,
+            status=KnowledgeJobStatus.QUEUED,
+        )
+        db.add(job)
+        source.status = SourceStatus.QUEUED
+        return job
+
+    @staticmethod
+    def _validate_public_url(url: str) -> str:
+        parsed = urlparse(url.strip())
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            raise ValueError("Website URL must start with http:// or https://")
+        try:
+            addresses = socket.getaddrinfo(parsed.hostname, None)
+            for result in addresses:
+                ip = ipaddress.ip_address(result[4][0])
+                if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                    raise ValueError("Website URL must resolve to a public address")
+        except socket.gaierror:
+            raise ValueError("Website URL could not be resolved")
+        return url.strip()
+
     @staticmethod
     def create_metadata_source(db: Session, org_id: uuid.UUID, chatbot_id: uuid.UUID, source_type: SourceType, value: str, label: str) -> KnowledgeSource:
+        KnowledgeService.ensure_chatbot_access(db, org_id, chatbot_id)
+        cleaned_value = value.strip()
+        if not cleaned_value:
+            raise ValueError("Knowledge source value cannot be empty")
         source = KnowledgeSource(
             org_id=org_id,
             chatbot_id=chatbot_id,
             source_type=source_type,
-            label=label,
-            value=value,
+            label=KnowledgeService._clean_label(label, source_type.value.title()),
+            value=cleaned_value,
             status=SourceStatus.INDEXED
         )
         db.add(source)
@@ -32,23 +96,39 @@ class KnowledgeService:
 
     @classmethod
     def upload_file(cls, db: Session, org_id: uuid.UUID, chatbot_id: uuid.UUID, file: UploadFile) -> KnowledgeSource:
-        filename = file.filename
-        ext = filename.split(".")[-1].lower()
-        if ext not in ["pdf", "docx", "txt", "csv"]:
+        cls.ensure_chatbot_access(db, org_id, chatbot_id)
+        filename = Path(file.filename or "").name
+        if not filename or "." not in filename:
+            raise ValueError("Uploaded file must have a supported extension")
+        ext = filename.rsplit(".", 1)[-1].lower()
+        if ext not in cls.ALLOWED_EXTENSIONS:
             raise ValueError("Unsupported file type")
+        if file.content_type and file.content_type not in {
+            "application/pdf",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "text/plain",
+            "text/csv",
+            "application/csv",
+            "application/octet-stream",
+        }:
+            raise ValueError("Unsupported file content type")
             
         os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
         file_id = uuid.uuid4()
         storage_filename = f"{file_id}.{ext}"
-        storage_path = os.path.join(settings.UPLOAD_DIR, storage_filename)
+        upload_root = os.path.abspath(settings.UPLOAD_DIR)
+        storage_path = os.path.abspath(os.path.join(upload_root, storage_filename))
+        if not storage_path.startswith(upload_root):
+            raise ValueError("Invalid upload path")
         
         size = 0
+        content = file.file.read(settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024 + 1)
+        size = len(content)
+        if size == 0:
+            raise ValueError("Uploaded file is empty")
+        if size > settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024:
+            raise ValueError("File exceeds maximum allowed size")
         with open(storage_path, "wb") as f:
-            content = file.file.read()
-            size = len(content)
-            if size > settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024:
-                os.remove(storage_path)
-                raise ValueError("File exceeds maximum allowed size")
             f.write(content)
 
         source = KnowledgeSource(
@@ -73,27 +153,35 @@ class KnowledgeService:
             uploaded_at=datetime.now(timezone.utc)
         )
         db.add(doc)
+        cls._enqueue_job(db, source)
         db.commit()
         db.refresh(source)
         return source
 
     @classmethod
     def create_text_source(cls, db: Session, org_id: uuid.UUID, chatbot_id: uuid.UUID, text: str, label: str) -> KnowledgeSource:
+        cls.ensure_chatbot_access(db, org_id, chatbot_id)
+        cleaned_text = text.strip()
+        if not cleaned_text:
+            raise ValueError("Text knowledge source cannot be empty")
         source = KnowledgeSource(
             org_id=org_id,
             chatbot_id=chatbot_id,
             source_type=SourceType.TEXT,
-            label=label,
-            value=text[:100] + ("..." if len(text) > 100 else ""),
+            label=cls._clean_label(label, "Text"),
+            value=cleaned_text,
             status=SourceStatus.QUEUED
         )
         db.add(source)
+        cls._enqueue_job(db, source)
         db.commit()
         db.refresh(source)
         return source
 
     @classmethod
     def create_website_source(cls, db: Session, org_id: uuid.UUID, chatbot_id: uuid.UUID, url: str) -> KnowledgeSource:
+        cls.ensure_chatbot_access(db, org_id, chatbot_id)
+        url = cls._validate_public_url(url)
         source = KnowledgeSource(
             org_id=org_id,
             chatbot_id=chatbot_id,
@@ -103,77 +191,121 @@ class KnowledgeService:
             status=SourceStatus.QUEUED
         )
         db.add(source)
+        cls._enqueue_job(db, source)
         db.commit()
         db.refresh(source)
         return source
 
     @classmethod
-    def process_source_background(cls, source_id: uuid.UUID, raw_text: str = None):
+    def process_source_background(cls, source_id: uuid.UUID):
         from app.db.session import SessionLocal
         db = SessionLocal()
         try:
             source = db.query(KnowledgeSource).filter(KnowledgeSource.id == source_id).first()
             if not source:
                 return
-
-            source.status = SourceStatus.PROCESSING
+            cls.process_source(db, source)
             db.commit()
-
-            text = ""
-            if source.source_type == SourceType.FILE:
-                doc = source.document
-                if doc.file_type == FileType.PDF:
-                    text = TextExtractor.extract_pdf(doc.storage_path)
-                elif doc.file_type == FileType.DOCX:
-                    text = TextExtractor.extract_docx(doc.storage_path)
-                elif doc.file_type == FileType.TXT:
-                    text = TextExtractor.extract_txt(doc.storage_path)
-                elif doc.file_type == FileType.CSV:
-                    text = TextExtractor.extract_csv(doc.storage_path)
-            elif source.source_type == SourceType.TEXT:
-                text = raw_text or source.value
-            elif source.source_type == SourceType.WEBSITE:
-                import asyncio
-                text = asyncio.run(TextExtractor.extract_url(source.value))
-
-            chunks = TextChunker.split_text(text)
-            if not chunks:
-                source.status = SourceStatus.INDEXED
-                db.commit()
-                return
-
-            chunk_records = []
-            for i, chunk_text in enumerate(chunks):
-                record = KnowledgeChunk(
-                    source_id=source.id,
-                    chatbot_id=source.chatbot_id,
-                    chunk_text=chunk_text,
-                    chunk_index=i,
-                    index_status=ChunkStatus.PROCESSING
-                )
-                db.add(record)
-                chunk_records.append(record)
-            db.flush()
-
-            embeddings = embedding_service.encode(chunks)
-            chunk_ids = [str(r.id) for r in chunk_records]
-            VectorStoreService.add_vectors(str(source.chatbot_id), embeddings, chunk_ids, str(source.id), chunks)
-
-            for r in chunk_records:
-                r.index_status = ChunkStatus.COMPLETED
-            source.status = SourceStatus.INDEXED
-            db.commit()
-
-        except Exception as e:
-            logger.exception("Error processing knowledge source %s", source_id)
+        except Exception:
             db.rollback()
-            source = db.query(KnowledgeSource).filter(KnowledgeSource.id == source_id).first()
-            if source:
-                source.status = SourceStatus.FAILED
-                source.error_message = str(e)
-                db.commit()
+            logger.exception("Error processing knowledge source %s", source_id)
         finally:
             db.close()
+
+    @classmethod
+    def process_source(cls, db: Session, source: KnowledgeSource) -> None:
+        source.status = SourceStatus.PROCESSING
+        source.error_message = None
+        db.flush()
+
+        text = ""
+        if source.source_type == SourceType.FILE:
+            doc = source.document
+            if not doc:
+                raise ValueError("Document metadata is missing")
+            if doc.file_type == FileType.PDF:
+                text = TextExtractor.extract_pdf(doc.storage_path)
+            elif doc.file_type == FileType.DOCX:
+                text = TextExtractor.extract_docx(doc.storage_path)
+            elif doc.file_type == FileType.TXT:
+                text = TextExtractor.extract_txt(doc.storage_path)
+            elif doc.file_type == FileType.CSV:
+                text = TextExtractor.extract_csv(doc.storage_path)
+        elif source.source_type == SourceType.TEXT:
+            text = source.value
+        elif source.source_type == SourceType.WEBSITE:
+            import asyncio
+            text = asyncio.run(TextExtractor.extract_url(source.value))
+
+        chunks = TextChunker.split_text(text)
+        db.query(KnowledgeChunk).filter(KnowledgeChunk.source_id == source.id).delete()
+        try:
+            VectorStoreService.remove_by_source(str(source.chatbot_id), str(source.id))
+        except Exception:
+            logger.warning("Unable to remove previous vectors for source %s", source.id, exc_info=True)
+
+        if not chunks:
+            source.status = SourceStatus.INDEXED
+            return
+
+        chunk_records = []
+        for i, chunk_text in enumerate(chunks):
+            record = KnowledgeChunk(
+                source_id=source.id,
+                chatbot_id=source.chatbot_id,
+                chunk_text=chunk_text,
+                chunk_index=i,
+                index_status=ChunkStatus.PROCESSING
+            )
+            db.add(record)
+            chunk_records.append(record)
+        db.flush()
+
+        embeddings = embedding_service.encode(chunks)
+        chunk_ids = [str(r.id) for r in chunk_records]
+        VectorStoreService.add_vectors(str(source.chatbot_id), embeddings, chunk_ids, str(source.id), chunks)
+
+        for r in chunk_records:
+            r.index_status = ChunkStatus.COMPLETED
+        source.status = SourceStatus.INDEXED
+
+    @classmethod
+    def process_next_job(cls, db: Session) -> bool:
+        job = db.query(KnowledgeJob).filter(
+            KnowledgeJob.status == KnowledgeJobStatus.QUEUED,
+            KnowledgeJob.attempts < KnowledgeJob.max_attempts,
+        ).order_by(KnowledgeJob.created_at.asc()).first()
+        if not job:
+            return False
+
+        job.status = KnowledgeJobStatus.PROCESSING
+        job.attempts += 1
+        job.started_at = datetime.now(timezone.utc)
+        job.error_message = None
+        db.commit()
+
+        try:
+            source = db.query(KnowledgeSource).filter(KnowledgeSource.id == job.source_id).first()
+            if not source:
+                raise ValueError("Knowledge source not found")
+            cls.process_source(db, source)
+            job.status = KnowledgeJobStatus.COMPLETED
+            job.completed_at = datetime.now(timezone.utc)
+            db.commit()
+            return True
+        except Exception as exc:
+            db.rollback()
+            job = db.query(KnowledgeJob).filter(KnowledgeJob.id == job.id).first()
+            source = db.query(KnowledgeSource).filter(KnowledgeSource.id == job.source_id).first() if job else None
+            if job:
+                job.error_message = str(exc)
+                job.status = KnowledgeJobStatus.FAILED if job.attempts >= job.max_attempts else KnowledgeJobStatus.QUEUED
+            if source:
+                source.status = SourceStatus.FAILED if job and job.status == KnowledgeJobStatus.FAILED else SourceStatus.QUEUED
+                source.error_message = str(exc)
+            db.commit()
+            logger.exception("Knowledge job failed: %s", job.id if job else "unknown")
+            return True
 
     @classmethod
     def delete_source(cls, db: Session, org_id: uuid.UUID, source_id: uuid.UUID) -> bool:

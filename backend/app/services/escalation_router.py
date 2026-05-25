@@ -66,7 +66,7 @@ class EscalationRouter:
         response_text: str,
         language: Optional[str],
         is_new_conv: bool = False,
-        active_config_id: Optional[int] = None,
+        active_config_id: Optional[uuid.UUID] = None,
         sources: Optional[list] = None
     ) -> Dict[str, Any]:
         """
@@ -85,19 +85,25 @@ class EscalationRouter:
             
         db.add(conversation)
         
-        # 3. Record messages
-        db.add(DBMessage(
+        # 3. Record messages with IDs now so live inbox events can dedupe safely.
+        user_msg = DBMessage(
+            id=uuid.uuid4(),
             conversation_id=conversation.id,
             role=MessageRole.USER,
             content=user_message,
-            config_id=active_config_id
-        ))
-        db.add(DBMessage(
+            config_id=active_config_id,
+            created_at=datetime.now(timezone.utc),
+        )
+        bot_msg = DBMessage(
+            id=uuid.uuid4(),
             conversation_id=conversation.id,
             role=MessageRole.BOT,
             content=response_text,
-            config_id=active_config_id
-        ))
+            config_id=active_config_id,
+            created_at=datetime.now(timezone.utc),
+        )
+        db.add(user_msg)
+        db.add(bot_msg)
         
         # 4. Update chatbot statistics
         chatbot.total_messages += 2
@@ -110,7 +116,7 @@ class EscalationRouter:
         # 5. Broadcast escalation status event
         escalation_event = {
             "conversation_id": str(conversation.id),
-            "status": ConversationStatus.ESCALATED,
+            "status": ConversationStatus.ESCALATED.value,
             "assigned_agent_id": str(conversation.assigned_agent_id) if conversation.assigned_agent_id else None,
             "chatbot_id": str(chatbot.id)
         }
@@ -119,17 +125,19 @@ class EscalationRouter:
         user_msg_data = {
             "conversation_id": str(conversation.id),
             "message": {
+                "id": str(user_msg.id),
                 "role": "user",
                 "content": user_message,
-                "created_at": datetime.now(timezone.utc).isoformat()
+                "created_at": user_msg.created_at.isoformat()
             }
         }
         bot_msg_data = {
             "conversation_id": str(conversation.id),
             "message": {
+                "id": str(bot_msg.id),
                 "role": "bot",
                 "content": response_text,
-                "created_at": datetime.now(timezone.utc).isoformat()
+                "created_at": bot_msg.created_at.isoformat()
             }
         }
         
@@ -157,7 +165,7 @@ class EscalationRouter:
         org_id: uuid.UUID,
         user_message: str,
         language: Optional[str],
-        active_config_id: Optional[int] = None
+        active_config_id: Optional[uuid.UUID] = None
     ) -> Dict[str, Any]:
         """Handles messages sent to an already escalated conversation by bypassing standard RAG."""
         import asyncio
@@ -165,18 +173,24 @@ class EscalationRouter:
         
         response_text = cls.get_escalation_message(language, user_message=user_message)
         
-        db.add(DBMessage(
+        user_msg = DBMessage(
+            id=uuid.uuid4(),
             conversation_id=conversation.id,
             role=MessageRole.USER,
             content=user_message,
-            config_id=active_config_id
-        ))
-        db.add(DBMessage(
+            config_id=active_config_id,
+            created_at=datetime.now(timezone.utc),
+        )
+        bot_msg = DBMessage(
+            id=uuid.uuid4(),
             conversation_id=conversation.id,
             role=MessageRole.BOT,
             content=response_text,
-            config_id=active_config_id
-        ))
+            config_id=active_config_id,
+            created_at=datetime.now(timezone.utc),
+        )
+        db.add(user_msg)
+        db.add(bot_msg)
         
         # Update chatbot statistics
         chatbot.total_messages += 2
@@ -187,17 +201,19 @@ class EscalationRouter:
         user_msg_data = {
             "conversation_id": str(conversation.id),
             "message": {
+                "id": str(user_msg.id),
                 "role": "user",
                 "content": user_message,
-                "created_at": datetime.now(timezone.utc).isoformat()
+                "created_at": user_msg.created_at.isoformat()
             }
         }
         bot_msg_data = {
             "conversation_id": str(conversation.id),
             "message": {
+                "id": str(bot_msg.id),
                 "role": "bot",
                 "content": response_text,
-                "created_at": datetime.now(timezone.utc).isoformat()
+                "created_at": bot_msg.created_at.isoformat()
             }
         }
         try:
