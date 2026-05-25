@@ -64,18 +64,48 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
   }, [isAuthenticated]);
 
-  // Load notifications on mount / auth change and setup polling
+  // Load notifications on mount / auth change and setup WebSocket
   useEffect(() => {
     if (isAuthenticated) {
       setIsLoading(true);
       fetchNotifications().finally(() => setIsLoading(false));
 
-      // Poll every 30 seconds for background notifications
-      const interval = setInterval(() => {
-        fetchNotifications();
-      }, 30000);
+      // Setup WebSocket connection for real-time notifications
+      const token = localStorage.getItem("token");
+      let ws: WebSocket | null = null;
+      
+      if (token) {
+        ws = new WebSocket(`ws://localhost:8000/api/v1/notifications/ws?token=${token}`);
+        
+        ws.onmessage = (event) => {
+          try {
+            const data: NotificationItem = JSON.parse(event.data);
+            setNotifications((prev) => {
+              // Ensure we don't duplicate if already fetched
+              if (!prev.find((n) => n.id === data.id)) {
+                // Show toast for new live notification
+                toast.info(data.title, {
+                  description: data.details,
+                });
+                return [data, ...prev];
+              }
+              return prev;
+            });
+          } catch (e) {
+            console.error("Error parsing websocket message:", e);
+          }
+        };
 
-      return () => clearInterval(interval);
+        ws.onerror = (error) => {
+          console.error("Notification WebSocket error:", error);
+        };
+      }
+
+      return () => {
+        if (ws) {
+          ws.close();
+        }
+      };
     } else {
       setNotifications([]);
     }
