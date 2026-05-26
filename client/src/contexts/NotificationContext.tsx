@@ -79,7 +79,15 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         
         ws.onmessage = (event) => {
           try {
-            const data: NotificationItem = JSON.parse(event.data);
+            const parsed = JSON.parse(event.data);
+            
+            // Intercept custom events that are not standard user notifications
+            if (parsed.type === "knowledge_update") {
+              window.dispatchEvent(new CustomEvent("knowledge_update", { detail: { chatbotId: parsed.chatbot_id } }));
+              return;
+            }
+
+            const data = parsed as NotificationItem;
             setNotifications((prev) => {
               // Ensure we don't duplicate if already fetched
               if (!prev.find((n) => n.id === data.id)) {

@@ -173,6 +173,7 @@ class KnowledgeService:
             status=SourceStatus.QUEUED
         )
         db.add(source)
+        db.flush()
         cls._enqueue_job(db, source)
         db.commit()
         db.refresh(source)
@@ -191,6 +192,7 @@ class KnowledgeService:
             status=SourceStatus.QUEUED
         )
         db.add(source)
+        db.flush()
         cls._enqueue_job(db, source)
         db.commit()
         db.refresh(source)
@@ -270,6 +272,35 @@ class KnowledgeService:
         source.status = SourceStatus.INDEXED
 
     @classmethod
+    def _notify_job_update(cls, db: Session, job: KnowledgeJob):
+        from app.models.organization import OrgMember
+        from app.services.websocket import manager
+        import asyncio
+
+        try:
+            members = db.query(OrgMember).filter(OrgMember.org_id == job.org_id).all()
+            if not members:
+                return
+            
+            payload = {
+                "type": "knowledge_update",
+                "chatbot_id": str(job.chatbot_id)
+            }
+            
+            async def send_updates():
+                for member in members:
+                    await manager.send_personal_message(payload, member.user_id)
+            
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(send_updates())
+            except RuntimeError:
+                asyncio.run(send_updates())
+                
+        except Exception as e:
+            logger.error(f"Failed to notify users of knowledge update: {e}")
+
+    @classmethod
     def process_next_job(cls, db: Session) -> bool:
         job = db.query(KnowledgeJob).filter(
             KnowledgeJob.status == KnowledgeJobStatus.QUEUED,
@@ -292,6 +323,7 @@ class KnowledgeService:
             job.status = KnowledgeJobStatus.COMPLETED
             job.completed_at = datetime.now(timezone.utc)
             db.commit()
+            cls._notify_job_update(db, job)
             return True
         except Exception as exc:
             db.rollback()
@@ -304,6 +336,8 @@ class KnowledgeService:
                 source.status = SourceStatus.FAILED if job and job.status == KnowledgeJobStatus.FAILED else SourceStatus.QUEUED
                 source.error_message = str(exc)
             db.commit()
+            if job and job.status == KnowledgeJobStatus.FAILED:
+                cls._notify_job_update(db, job)
             logger.exception("Knowledge job failed: %s", job.id if job else "unknown")
             return True
 

@@ -18,6 +18,8 @@ build/
 .env.test.local
 .env.production.local
 docs/tests/
+data/
+data/*
 
 # IDE and editor files
 .vscode/

@@ -128,8 +128,12 @@ export const api = {
   createChatbot: (payload: { persona_id: string; name: string; description?: string | null; status?: ChatbotStatus }) =>
     apiRequest<ChatbotResponse>("/api/v1/chatbots", { method: "POST", body: JSON.stringify(payload) }),
 
+  getChatbot: (id: string) => apiRequest<ChatbotResponse>(`/api/v1/chatbots/${id}`),
+
   updateChatbot: (id: string, payload: Partial<{ persona_id: string; name: string; description: string | null; status: ChatbotStatus }>) =>
     apiRequest<ChatbotResponse>(`/api/v1/chatbots/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+
+  deleteChatbot: (id: string) => apiRequest<void>(`/api/v1/chatbots/${id}`, { method: "DELETE" }),
 
   listKnowledge: (chatbotId: string) => apiRequest<KnowledgeSourceResponse[]>(`/api/v1/knowledge/chatbots/${chatbotId}`),
 

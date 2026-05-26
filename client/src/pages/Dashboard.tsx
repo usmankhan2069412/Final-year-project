@@ -3,6 +3,14 @@ import { useLocation } from "wouter";
 import { useTheme } from "../contexts/ThemeContext";
 import { useAuth } from "../contexts/AuthContext";
 import { useLayoutConfig } from "../contexts/LayoutContext";
+import { api } from "../lib/api";
+import { toast } from "sonner";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "../components/ui/dropdown-menu";
 
 // ── Types & Interfaces ──────────────────────────────────────────────────────
 
@@ -149,6 +157,19 @@ export default function Dashboard() {
       setError(err?.message || "An unexpected error occurred while loading dashboard statistics.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteBot = async (botId: string, name: string) => {
+    if (!confirm(`Are you sure you want to delete the AI agent "${name}"?`)) {
+      return;
+    }
+    try {
+      await api.deleteChatbot(botId);
+      toast.success(`AI agent "${name}" deleted successfully.`);
+      setChatbots((prev) => prev.filter((bot) => bot.id !== botId));
+    } catch (err: any) {
+      toast.error(err?.message || `Failed to delete AI agent "${name}".`);
     }
   };
 
@@ -477,7 +498,7 @@ export default function Dashboard() {
                         className={`flex items-center gap-4 px-5 py-4 cursor-pointer transition-colors ${
                           isDark ? "hover:bg-white/[0.02]" : "hover:bg-black/[0.02]"
                         }`}
-                        onClick={() => setLocation("/builder")}
+                        onClick={() => setLocation(`/builder?id=${bot.id}`)}
                       >
                         {/* Icon */}
                         <div
@@ -561,7 +582,7 @@ export default function Dashboard() {
                             className={`transition-colors cursor-pointer group ${
                               isDark ? "hover:bg-white/[0.02]" : "hover:bg-black/[0.02]"
                             }`}
-                            onClick={() => setLocation("/builder")}
+                            onClick={() => setLocation(`/builder?id=${bot.id}`)}
                           >
                             {/* Agent Name */}
                             <td className="px-8 py-5">
@@ -633,17 +654,42 @@ export default function Dashboard() {
 
                             {/* Actions */}
                             <td className="px-8 py-5 text-right">
-                              <button
-                                aria-label={`More options for ${name}`}
-                                className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all outline-none border ${
-                                  isDark
-                                    ? "text-white/30 hover:text-white hover:bg-white/5 border-transparent hover:border-white/10"
-                                    : "text-[#1c1c1e]/40 hover:text-[#1c1c1e] hover:bg-black/5 border-transparent hover:border-black/5"
-                                }`}
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <span className="material-symbols-outlined text-[20px]">more_horiz</span>
-                              </button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    aria-label={`More options for ${name}`}
+                                    className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all outline-none border ${
+                                      isDark
+                                        ? "text-white/30 hover:text-white hover:bg-white/5 border-transparent hover:border-white/10"
+                                        : "text-[#1c1c1e]/40 hover:text-[#1c1c1e] hover:bg-black/5 border-transparent hover:border-black/5"
+                                    }`}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <span className="material-symbols-outlined text-[20px]">more_horiz</span>
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                  <DropdownMenuItem
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setLocation(`/builder?id=${bot.id}`);
+                                    }}
+                                  >
+                                    <span className="material-symbols-outlined text-[16px] mr-2">edit</span>
+                                    Edit Bot
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    variant="destructive"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteBot(bot.id, name);
+                                    }}
+                                  >
+                                    <span className="material-symbols-outlined text-[16px] mr-2">delete</span>
+                                    Delete Bot
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </td>
                           </tr>
                         );

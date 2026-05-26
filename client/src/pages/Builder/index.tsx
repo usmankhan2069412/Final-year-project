@@ -49,6 +49,37 @@ export default function BotBuilder() {
     error_message: source.error_message,
   });
 
+  // Load existing chatbot if ID is provided in query params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("id");
+    if (id) {
+      const loadChatbot = async () => {
+        try {
+          const bot = await api.getChatbot(id);
+          setChatbotId(bot.id);
+          setBotName(bot.name);
+          setPersonaId(bot.persona_id);
+          if (bot.persona) {
+            setCustomGreeting(bot.persona.greeting || "");
+            setCustomFallback(bot.persona.fallback || "");
+            setCustomDescription(bot.persona.description || "");
+            setCustomRole(bot.persona.description || "");
+            const tone = bot.persona.traits?.[0]?.trait_name || "friendly";
+            setCustomTone(tone);
+          }
+          setSaveStatus("saved");
+          // Pre-load knowledge items
+          const sources = await api.listKnowledge(bot.id);
+          setKnowledgeItems(sources.map(toKnowledgeItem));
+        } catch (err: any) {
+          toast.error(err?.message || "Failed to load chatbot details");
+        }
+      };
+      loadChatbot();
+    }
+  }, []);
+
   // Dynamic persona object construction to ensure state integrity
   const persona = {
     id: "custom",
@@ -132,8 +163,16 @@ export default function BotBuilder() {
   useEffect(() => {
     if (!chatbotId || step !== 2) return;
     refreshKnowledge(chatbotId);
-    const timer = window.setInterval(() => refreshKnowledge(chatbotId), 3000);
-    return () => window.clearInterval(timer);
+    
+    const handleKnowledgeUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent<{ chatbotId: string }>;
+      if (customEvent.detail.chatbotId === chatbotId) {
+        refreshKnowledge(chatbotId);
+      }
+    };
+    
+    window.addEventListener("knowledge_update", handleKnowledgeUpdate);
+    return () => window.removeEventListener("knowledge_update", handleKnowledgeUpdate);
   }, [chatbotId, step]);
 
   const addKnowledgeItem = async (type: Exclude<SourceType, "file">, value: string, label: string) => {

@@ -1,6 +1,7 @@
 import logging
 import time
 
+from app.db.base import Base # Ensure all mappers are initialized
 from app.db.session import SessionLocal
 from app.services.document import KnowledgeService
 

@@ -33,8 +33,9 @@ class Settings(BaseSettings):
     # Document Processing & Vector DB Settings
     UPLOAD_DIR: str = "data/uploads"
     FAISS_DIR: str = "data/faiss"
-    EMBEDDING_MODEL: str = "Qwen/Qwen3-Embedding-0.6B"
-    EMBEDDING_DIM: int = 1024            # Qwen3-Embedding-0.6B output dimension
+    EMBEDDING_MODEL: str = "gemini-embedding-2"
+    EMBEDDING_DIM: int = 3072            # gemini-embedding-2 output dimension
+    GEMINI_API_KEY: str = ""
     CHUNK_SIZE: int = 500                # Characters per chunk
     CHUNK_OVERLAP: int = 50              # Overlap between chunks
     MAX_UPLOAD_SIZE_MB: int = 50

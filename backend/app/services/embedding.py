@@ -1,25 +1,62 @@
 import logging
+import time
 from typing import List
 import numpy as np
-from sentence_transformers import SentenceTransformer
 from app.core.config import settings
+
+try:
+    from google import genai
+except ImportError:
+    genai = None
 
 logger = logging.getLogger(__name__)
 
 class EmbeddingService:
     def __init__(self):
-        self._model = None
+        self._client = None
+        self._delay_seconds = 4  # 15 requests per minute = 1 request every 4 seconds roughly
 
-    def get_model(self) -> SentenceTransformer:
-        if self._model is None:
-            logger.info("Loading embedding model: %s", settings.EMBEDDING_MODEL)
-            # Load model with trust_remote_code=True for Qwen architecture
-            self._model = SentenceTransformer(settings.EMBEDDING_MODEL, trust_remote_code=True)
-            logger.info("Embedding model loaded successfully.")
-        return self._model
+    def get_client(self):
+        if genai is None:
+            raise ImportError("google-genai package is not installed.")
+        if self._client is None:
+            if not settings.GEMINI_API_KEY:
+                raise ValueError("GEMINI_API_KEY is not set in environment variables.")
+            logger.info("Initializing Gemini API client for embeddings.")
+            self._client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        return self._client
 
     def encode(self, texts: List[str]) -> np.ndarray:
-        model = self.get_model()
-        return model.encode(texts, show_progress_bar=False)
+        if not texts:
+            return np.array([])
+            
+        client = self.get_client()
+        all_embeddings = []
+        
+        logger.info(f"Generating embeddings for {len(texts)} chunks using {settings.EMBEDDING_MODEL}...")
+        
+        # Process chunks one by one to ensure 1 vector per chunk
+        for i, text in enumerate(texts):
+            retries = 3
+            while retries > 0:
+                try:
+                    result = client.models.embed_content(
+                        model=settings.EMBEDDING_MODEL,
+                        contents=text
+                    )
+                    all_embeddings.append(result.embeddings[0].values)
+                    break
+                except Exception as e:
+                    if "429" in str(e):
+                        logger.warning(f"Rate limit hit at chunk {i}, sleeping for 5 seconds...")
+                        time.sleep(5)
+                        retries -= 1
+                        if retries == 0:
+                            raise
+                    else:
+                        logger.error(f"Failed to generate embeddings for chunk {i}: {e}")
+                        raise
+                        
+        return np.array(all_embeddings, dtype=np.float32)
 
 embedding_service = EmbeddingService()

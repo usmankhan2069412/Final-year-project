@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse, Response
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import settings
+from app.db.base import Base  # Ensure all models are registered
 from app.api.v1.auth import router as auth_router
 from app.api.v1.users import router as users_router
 from app.api.v1.bots import router as bots_router
@@ -13,6 +14,7 @@ from app.api.v1.messaging import router as messaging_router
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
+logging.getLogger("apscheduler").setLevel(logging.ERROR)
 logger = logging.getLogger(__name__)
 
 from fastapi.middleware.cors import CORSMiddleware
@@ -85,8 +87,13 @@ def start_scheduler():
     scheduler = BackgroundScheduler()
     # Run daily aggregation at 12:05 AM (00:05) every day
     scheduler.add_job(run_nightly_aggregation, "cron", hour=0, minute=5)
+    
+    # Run the knowledge worker every 3 seconds to process queued documents
+    from app.workers.knowledge_worker import run_once
+    scheduler.add_job(run_once, "interval", seconds=3, max_instances=1)
+    
     scheduler.start()
-    logger.info("APScheduler initialized and started nightly aggregation task.")
+    logger.info("APScheduler initialized and started background tasks.")
 
 
 @app.get("/")
