@@ -236,8 +236,7 @@ class KnowledgeService:
         elif source.source_type == SourceType.TEXT:
             text = source.value
         elif source.source_type == SourceType.WEBSITE:
-            import asyncio
-            text = asyncio.run(TextExtractor.extract_url(source.value))
+            text = TextExtractor.extract_url_sync(source.value)
 
         chunks = TextChunker.split_text(text)
         db.query(KnowledgeChunk).filter(KnowledgeChunk.source_id == source.id).delete()

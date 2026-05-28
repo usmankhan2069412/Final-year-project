@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     # 🔴 SECRET_KEY must be set in .env — no insecure fallback
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
     GOOGLE_CLIENT_ID: str = ""
 
     # SMTP Configuration Settings
@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     CHUNK_SIZE: int = 500                # Characters per chunk
     CHUNK_OVERLAP: int = 50              # Overlap between chunks
     MAX_UPLOAD_SIZE_MB: int = 50
+
+    # Website scraping settings
+    SCRAPE_TIMEOUT_SECS: int = 45        # Per-page HTTP timeout in seconds
+    SCRAPE_MAX_PAGES: int = 15           # Max pages to crawl per job
+    SCRAPE_MAX_DEPTH: int = 2            # BFS crawl depth
 
     # PubSub / SSE scaling settings
     REDIS_URL: str = ""

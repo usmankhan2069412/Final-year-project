@@ -152,26 +152,79 @@ export default function Step2Knowledge({ items, onAddItem, onUploadFiles, onRemo
                 placeholder="Paste your guidelines, FAQs, product descriptions, policies, or any text your bot should know..."
               />
             ) : (
-              <input
-                type="text"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                className={`w-full rounded-xl px-5 py-4 text-[14px] font-medium outline-none transition-all shadow-inner ${
-                  isDark
-                    ? "bg-[#131317] border border-white/[0.06] text-white focus:border-[#EBDCFF]/50"
-                    : "bg-[#F5F5F7] border border-black/5 text-[#1c1c1e] focus:border-black/20 focus:bg-white"
-                }`}
-                placeholder={
-                  activeType === "website"
-                    ? "https://yourwebsite.com"
-                    : activeType === "email"
-                    ? "support@yourcompany.com"
-                    : activeType === "phone"
-                    ? "+92 300 1234567"
-                    : "API endpoint or app name"
-                }
-                onKeyDown={(e) => e.key === "Enter" && addItem()}
-              />
+              <>
+                <input
+                  type="text"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  className={`w-full rounded-xl px-5 py-4 text-[14px] font-medium outline-none transition-all shadow-inner ${
+                    isDark
+                      ? "bg-[#131317] border border-white/[0.06] text-white focus:border-[#EBDCFF]/50"
+                      : "bg-[#F5F5F7] border border-black/5 text-[#1c1c1e] focus:border-black/20 focus:bg-white"
+                  }`}
+                  placeholder={
+                    activeType === "website"
+                      ? "https://yourwebsite.com"
+                      : activeType === "email"
+                      ? "support@yourcompany.com"
+                      : activeType === "phone"
+                      ? "+92 300 1234567"
+                      : "API endpoint or app name"
+                  }
+                  onKeyDown={(e) => e.key === "Enter" && addItem()}
+                />
+
+                {/* Website capability guide — shown only on website tab */}
+                {activeType === "website" && (
+                  <div
+                    className={`rounded-xl border p-4 text-[12px] ${
+                      isDark
+                        ? "bg-[#131317] border-white/[0.06]"
+                        : "bg-[#F5F5F7] border-black/5"
+                    }`}
+                  >
+                    <p className={`font-bold uppercase tracking-widest mb-3 ${c("text-[#1c1c1e]/60", "text-[#85948b]")}`}>
+                      Crawling Compatibility
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {/* Supported */}
+                      <div className="space-y-1.5">
+                        <p className={`font-bold mb-1.5 flex items-center gap-1.5 ${c("text-green-700", "text-green-400")}`}>
+                          <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                          Works
+                        </p>
+                        {[
+                          "Static blogs & articles",
+                          "University / info portals",
+                          "Public documentation",
+                          "Server-rendered HTML sites",
+                        ].map((t) => (
+                          <p key={t} className={`leading-snug ${c("text-[#1c1c1e]/60", "text-[#85948b]")}`}>
+                            · {t}
+                          </p>
+                        ))}
+                      </div>
+                      {/* Unsupported */}
+                      <div className="space-y-1.5">
+                        <p className={`font-bold mb-1.5 flex items-center gap-1.5 ${c("text-red-600", "text-red-400")}`}>
+                          <span className="material-symbols-outlined text-[14px]">cancel</span>
+                          Won't work
+                        </p>
+                        {[
+                          "Cloudflare / firewall-protected",
+                          "React / Vue / Angular SPAs",
+                          "Login-required pages",
+                          "PDF / ZIP / media links",
+                        ].map((t) => (
+                          <p key={t} className={`leading-snug ${c("text-[#1c1c1e]/60", "text-[#85948b]")}`}>
+                            · {t}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
             {activeType !== "file" && (
