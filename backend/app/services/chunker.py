@@ -1,6 +1,8 @@
 import re
 from typing import List
 from app.core.config import settings
+from langchain.text_splitter import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
+from langchain_core.documents import Document
 
 class TextChunker:
     @staticmethod
@@ -15,40 +17,53 @@ class TextChunker:
         if overlap >= chunk_size:
             raise ValueError("overlap must be smaller than chunk_size")
 
-        normalized = re.sub(r"\s+", " ", text).strip()
-        if len(normalized) <= chunk_size:
-            return [normalized]
+        # 1. Semantic Splitting based on Markdown Headers
+        headers_to_split_on = [
+            ("#", "Header 1"),
+            ("##", "Header 2"),
+            ("###", "Header 3"),
+        ]
+        markdown_splitter = MarkdownHeaderTextSplitter(headers_to_split_on=headers_to_split_on)
+        
+        try:
+            md_docs = markdown_splitter.split_text(text)
+        except Exception:
+            md_docs = [Document(page_content=text, metadata={})]
 
-        chunks = []
-        start = 0
-        text_len = len(normalized)
+        if not md_docs:
+            md_docs = [Document(page_content=text, metadata={})]
 
-        while start < text_len:
-            target_end = min(start + chunk_size, text_len)
-            end = target_end
+        # 2. Token-Based Chunking
+        # We explicitly exclude comma (,) to prevent breaking sentences and tables.
+        try:
+            token_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
+                chunk_size=chunk_size,
+                chunk_overlap=overlap,
+                separators=["\n\n", "\n", ".", "?", "!", " "]
+            )
+        except ImportError:
+            # Fallback to character chunking if tiktoken is missing
+            token_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=chunk_size,
+                chunk_overlap=overlap,
+                separators=["\n\n", "\n", ".", "?", "!", " "]
+            )
 
-            if target_end < text_len:
-                boundary_window_start = max(start + int(chunk_size * 0.5), start)
-                sentence_boundaries = [
-                    normalized.rfind(". ", boundary_window_start, target_end),
-                    normalized.rfind("? ", boundary_window_start, target_end),
-                    normalized.rfind("! ", boundary_window_start, target_end),
-                    normalized.rfind("; ", boundary_window_start, target_end),
-                    normalized.rfind(", ", boundary_window_start, target_end),
-                ]
-                best_boundary = max(sentence_boundaries)
-                if best_boundary <= start:
-                    best_boundary = normalized.rfind(" ", boundary_window_start, target_end)
-                if best_boundary > start:
-                    end = best_boundary + 1
+        final_chunks = []
+        for doc in md_docs:
+            # Split the section into token-sized chunks
+            sub_chunks = token_splitter.split_text(doc.page_content)
+            
+            # Reconstruct parent context
+            header_str = ""
+            if doc.metadata:
+                header_parts = [f"{k}: {v}" for k, v in doc.metadata.items()]
+                if header_parts:
+                    header_str = f"[{' | '.join(header_parts)}]\n"
 
-            chunk = normalized[start:end].strip()
-            if chunk:
-                chunks.append(chunk)
+            for sub in sub_chunks:
+                clean_chunk = sub.strip()
+                if clean_chunk:
+                    final_chunks.append(f"{header_str}{clean_chunk}")
 
-            if end >= text_len:
-                break
-
-            start = max(end - overlap, start + 1)
-
-        return chunks
+        return final_chunks
