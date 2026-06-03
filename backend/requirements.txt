@@ -29,4 +29,5 @@ tiktoken > = 0 . 7 . 0
 prometheus-client>=0.20.0
 langchain-text-splitters
 langchain-openrouter 
-supabase
+pgvector==0.3.6
+supabase==2.15.3

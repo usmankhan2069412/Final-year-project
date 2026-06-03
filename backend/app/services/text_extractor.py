@@ -294,53 +294,72 @@ def _crawl_site_sync(
     max_depth: int = None,
 ) -> list[dict]:
     """
-    BFS multi-page crawl starting at start_url.
-    Mirrors web-analyzer's crawlSite() function.
+    BFS multi-page crawl starting at start_url using ThreadPoolExecutor for concurrent requests.
+    Mirrors web-analyzer's crawlSite() function with level-based concurrency.
 
     Returns a list of page dicts (url, title, content_markdown, error).
     If the root page fails, raises immediately so the job is marked FAILED.
     """
+    import concurrent.futures
     max_pages = max_pages or settings.SCRAPE_MAX_PAGES
     max_depth = max_depth or settings.SCRAPE_MAX_DEPTH
 
     visited: set[str] = set()
-    queue: deque = deque()
-    queue.append((start_url, 0))
     results: list[dict] = []
     crawl_start = time.monotonic()
+    
+    # We BFS crawl by depth levels in parallel
+    current_depth_urls = [start_url]
 
-    with _build_client() as client:
-        while queue and len(results) < max_pages:
+    with _build_client() as client, concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        for depth in range(max_depth + 1):
+            if not current_depth_urls or len(results) >= max_pages:
+                break
+                
+            # Filter out already visited URLs
+            urls_to_crawl = []
+            for url in current_depth_urls:
+                norm = url.rstrip("/") if len(url) > len(urlparse(url).scheme + "://" + urlparse(url).netloc) else url
+                if norm not in visited:
+                    visited.add(norm)
+                    urls_to_crawl.append(url)
+            
+            if not urls_to_crawl:
+                continue
+
+            # Limit to remaining page slots
+            remaining_slots = max_pages - len(results)
+            urls_to_crawl = urls_to_crawl[:remaining_slots]
+
+            logger.info("Crawling depth %d in parallel: %d pages...", depth, len(urls_to_crawl))
+            
+            # Map scraping tasks to thread pool
+            futures = {executor.submit(_scrape_page_sync, client, url): url for url in urls_to_crawl}
+            
+            next_depth_links = []
+            for future in concurrent.futures.as_completed(futures):
+                url = futures[future]
+                try:
+                    page = future.result()
+                    if page["error"] and depth == 0:
+                        raise RuntimeError(f"Failed to scrape the starting URL: {page['error']}")
+                    results.append(page)
+                    if not page["error"]:
+                        next_depth_links.extend(page["links"])
+                except Exception as exc:
+                    if depth == 0:
+                        raise RuntimeError(f"Failed to scrape the starting URL: {exc}")
+                    logger.warning("Scrape task failed for %s: %s", url, exc)
+            
+            # Prepare next level URLs (deduplicate links)
+            current_depth_urls = list(dict.fromkeys(next_depth_links))
+            
             if time.monotonic() - crawl_start > _CRAWL_BUDGET_SECS:
                 logger.warning(
-                    "Crawl budget of %ds exceeded for %s — stopping after %d pages.",
-                    _CRAWL_BUDGET_SECS, start_url, len(results)
+                    "Crawl budget of %ds exceeded for %s — stopping.",
+                    _CRAWL_BUDGET_SECS, start_url
                 )
                 break
-
-            url, depth = queue.popleft()
-
-            # Normalise URL for dedup (strip trailing slash beyond origin)
-            norm = url.rstrip("/") if len(url) > len(urlparse(url).scheme + "://" + urlparse(url).netloc) else url
-            if norm in visited:
-                continue
-            visited.add(norm)
-
-            logger.info("Crawling [depth=%d, page=%d/%d]: %s", depth, len(results) + 1, max_pages, url)
-            page = _scrape_page_sync(client, url)
-
-            if page["error"] and depth == 0:
-                # Root page failed — surface the error immediately
-                raise RuntimeError(f"Failed to scrape the starting URL: {page['error']}")
-
-            results.append(page)
-
-            # Enqueue child links if we haven't reached max depth
-            if depth < max_depth and not page["error"]:
-                for link in page["links"]:
-                    norm_link = link.rstrip("/")
-                    if norm_link not in visited and not any(q[0].rstrip("/") == norm_link for q in queue):
-                        queue.append((link, depth + 1))
 
     return results
 

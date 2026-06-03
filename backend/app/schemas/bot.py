@@ -99,7 +99,7 @@ class AIModelConfigBase(BaseModel):
     secret_ref: Optional[str] = None
 
 class AIModelConfigCreate(AIModelConfigBase):
-    api_key: str  # Raw API key passed in from client
+    api_key: Optional[str] = None  # Raw API key passed in from client, now optional for OpenRouter
     routing_rules: Optional[List[RoutingRuleCreate]] = None
 
 class AIModelConfigUpdate(BaseModel):

@@ -99,7 +99,8 @@ def start_scheduler():
     structlog.configure(
         processors=[
             structlog.stdlib.add_log_level,
-            structlog.stdlib.add_logger_name,
+            # NOTE: add_logger_name requires a stdlib logger (.name attr).
+            # PrintLoggerFactory's PrintLogger has no .name — omit this processor.
             structlog.processors.TimeStamper(fmt="iso"),
             structlog.processors.JSONRenderer(),
         ],

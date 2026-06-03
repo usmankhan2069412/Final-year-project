@@ -50,7 +50,7 @@ class ChatRequest(BaseModel):
 
 class SourceChunkInfo(BaseModel):
     chunk_id: uuid.UUID
-    source_id: uuid.UUID
+    source_id: Optional[uuid.UUID] = None  # None if chunk has no source mapping
     text: str
     score: float
 

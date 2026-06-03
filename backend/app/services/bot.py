@@ -223,7 +223,7 @@ class ModelConfigService:
     @staticmethod
     def seed_providers(db: Session) -> None:
         """Helper to pre-populate standard providers if none exist."""
-        default_providers = ["OpenAI", "Anthropic", "Google Gemini"]
+        default_providers = ["OpenRouter", "OpenAI", "Anthropic", "Google Gemini"]
         for p_name in default_providers:
             existing = db.query(AIProvider).filter(AIProvider.name == p_name).first()
             if not existing:
@@ -259,7 +259,10 @@ class ModelConfigService:
         if not provider:
             raise ValueError("AI Provider not found")
 
-        encrypted_api_key = ModelConfigService.encrypt_key(config_in.api_key)
+        if config_in.api_key:
+            encrypted_api_key = ModelConfigService.encrypt_key(config_in.api_key)
+        else:
+            encrypted_api_key = ModelConfigService.encrypt_key("managed-by-openrouter")
 
         db_config = AIModelConfig(
             org_id=org_id,

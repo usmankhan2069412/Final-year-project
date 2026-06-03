@@ -72,13 +72,31 @@ class EmbeddingService:
             while retries > 0:
                 try:
                     if settings.OPENROUTER_API_KEY:
-                        response = client.embeddings.create(
-                            model=settings.EMBEDDING_MODEL,
-                            input=batch,
-                            encoding_format="float"
-                        )
-                        for emb in response.data:
-                            all_embeddings.append(emb.embedding)
+                        import httpx
+                        payload = {
+                            "model": settings.EMBEDDING_MODEL,
+                            "input": batch
+                        }
+                        headers = {
+                            "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+                            "Content-Type": "application/json"
+                        }
+                        with httpx.Client() as http_client:
+                            resp = http_client.post("https://openrouter.ai/api/v1/embeddings", json=payload, headers=headers, timeout=30.0)
+                            
+                            if resp.status_code != 200:
+                                raise ValueError(f"OpenRouter HTTP {resp.status_code}: {resp.text}")
+                                
+                            result = resp.json()
+                            
+                            if "error" in result:
+                                raise ValueError(f"OpenRouter API Error: {result['error']}")
+                                
+                            if "data" not in result or result["data"] is None:
+                                raise ValueError(f"No data in OpenRouter response. Raw: {result}")
+                                
+                            for item in result["data"]:
+                                all_embeddings.append(item["embedding"])
                     else:
                         result = client.models.embed_content(
                             model=settings.EMBEDDING_MODEL,

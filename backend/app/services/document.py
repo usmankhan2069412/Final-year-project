@@ -129,8 +129,8 @@ class KnowledgeService:
             raise ValueError("Uploaded file is empty")
         if size > settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024:
             raise ValueError("File exceeds maximum allowed size")
-        with open(storage_path, "wb") as f:
-            f.write(content)
+        from app.services.storage import StorageService
+        StorageService.save_file(storage_path, content)
 
         source = KnowledgeSource(
             org_id=org_id,
@@ -265,7 +265,7 @@ class KnowledgeService:
 
         embeddings = embedding_service.encode(chunks)
         chunk_ids = [str(r.id) for r in chunk_records]
-        VectorStoreService.add_vectors(str(source.chatbot_id), embeddings, chunk_ids, str(source.id), chunks)
+        VectorStoreService.add_vectors(str(source.chatbot_id), embeddings, chunk_ids, str(source.id), chunks, db=db)
 
         for r in chunk_records:
             r.index_status = ChunkStatus.COMPLETED
@@ -363,12 +363,8 @@ class KnowledgeService:
             return False
 
         if source.source_type == SourceType.FILE and source.document:
-            path = source.document.storage_path
-            if os.path.exists(path):
-                try:
-                    os.remove(path)
-                except OSError:
-                    pass
+            from app.services.storage import StorageService
+            StorageService.delete_file(source.document.storage_path)
 
         if source.source_type in [SourceType.FILE, SourceType.TEXT, SourceType.WEBSITE]:
             try:

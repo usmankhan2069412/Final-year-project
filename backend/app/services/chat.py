@@ -2,12 +2,14 @@ import uuid
 import logging
 import re
 import os
+import httpx
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional, TypedDict
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.language import detect_message_language
+from app.core.metrics import chat_requests_total, chat_latency_seconds, fallback_total
 from app.db.base_repository import MessageRepository, ConversationRepository
 from app.models.chatbot import Chatbot
 from app.models.persona import Persona, PersonaTrait
@@ -39,6 +41,8 @@ class AgentState(TypedDict, total=False):
     sources: List[Dict[str, Any]]
     context_text: str
     is_relevant: bool
+    routing_rules: Dict[str, str]
+    default_model: str
     
     # Final Output
     response: str
@@ -66,9 +70,30 @@ class AgentGraphExecutor:
         return cls._graph
     @staticmethod
     def _get_llm(state: AgentState, temperature: float = 0.3) -> Optional[ChatOpenAI]:
-        if not state.get("api_key"):
+        api_key = state.get("api_key")
+        if not api_key:
             return None
-        return ChatOpenAI(api_key=state["api_key"], model=state["model_name"], temperature=temperature)
+            
+        model = state.get("model_name", "openai/gpt-4o-mini")
+        
+        # If it's a managed OpenRouter key, use OpenRouter API
+        if api_key == "managed-by-openrouter":
+            real_key = getattr(settings, "OPENROUTER_API_KEY", None) or os.getenv("OPENROUTER_API_KEY")
+            if not real_key:
+                logger.warning("OPENROUTER_API_KEY not found in environment, falling back to OPENAI_API_KEY")
+                api_key = getattr(settings, "OPENAI_API_KEY", None) or os.getenv("OPENAI_API_KEY")
+                if not api_key:
+                    return None
+            else:
+                return ChatOpenAI(
+                    api_key=real_key,
+                    model=model,
+                    temperature=temperature,
+                    base_url="https://openrouter.ai/api/v1"
+                )
+                
+        # Standard fallback (e.g. native OpenAI)
+        return ChatOpenAI(api_key=api_key, model=model, temperature=temperature)
 
     @staticmethod
     def _content_terms(text: str) -> set[str]:
@@ -103,13 +128,25 @@ class AgentGraphExecutor:
         # 1. Fast Semantic Routing using Embeddings
         intent = SemanticRouter.classify(state["user_message"])
         chatbot_id = state.get("chatbot_id")
+        
+        final_intent = intent if intent else "RAG_LOOKUP"
+        
+        # Match intent to configured model, fallback to default OpenRouter model
+        model_name = state.get("default_model", "openai/gpt-4o-mini")
+        rules = state.get("routing_rules", {})
+        
+        if final_intent in rules:
+            model_name = rules[final_intent]
+        elif "General Inquiries" in rules:
+            model_name = rules["General Inquiries"]
+
         if intent:
-            logger.info("intent_routed", intent=intent, chatbot_id=chatbot_id)
-            return {"intent": intent}
+            logger.info("intent_routed", intent=final_intent, chatbot_id=chatbot_id, mapped_model=model_name)
+            return {"intent": final_intent, "model_name": model_name}
                 
         # 2. Fallback directly to RAG_LOOKUP
-        logger.info("intent_routed", intent="RAG_LOOKUP", chatbot_id=chatbot_id)
-        return {"intent": "RAG_LOOKUP"}
+        logger.info("intent_routed", intent="RAG_LOOKUP", chatbot_id=chatbot_id, mapped_model=model_name)
+        return {"intent": "RAG_LOOKUP", "model_name": model_name}
 
     @staticmethod
     def agent_handoff_node(state: AgentState) -> AgentState:
@@ -252,13 +289,17 @@ class AgentGraphExecutor:
             logger.info("validation_result", is_relevant=False, chunks_before=0, chunks_after=0)
             return {"is_relevant": False, "context_text": ""}
             
-        llm = AgentGraphExecutor._get_llm(state)
         query = state.get("rewritten_query") or state["user_message"]
         
-        if not llm:
+        # Resolve OpenRouter API Key
+        api_key = state.get("api_key")
+        if api_key == "managed-by-openrouter":
+            api_key = getattr(settings, "OPENROUTER_API_KEY", None) or os.getenv("OPENROUTER_API_KEY")
+        
+        if not api_key:
             is_rel = AgentGraphExecutor._has_lexical_relevance(query, state.get("context_text", ""))
             filtered_sources = state.get("sources", []) if is_rel else []
-            logger.info("validation_result", is_relevant=is_rel, chunks_before=len(sources), chunks_after=len(filtered_sources), no_llm=True)
+            logger.info("validation_result", is_relevant=is_rel, chunks_before=len(sources), chunks_after=len(filtered_sources), no_api_key=True)
             return {
                 "is_relevant": is_rel,
                 "sources": filtered_sources,
@@ -266,39 +307,43 @@ class AgentGraphExecutor:
             }
             
         try:
-            sys_msg = SystemMessage(content=(
-                "You are an expert Semantic Reranker and Hallucination Filter. "
-                "Evaluate each provided source text against the user query. "
-                "Determine which sources contain relevant information to answer the query.\n"
-                "Respond ONLY with a comma-separated list of the Source IDs that are relevant (e.g., 0, 2). "
-                "If NONE of the sources are relevant, reply exactly with NONE."
-            ))
+            documents = [src['text'] for src in sources]
+            payload = {
+                "model": "cohere/rerank-4-fast",
+                "query": query,
+                "documents": documents,
+                "top_n": len(documents)
+            }
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
             
-            sources_text = ""
-            for idx, src in enumerate(sources):
-                sources_text += f"[Source {idx}]\n{src['text']}\n\n"
-                
-            h_msg = HumanMessage(content=f"Query: \"{query}\"\n\nSources:\n{sources_text}\nRelevant Source IDs:")
+            with httpx.Client() as client:
+                response = client.post(
+                    "https://openrouter.ai/api/v1/rerank",
+                    json=payload,
+                    headers=headers,
+                    timeout=15.0
+                )
+                response.raise_for_status()
+                result = response.json()
             
-            answer = llm.invoke([sys_msg, h_msg]).content.strip().upper()
+            filtered_sources = []
             
-            if answer == "NONE" or not answer:
+            if "results" in result:
+                sorted_results = sorted(result["results"], key=lambda x: x.get("relevance_score", 0), reverse=True)
+                for item in sorted_results:
+                    score = item.get("relevance_score", 0)
+                    idx = item.get("index")
+                    
+                    if score >= 0.3 and idx is not None and 0 <= idx < len(sources):
+                        filtered_sources.append(sources[idx])
+            
+            if not filtered_sources:
                 logger.info("validation_result", is_relevant=False, chunks_before=len(sources), chunks_after=0)
                 return {"is_relevant": False, "sources": [], "context_text": ""}
                 
-            valid_indices = []
-            for part in answer.replace(" ", "").split(","):
-                if part.isdigit():
-                    idx = int(part)
-                    if 0 <= idx < len(sources):
-                        valid_indices.append(idx)
-                        
-            if not valid_indices:
-                logger.info("validation_result", is_relevant=False, chunks_before=len(sources), chunks_after=0)
-                return {"is_relevant": False, "sources": [], "context_text": ""}
-                
-            filtered_sources = [sources[i] for i in valid_indices]
-            
             new_context_text = "\n\n".join(
                 f"[Source {idx + 1}]\n{chunk['text']}"
                 for idx, chunk in enumerate(filtered_sources)
@@ -311,7 +356,7 @@ class AgentGraphExecutor:
                 "context_text": new_context_text
             }
         except Exception as e:
-            logger.warning("validate_node_llm_failed", error=str(e))
+            logger.warning("validate_node_rerank_api_failed", error=str(e))
             # Fall back to lexical relevance check with the original sources
             is_rel = AgentGraphExecutor._has_lexical_relevance(query, state.get("context_text", ""))
             filtered_sources = state.get("sources", []) if is_rel else []
@@ -495,15 +540,20 @@ class ChatService:
 
         # 2. Resolve credentials safely
         api_key = None
+        routing_rules_dict = {}
+        
         active_config = db.query(AIModelConfig).filter(AIModelConfig.org_id == org_id).first()
         if active_config:
             try:
                 api_key = model_config_service.decrypt_key(active_config.encrypted_api_key)
             except Exception:
                 pass
+            for rule in active_config.routing_rules:
+                routing_rules_dict[rule.intent] = rule.model_target
 
         if not api_key:
-            api_key = getattr(settings, "OPENAI_API_KEY", None) or os.getenv("OPENAI_API_KEY")
+            # If no provider is explicitly configured, use OpenRouter by default
+            api_key = "managed-by-openrouter"
 
         # 3. Resolve session
         is_new_conv = False
@@ -560,16 +610,17 @@ class ChatService:
             "user_message": user_message,
             "history": history,
             "api_key": api_key,
-            "model_name": "gpt-4o",
+            "model_name": "openai/gpt-4o-mini", # Will be overwritten by routing rules
             "persona": persona,
             "traits": traits,
             "chatbot_id": str(chatbot_id),
             "status": conversation.status,
-            "sources": []
+            "sources": [],
+            "routing_rules": routing_rules_dict,
+            "default_model": "openai/gpt-4o-mini"
         }
         
         import time
-        from app.core.metrics import chat_requests_total, chat_latency_seconds, fallback_total
         
         t0 = time.monotonic()
         final_state = AgentGraphExecutor.execute(initial_state)

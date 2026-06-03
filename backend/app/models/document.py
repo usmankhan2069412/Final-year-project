@@ -5,6 +5,8 @@ from sqlalchemy import Column, Integer, String, DateTime, Enum, ForeignKey, Inde
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.db.session import Base
+from pgvector.sqlalchemy import Vector
+from app.core.config import settings
 
 class SourceType(str, PyEnum):
     FILE = "file"
@@ -86,6 +88,7 @@ class KnowledgeChunk(Base):
     chunk_text = Column(Text, nullable=False)
     chunk_index = Column(Integer, nullable=False)
     index_status = Column(Enum(ChunkStatus, name="enum_chunk_status"), nullable=False, default=ChunkStatus.QUEUED)
+    embedding = Column(Vector(settings.EMBEDDING_DIM), nullable=True)
 
     source = relationship("KnowledgeSource", back_populates="chunks")
 

@@ -24,24 +24,15 @@ interface AIModelConfig {
   routing_rules: RoutingRule[];
 }
 
-const PROVIDER_SUGGESTED_MODELS: Record<string, string[]> = {
-  openai: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
-  anthropic: [
-    "claude-3-5-sonnet-20240620",
-    "claude-3-opus-20240229",
-    "claude-3-haiku-20240307",
-  ],
-  gemini: [
-    "gemini-1.5-pro-latest",
-    "gemini-1.5-flash-latest",
-    "gemini-1.0-pro",
-  ],
-  google: [
-    "gemini-1.5-pro-latest",
-    "gemini-1.5-flash-latest",
-    "gemini-1.0-pro",
-  ],
-};
+const OPENROUTER_MODELS = [
+  "openai/gpt-4o",
+  "openai/gpt-4o-mini",
+  "anthropic/claude-3.5-sonnet",
+  "anthropic/claude-3-opus",
+  "google/gemini-1.5-pro",
+  "meta-llama/llama-3-8b-instruct",
+  "mistralai/mixtral-8x7b-instruct",
+];
 
 const POPULAR_INTENTS = [
   "General Inquiries",
@@ -62,44 +53,16 @@ export default function Models() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingConfig, setEditingConfig] = useState<AIModelConfig | null>(null);
   const [selectedProviderId, setSelectedProviderId] = useState("");
-  const [apiKey, setApiKey] = useState("");
-  const [secretRef, setSecretRef] = useState("");
   const [routingRules, setRoutingRules] = useState<RoutingRule[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
-  // Router settings mockup state (local state switches/sliders)
+  // Router settings mockup state
   const [latencyTolerance, setLatencyTolerance] = useState(1200);
   const [costOptimization, setCostOptimization] = useState(80);
   const [autoFailover, setAutoFailover] = useState(true);
   const [responseCaching, setResponseCaching] = useState(false);
 
   const c = (light: string, dark: string) => (isDark ? dark : light);
-
-  const getProviderLogoInfo = (name: string) => {
-    const norm = name.toLowerCase();
-    if (norm.includes("openai")) {
-      return { logo: "○", bg: isDark ? "#fff" : "#1c1c1e", color: isDark ? "#000" : "#fff" };
-    }
-    if (norm.includes("anthropic")) {
-      return { logo: "A", bg: "#D97757", color: "#fff" };
-    }
-    if (norm.includes("gemini") || norm.includes("google")) {
-      return { logo: "G", bg: "#4285F4", color: "#fff" };
-    }
-    return { logo: name.charAt(0).toUpperCase(), bg: "#8a5cf5", color: "#fff" };
-  };
-
-  const getSuggestedModels = (providerId: string) => {
-    const provider = providers.find((p) => p.id === providerId);
-    if (!provider) return [];
-    const name = provider.name.toLowerCase();
-    for (const key in PROVIDER_SUGGESTED_MODELS) {
-      if (name.includes(key)) {
-        return PROVIDER_SUGGESTED_MODELS[key];
-      }
-    }
-    return ["gpt-4o", "claude-3-5-sonnet-20240620", "gemini-1.5-pro-latest"];
-  };
 
   const getHeaders = () => {
     const token = localStorage.getItem("token");
@@ -117,13 +80,11 @@ export default function Models() {
     try {
       const headers = getHeaders();
       
-      // Fetch providers
       const providersRes = await fetch("http://localhost:8000/api/v1/models/providers", { headers });
       if (!providersRes.ok) throw new Error("Failed to load AI providers");
       const providersData = await providersRes.json();
       setProviders(providersData);
 
-      // Fetch configs
       const configsRes = await fetch("http://localhost:8000/api/v1/models/configs", { headers });
       if (!configsRes.ok) throw new Error("Failed to load model configurations");
       const configsData = await configsRes.json();
@@ -140,37 +101,32 @@ export default function Models() {
     fetchData();
   }, []);
 
-  const handleOpenAddModal = () => {
-    // Filter to show only non-configured providers
-    const configuredProviderIds = configs.map((c) => c.provider_id);
-    const unconfigured = providers.filter((p) => !configuredProviderIds.includes(p.id));
+  const getOpenRouterProvider = () => {
+    return providers.find(p => p.name.toLowerCase().includes("openrouter")) || providers[0];
+  };
 
-    if (unconfigured.length === 0) {
-      toast.info("All available providers have already been configured. Edit existing configurations to adjust rules.");
+  const handleOpenConfigureModal = () => {
+    const provider = getOpenRouterProvider();
+    if (!provider) {
+      toast.error("No AI providers available in the system.");
       return;
     }
 
-    setEditingConfig(null);
-    setSelectedProviderId(unconfigured[0].id);
-    setApiKey("");
-    setSecretRef("");
-    // Add one default rule
-    setRoutingRules([{ intent: "General Inquiries", model_target: getSuggestedModels(unconfigured[0].id)[0] || "" }]);
-    setIsModalOpen(true);
-  };
-
-  const handleOpenEditModal = (config: AIModelConfig) => {
-    setEditingConfig(config);
-    setSelectedProviderId(config.provider_id);
-    setApiKey(""); // Keep blank to indicate no change unless typed
-    setSecretRef(config.secret_ref || "");
-    setRoutingRules(config.routing_rules.map((r) => ({ intent: r.intent, model_target: r.model_target })));
+    const existingConfig = configs.find(c => c.provider_id === provider.id);
+    
+    setSelectedProviderId(provider.id);
+    if (existingConfig) {
+      setEditingConfig(existingConfig);
+      setRoutingRules(existingConfig.routing_rules.map((r) => ({ intent: r.intent, model_target: r.model_target })));
+    } else {
+      setEditingConfig(null);
+      setRoutingRules([{ intent: "General Inquiries", model_target: OPENROUTER_MODELS[0] }]);
+    }
     setIsModalOpen(true);
   };
 
   const handleAddRule = () => {
-    const suggested = getSuggestedModels(selectedProviderId);
-    setRoutingRules([...routingRules, { intent: "General Inquiries", model_target: suggested[0] || "" }]);
+    setRoutingRules([...routingRules, { intent: "General Inquiries", model_target: OPENROUTER_MODELS[0] }]);
   };
 
   const handleRemoveRule = (index: number) => {
@@ -188,17 +144,10 @@ export default function Models() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProviderId) {
-      toast.error("Please select a provider");
+      toast.error("Provider not found");
       return;
     }
 
-    // API key is required when creating a configuration
-    if (!editingConfig && !apiKey.trim()) {
-      toast.error("API Key is required to configure a new provider");
-      return;
-    }
-
-    // Validate routing rules
     for (let i = 0; i < routingRules.length; i++) {
       if (!routingRules[i].intent.trim() || !routingRules[i].model_target.trim()) {
         toast.error(`Please complete both fields for Routing Rule #${i + 1}`);
@@ -211,24 +160,17 @@ export default function Models() {
       const headers = getHeaders();
       const payload: any = {
         provider_id: selectedProviderId,
-        secret_ref: secretRef.trim() || null,
         routing_rules: routingRules.map((r) => ({ intent: r.intent.trim(), model_target: r.model_target.trim() })),
       };
 
-      if (apiKey.trim()) {
-        payload.api_key = apiKey.trim();
-      }
-
       let res;
       if (editingConfig) {
-        // Edit config
         res = await fetch(`http://localhost:8000/api/v1/models/configs/${editingConfig.id}`, {
           method: "PATCH",
           headers,
           body: JSON.stringify(payload),
         });
       } else {
-        // Create config
         res = await fetch("http://localhost:8000/api/v1/models/configs", {
           method: "POST",
           headers,
@@ -241,43 +183,24 @@ export default function Models() {
         throw new Error(errData.detail || "Failed to save configuration");
       }
 
-      toast.success(editingConfig ? "Configuration updated successfully!" : "Provider configured successfully!");
+      toast.success(editingConfig ? "Models updated successfully!" : "Models configured successfully!");
       setIsModalOpen(false);
       fetchData();
     } catch (err: any) {
       console.error(err);
-      toast.error(err.message || "Error saving configuration");
+      toast.error(err.message || "Error saving models configuration");
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleDeleteConfig = async (configId: string, providerName: string) => {
-    if (!confirm(`Are you sure you want to disconnect ${providerName}? This will delete all its routing rules.`)) {
-      return;
+  const getProviderLogo = (providerName: string) => {
+    if (providerName.toLowerCase().includes("openrouter")) {
+      return { logo: "OR", bg: isDark ? "#fff" : "#1c1c1e", color: isDark ? "#000" : "#fff" };
     }
-
-    try {
-      const headers = getHeaders();
-      const res = await fetch(`http://localhost:8000/api/v1/models/configs/${configId}`, {
-        method: "DELETE",
-        headers,
-      });
-
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.detail || "Failed to delete configuration");
-      }
-
-      toast.success(`Disconnected ${providerName} successfully.`);
-      fetchData();
-    } catch (err: any) {
-      console.error(err);
-      toast.error(err.message || "Error deleting configuration");
-    }
+    return { logo: "AI", bg: "#8a5cf5", color: "#fff" };
   };
 
-  // Compile active rules for the Routing Fabric visualizer
   const activeRules = configs.flatMap((config) =>
     config.routing_rules.map((rule) => ({
       label: rule.intent,
@@ -294,10 +217,10 @@ export default function Models() {
   );
 
   useLayoutConfig({
-    title: "Production Environment",
+    title: "Chatbot Models",
     actions: (
       <button
-        onClick={handleOpenAddModal}
+        onClick={handleOpenConfigureModal}
         className={`px-4 py-2 rounded-xl border transition-[color,background-color,border-color,box-shadow] duration-200 text-[13px] font-bold flex items-center gap-1.5 shadow-sm focus-visible:ring-2 outline-none cursor-pointer ${
           isDark
             ? "bg-[#EBDCFF]/10 border-[#EBDCFF]/20 text-[#EBDCFF] hover:bg-[#EBDCFF]/20 focus-visible:ring-[#EBDCFF]/20"
@@ -305,9 +228,9 @@ export default function Models() {
         }`}
       >
         <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
-          add
+          smart_toy
         </span>
-        <span className="hidden sm:inline">Add Provider</span>
+        <span className="hidden sm:inline">Configure Models</span>
       </button>
     )
   });
@@ -329,14 +252,14 @@ export default function Models() {
               }`}
               style={{ fontFamily: "'Playfair Display', serif" }}
             >
-              API Models & Routing
+              Chatbot Brain
             </h1>
             <p
               className={`text-lg max-w-2xl font-medium ${
                 c("text-[#1c1c1e]/60", "text-white/50")
               }`}
             >
-              Configure intelligence pipelines and map intents to specialized model clusters.
+              Choose which AI models will power your chatbot. Map different user intents to specialized models for the best performance.
             </p>
           </div>
 
@@ -355,7 +278,7 @@ export default function Models() {
                 }`}
                 style={{ fontFamily: "'Playfair Display', serif" }}
               >
-                Active Routing Fabric
+                Active Model Routing
               </h2>
               <div
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-full border shadow-sm ${
@@ -450,7 +373,7 @@ export default function Models() {
                       c("text-[#1c1c1e]", "text-white")
                     }`}
                   >
-                    Request Origin
+                    User Query
                   </h3>
                   <p
                     className={`text-[11px] font-medium mt-1 ${
@@ -496,14 +419,14 @@ export default function Models() {
                       c("text-[#1c1c1e]", "text-white")
                     }`}
                   >
-                    Cognitive Router
+                    Intent Matcher
                   </h3>
                   <p
                     className={`text-[11px] font-bold mt-1 ${
                       c("text-[#1c1c1e]/60", "text-white/60")
                     }`}
                   >
-                    v2.4 Neural Matcher
+                    Smart Routing
                   </p>
                 </div>
 
@@ -524,19 +447,38 @@ export default function Models() {
                 <div className="flex flex-col gap-3 w-full md:w-auto">
                   {activeRules.length === 0 ? (
                     <div
-                      className={`rounded-2xl px-5 py-6 flex flex-col items-center justify-center border border-dashed text-center w-full md:w-64 ${
-                        isDark ? "bg-white/[0.02] border-white/10" : "bg-black/[0.01] border-black/10"
+                      className={`rounded-2xl px-5 py-4 flex items-center justify-between gap-8 border shadow-sm text-left w-full md:w-64 ${
+                        isDark ? "bg-[#131317] border-white/[0.04]" : "bg-[#F5F5F7] border-black/5"
                       }`}
                     >
-                      <span className={`material-symbols-outlined text-[24px] mb-2 ${c("text-black/30", "text-white/30")}`}>
-                        route_tos
-                      </span>
-                      <p className={`text-[12px] font-bold ${c("text-[#1c1c1e]/60", "text-white/50")}`}>
-                        No Active Routing
-                      </p>
-                      <p className={`text-[10px] font-medium mt-1 ${c("text-[#1c1c1e]/40", "text-white/30")}`}>
-                        Configure a provider to add routing rules.
-                      </p>
+                      <div>
+                        <p
+                          className={`text-[10px] font-bold uppercase tracking-widest mb-1 ${
+                            c("text-[#1c1c1e]/50", "text-white/40")
+                          }`}
+                        >
+                          All Queries (Default)
+                        </p>
+                        <p
+                          className={`text-[14px] font-bold ${
+                            c("text-[#1c1c1e]", "text-white")
+                          }`}
+                        >
+                          gpt-4o-mini
+                        </p>
+                        <p className={`text-[9px] font-semibold opacity-65 ${c("text-[#1c1c1e]/40", "text-white/30")}`}>
+                          via AI Engine
+                        </p>
+                      </div>
+                      <div
+                        className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                          isDark ? "bg-[#EBDCFF]/10 text-[#EBDCFF]" : "bg-white border text-[#1c1c1e]"
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+                          speed
+                        </span>
+                      </div>
                     </div>
                   ) : (
                     activeRules.map((dest, idx) => (
@@ -559,10 +501,10 @@ export default function Models() {
                               c("text-[#1c1c1e]", "text-white")
                             }`}
                           >
-                            {dest.model}
+                            {dest.model.split('/').pop()}
                           </p>
                           <p className={`text-[9px] font-semibold opacity-65 ${c("text-[#1c1c1e]/40", "text-white/30")}`}>
-                            via {dest.provider}
+                            via AI Engine
                           </p>
                         </div>
                         <div
@@ -598,12 +540,12 @@ export default function Models() {
                 }`}
                 style={{ fontFamily: "'Playfair Display', serif" }}
               >
-                Router Settings
+                Advanced Settings
               </h3>
               <div className="space-y-6">
                 {[
                   {
-                    label: "Latency Tolerance",
+                    label: "Response Speed (Tolerance)",
                     value: `${latencyTolerance}ms`,
                     pct: Math.min(100, (latencyTolerance / 3000) * 100),
                     color: c("#1c1c1e", "#EBDCFF"),
@@ -612,7 +554,7 @@ export default function Models() {
                     max: 3000,
                   },
                   {
-                    label: "Cost Optimization",
+                    label: "Cost vs Quality",
                     value: costOptimization > 70 ? "Aggressive" : costOptimization > 40 ? "Balanced" : "Conservative",
                     pct: costOptimization,
                     color: c("rgba(0,0,0,0.3)", "rgba(255,255,255,0.4)"),
@@ -651,13 +593,13 @@ export default function Models() {
                   {[
                     {
                       label: "Auto-Failover",
-                      sub: "Switch if provider fails",
+                      sub: "Switch model if one is down",
                       enabled: autoFailover,
                       onToggle: () => setAutoFailover(!autoFailover),
                     },
                     {
                       label: "Response Caching",
-                      sub: "Cache repeated questions",
+                      sub: "Speed up repeated questions",
                       enabled: responseCaching,
                       onToggle: () => setResponseCaching(!responseCaching),
                     },
@@ -719,7 +661,7 @@ export default function Models() {
               </div>
             </div>
 
-            {/* Backends Table */}
+            {/* Configured Models Table */}
             <div
               className={`rounded-[2rem] border overflow-hidden lg:col-span-2 ${
                 isDark
@@ -728,33 +670,45 @@ export default function Models() {
               }`}
             >
               <div
-                className={`p-8 border-b ${
+                className={`p-8 border-b flex justify-between items-center ${
                   c("border-black/5", "border-white/[0.06]")
                 }`}
               >
-                <h3
-                  className={`text-[20px] font-serif font-bold ${
-                    c("text-[#1c1c1e]", "text-white")
+                <div>
+                  <h3
+                    className={`text-[20px] font-serif font-bold ${
+                      c("text-[#1c1c1e]", "text-white")
+                    }`}
+                    style={{ fontFamily: "'Playfair Display', serif" }}
+                  >
+                    Active Models
+                  </h3>
+                  <p
+                    className={`text-[13px] font-medium mt-1 ${
+                      c("text-[#1c1c1e]/50", "text-white/40")
+                    }`}
+                  >
+                    Models currently powering your chatbot
+                  </p>
+                </div>
+                <button
+                  onClick={handleOpenConfigureModal}
+                  className={`px-4 py-2 rounded-xl text-[12px] font-bold border transition-colors cursor-pointer ${
+                    isDark ? "bg-white/5 border-white/10 hover:bg-white/10 text-white" : "bg-black/5 border-transparent hover:bg-black/10 text-[#1c1c1e]"
                   }`}
-                  style={{ fontFamily: "'Playfair Display', serif" }}
                 >
-                  Configured Backends
-                </h3>
-                <p
-                  className={`text-[13px] font-medium mt-1 ${
-                    c("text-[#1c1c1e]/50", "text-white/40")
-                  }`}
-                >
-                  {configs.length} of {providers.length} providers connected
-                </p>
+                  Edit Configuration
+                </button>
               </div>
 
               {loading ? (
-                <div className="overflow-x-auto animate-pulse">
+                <div className="p-8 animate-pulse text-center">Loading settings...</div>
+              ) : activeRules.length === 0 ? (
+                <div className="overflow-x-auto">
                   <table className="w-full text-left">
                     <thead>
                       <tr className={isDark ? "bg-black/20" : "bg-[#F5F5F7]/50"}>
-                        {["Provider", "Model Routing Targets", "Status", ""].map((h) => (
+                        {["Model", "Assigned Intents", "Status"].map((h) => (
                           <th
                             key={h}
                             className={`px-4 sm:px-8 py-3.5 sm:py-4 text-[11px] font-bold uppercase tracking-[0.15em] border-b whitespace-nowrap ${
@@ -769,31 +723,29 @@ export default function Models() {
                       </tr>
                     </thead>
                     <tbody className={isDark ? "divide-y divide-white/[0.04]" : "divide-y divide-black/5"}>
-                      {[1, 2, 3].map((i) => (
-                        <tr key={i}>
+                        <tr className={`transition-colors ${isDark ? "hover:bg-white/[0.02]" : "hover:bg-black/[0.02]"}`}>
                           <td className="px-4 sm:px-8 py-4 sm:py-6">
                             <div className="flex items-center gap-4">
-                              <div className={`w-10 h-10 rounded-xl ${isDark ? "bg-white/5" : "bg-black/5"}`} />
-                              <div className={`h-4.5 w-24 rounded ${isDark ? "bg-white/5" : "bg-black/5"}`} />
+                              <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-sm text-[#fff]" style={{ backgroundColor: "#8a5cf5" }}>
+                                <span className="material-symbols-outlined text-[20px]">speed</span>
+                              </div>
+                              <span className={`text-[15px] font-bold ${c("text-[#1c1c1e]", "text-white")}`}>
+                                gpt-4o-mini
+                              </span>
                             </div>
                           </td>
-                          <td className="px-4 sm:px-8 py-4 sm:py-6">
-                            <div className="space-y-1.5">
-                              <div className={`h-4 w-48 rounded ${isDark ? "bg-white/5" : "bg-black/5"}`} />
-                              <div className={`h-3 w-64 rounded ${isDark ? "bg-white/5" : "bg-black/5"}`} />
-                            </div>
+                          <td className={`px-4 sm:px-8 py-4 sm:py-6 text-[13px] font-medium ${c("text-[#1c1c1e]/80", "text-[#bbcac0]")}`}>
+                            All Queries (System Default)
                           </td>
                           <td className="px-4 sm:px-8 py-4 sm:py-6">
-                            <div className={`w-20 h-6 rounded-full ${isDark ? "bg-white/5" : "bg-black/5"}`} />
-                          </td>
-                          <td className="px-4 sm:px-8 py-4 sm:py-6">
-                            <div className="flex justify-end gap-2">
-                              <div className={`w-8 h-8 rounded-lg ${isDark ? "bg-white/5" : "bg-black/5"}`} />
-                              <div className={`w-8 h-8 rounded-lg ${isDark ? "bg-white/5" : "bg-black/5"}`} />
-                            </div>
+                            <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider border shadow-sm ${
+                                isDark ? "bg-[#EBDCFF]/10 text-[#EBDCFF] border-[#EBDCFF]/20" : "bg-[#1c1c1e] text-[#F5F5F7] border-transparent"
+                              }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${isDark ? "bg-[#EBDCFF]" : "bg-[#F5F5F7]"}`}></span>
+                              Active
+                            </span>
                           </td>
                         </tr>
-                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -802,7 +754,7 @@ export default function Models() {
                   <table className="w-full text-left">
                     <thead>
                       <tr className={isDark ? "bg-black/20" : "bg-[#F5F5F7]/50"}>
-                        {["Provider", "Model Routing Targets", "Status", ""].map((h) => (
+                        {["Model", "Assigned Intents", "Status"].map((h) => (
                           <th
                             key={h}
                             className={`px-4 sm:px-8 py-3.5 sm:py-4 text-[11px] font-bold uppercase tracking-[0.15em] border-b whitespace-nowrap ${
@@ -817,143 +769,55 @@ export default function Models() {
                       </tr>
                     </thead>
                     <tbody className={isDark ? "divide-y divide-white/[0.04]" : "divide-y divide-black/5"}>
-                      {providers.map((p) => {
-                        const config = configs.find((cfg) => cfg.provider_id === p.id);
-                        const logoInfo = getProviderLogoInfo(p.name);
-                        const active = !!config;
-
-                        // Create text display for routing targets
-                        let routingInfo = "Not Configured";
-                        if (active && config) {
-                          if (config.routing_rules.length === 0) {
-                            routingInfo = "No active rules";
-                          } else {
-                            routingInfo = config.routing_rules
-                              .map((rule) => `${rule.intent} → ${rule.model_target}`)
-                              .join(", ");
-                          }
-                        }
-
-                        return (
-                          <tr
-                            key={p.id}
-                            className={`transition-colors ${
-                              isDark ? "hover:bg-white/[0.02]" : "hover:bg-black/[0.02]"
+                      {activeRules.map((rule, i) => (
+                        <tr
+                          key={i}
+                          className={`transition-colors ${
+                            isDark ? "hover:bg-white/[0.02]" : "hover:bg-black/[0.02]"
+                          }`}
+                        >
+                          <td className="px-4 sm:px-8 py-4 sm:py-6">
+                            <div className="flex items-center gap-4">
+                              <div
+                                className="w-10 h-10 rounded-xl flex items-center justify-center shadow-sm text-[#fff]"
+                                style={{ backgroundColor: "#8a5cf5" }}
+                              >
+                                <span className="material-symbols-outlined text-[20px]">{rule.icon}</span>
+                              </div>
+                              <span
+                                className={`text-[15px] font-bold ${
+                                  c("text-[#1c1c1e]", "text-white")
+                                }`}
+                              >
+                                {rule.model.split('/').pop()}
+                              </span>
+                            </div>
+                          </td>
+                          <td
+                            className={`px-4 sm:px-8 py-4 sm:py-6 text-[13px] font-medium ${
+                              c("text-[#1c1c1e]/80", "text-[#bbcac0]")
                             }`}
                           >
-                            <td className="px-4 sm:px-8 py-4 sm:py-6">
-                              <div className="flex items-center gap-4">
-                                <div
-                                  className="w-10 h-10 rounded-xl flex items-center justify-center text-[16px] font-bold shadow-sm"
-                                  style={{ backgroundColor: logoInfo.bg, color: logoInfo.color }}
-                                >
-                                  {logoInfo.logo}
-                                </div>
-                                <span
-                                  className={`text-[15px] font-bold ${
-                                    c("text-[#1c1c1e]", "text-white")
-                                  }`}
-                                >
-                                  {p.name}
-                                </span>
-                              </div>
-                            </td>
-                            <td
-                              className={`px-4 sm:px-8 py-4 sm:py-6 text-[13px] font-medium max-w-xs sm:max-w-sm truncate ${
-                                active
-                                  ? c("text-[#1c1c1e]/80", "text-[#bbcac0]")
-                                  : c("text-[#1c1c1e]/40", "text-white/20")
+                            {rule.label}
+                          </td>
+                          <td className="px-4 sm:px-8 py-4 sm:py-6">
+                            <span
+                              className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider border shadow-sm ${
+                                isDark
+                                  ? "bg-[#EBDCFF]/10 text-[#EBDCFF] border-[#EBDCFF]/20"
+                                  : "bg-[#1c1c1e] text-[#F5F5F7] border-transparent"
                               }`}
-                              title={routingInfo}
                             >
-                              {routingInfo}
-                            </td>
-                            <td className="px-4 sm:px-8 py-4 sm:py-6">
-                              {active ? (
-                                <span
-                                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider border shadow-sm ${
-                                    isDark
-                                      ? "bg-[#EBDCFF]/10 text-[#EBDCFF] border-[#EBDCFF]/20"
-                                      : "bg-[#1c1c1e] text-[#F5F5F7] border-transparent"
-                                  }`}
-                                >
-                                  <span
-                                    className={`w-1.5 h-1.5 rounded-full animate-pulse ${
-                                      isDark ? "bg-[#EBDCFF]" : "bg-[#F5F5F7]"
-                                    }`}
-                                  ></span>
-                                  Active
-                                </span>
-                              ) : (
-                                <span
-                                  className={`inline-flex px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider border ${
-                                    isDark
-                                      ? "bg-[#2a2a2e] text-[#85948b] border-white/[0.06]"
-                                      : "bg-black/5 text-[#1c1c1e]/50 border-transparent"
-                                  }`}
-                                >
-                                  Standby
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-4 sm:px-8 py-4 sm:py-6 text-right">
-                              <div className="flex items-center justify-end gap-2">
-                                {active && config ? (
-                                  <>
-                                    <button
-                                      onClick={() => handleOpenEditModal(config)}
-                                      aria-label={`Configure settings for ${p.name}`}
-                                      className={`w-10 h-10 flex items-center justify-center rounded-xl transition-[color,background-color,border-color,box-shadow] duration-200 outline-none border cursor-pointer ${
-                                        isDark
-                                          ? "text-white/30 hover:text-white hover:bg-white/5 border-transparent hover:border-white/10 focus-visible:ring-[#EBDCFF]/20"
-                                          : "text-[#1c1c1e]/40 hover:text-[#1c1c1e] hover:bg-black/5 border-transparent hover:border-black/5 focus-visible:ring-[#1c1c1e]/20"
-                                      }`}
-                                    >
-                                      <span className="material-symbols-outlined text-[20px]" aria-hidden="true">
-                                        settings
-                                      </span>
-                                    </button>
-                                    <button
-                                      onClick={() => handleDeleteConfig(config.id, p.name)}
-                                      aria-label={`Disconnect ${p.name}`}
-                                      className={`w-10 h-10 flex items-center justify-center rounded-xl transition-[color,background-color,border-color,box-shadow] duration-200 outline-none border cursor-pointer ${
-                                        isDark
-                                          ? "text-red-400/40 hover:text-red-400 hover:bg-white/5 border-transparent hover:border-red-400/20 focus-visible:ring-red-400/20"
-                                          : "text-red-500/50 hover:text-red-600 hover:bg-red-50 border-transparent hover:border-red-100 focus-visible:ring-red-500/20"
-                                      }`}
-                                    >
-                                      <span className="material-symbols-outlined text-[20px]" aria-hidden="true">
-                                        delete
-                                      </span>
-                                    </button>
-                                  </>
-                                ) : (
-                                  <button
-                                    onClick={() => {
-                                      setEditingConfig(null);
-                                      setSelectedProviderId(p.id);
-                                      setApiKey("");
-                                      setSecretRef("");
-                                      setRoutingRules([
-                                        { intent: "General Inquiries", model_target: getSuggestedModels(p.id)[0] || "" },
-                                      ]);
-                                      setIsModalOpen(true);
-                                    }}
-                                    className={`px-3 py-1.5 rounded-lg border transition-all duration-200 text-[11px] font-bold flex items-center gap-1 cursor-pointer ${
-                                      isDark
-                                        ? "bg-white/5 border-white/10 hover:bg-white/10 text-white"
-                                        : "bg-white border-black/10 hover:bg-black/5 text-[#1c1c1e]"
-                                    }`}
-                                  >
-                                    <span className="material-symbols-outlined text-[14px]">add</span>
-                                    Configure
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full animate-pulse ${
+                                  isDark ? "bg-[#EBDCFF]" : "bg-[#F5F5F7]"
+                                }`}
+                              ></span>
+                              Active
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -962,7 +826,7 @@ export default function Models() {
           </div>
         </main>
 
-      {/* Add / Edit Config Modal */}
+      {/* Configure Models Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}></div>
@@ -973,9 +837,7 @@ export default function Models() {
           >
             <div className="flex justify-between items-center">
               <h3 className="text-[22px] font-serif font-bold" style={{ fontFamily: "'Playfair Display', serif" }}>
-                {editingConfig
-                  ? `Configure ${providers.find((p) => p.id === selectedProviderId)?.name || "Provider"}`
-                  : "Add Provider Connection"}
+                Select Chatbot Models
               </h3>
               <button
                 onClick={() => setIsModalOpen(false)}
@@ -988,71 +850,12 @@ export default function Models() {
             </div>
 
             <form onSubmit={handleSave} className="space-y-6">
-              {/* Provider Dropdown (only enabled when creating) */}
-              <div>
-                <label className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ${c("text-[#1c1c1e]/50", "text-[#85948b]")}`}>
-                  AI Provider
-                </label>
-                <select
-                  disabled={!!editingConfig}
-                  value={selectedProviderId}
-                  onChange={(e) => {
-                    setSelectedProviderId(e.target.value);
-                    const suggested = getSuggestedModels(e.target.value);
-                    setRoutingRules([{ intent: "General Inquiries", model_target: suggested[0] || "" }]);
-                  }}
-                  className={`w-full rounded-xl px-4 py-3 text-[14px] font-medium outline-none transition-all shadow-inner border ${
-                    isDark
-                      ? "bg-[#131317] border-white/[0.06] text-white focus:border-[#EBDCFF]/50"
-                      : "bg-[#F5F5F7] border-black/5 text-[#1c1c1e] focus:border-black/20 focus:bg-white"
-                  }`}
-                >
-                  {providers.map((p) => {
-                    // When adding, disable already configured providers
-                    const alreadyConfigured = configs.some((cfg) => cfg.provider_id === p.id && (!editingConfig || editingConfig.provider_id !== p.id));
-                    return (
-                      <option key={p.id} value={p.id} disabled={alreadyConfigured}>
-                        {p.name} {alreadyConfigured ? "(Configured)" : ""}
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-
-              {/* API Key */}
-              <div>
-                <label className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ${c("text-[#1c1c1e]/50", "text-[#85948b]")}`}>
-                  API Key
-                </label>
-                <input
-                  type="password"
-                  placeholder={editingConfig ? "•••••••• (Leave blank to keep current key)" : "Enter API Key"}
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  className={`w-full rounded-xl px-4 py-3 text-[14px] font-medium outline-none transition-all shadow-inner border ${
-                    isDark
-                      ? "bg-[#131317] border-white/[0.06] text-white focus:border-[#EBDCFF]/50"
-                      : "bg-[#F5F5F7] border-black/5 text-[#1c1c1e] focus:border-black/20 focus:bg-white"
-                  }`}
-                />
-              </div>
-
-              {/* Secret Reference */}
-              <div>
-                <label className={`block text-[11px] font-bold uppercase tracking-widest mb-2 ${c("text-[#1c1c1e]/50", "text-[#85948b]")}`}>
-                  Secret Reference (Optional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. aws/secrets/openai-key-v1"
-                  value={secretRef}
-                  onChange={(e) => setSecretRef(e.target.value)}
-                  className={`w-full rounded-xl px-4 py-3 text-[14px] font-medium outline-none transition-all shadow-inner border ${
-                    isDark
-                      ? "bg-[#131317] border-white/[0.06] text-white focus:border-[#EBDCFF]/50"
-                      : "bg-[#F5F5F7] border-black/5 text-[#1c1c1e] focus:border-black/20 focus:bg-white"
-                  }`}
-                />
+              
+              <div className="p-4 rounded-xl border flex items-center gap-4 bg-[#8a5cf5]/10 border-[#8a5cf5]/20">
+                <span className="material-symbols-outlined text-[#8a5cf5]">info</span>
+                <p className={`text-[13px] font-medium ${isDark ? "text-white/80" : "text-[#1c1c1e]/80"}`}>
+                  You don't need to provide any API keys! Simply select the models you want to use for your chatbot.
+                </p>
               </div>
 
               {/* Routing Rules Section */}
@@ -1060,10 +863,10 @@ export default function Models() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className={`text-[14px] font-bold ${c("text-[#1c1c1e]", "text-white")}`}>
-                      Routing Rules Mappings
+                      Model Configuration
                     </h4>
                     <p className={`text-[11px] font-medium ${c("text-[#1c1c1e]/50", "text-[#85948b]")}`}>
-                      Map incoming intents to specific model variants.
+                      Select which models will handle which types of queries.
                     </p>
                   </div>
                   <button
@@ -1076,7 +879,7 @@ export default function Models() {
                     }`}
                   >
                     <span className="material-symbols-outlined text-[14px]">add</span>
-                    Add Mapping
+                    Add Model
                   </button>
                 </div>
 
@@ -1087,7 +890,7 @@ export default function Models() {
                     }`}
                   >
                     <p className={`text-[12px] font-medium ${c("text-[#1c1c1e]/50", "text-[#85948b]")}`}>
-                      No mappings set. The provider configuration requires at least one routing rule mapping.
+                      Please select at least one model for your chatbot.
                     </p>
                   </div>
                 ) : (
@@ -1096,6 +899,9 @@ export default function Models() {
                       <div key={idx} className="flex gap-3 items-center">
                         {/* Intent select or input */}
                         <div className="flex-1">
+                          <label className={`block text-[10px] font-bold uppercase tracking-widest mb-1.5 ${c("text-[#1c1c1e]/50", "text-[#85948b]")}`}>
+                            Query Type (Intent)
+                          </label>
                           <select
                             value={POPULAR_INTENTS.includes(rule.intent) ? rule.intent : "Custom"}
                             onChange={(e) => {
@@ -1137,8 +943,11 @@ export default function Models() {
 
                         {/* Model select or input */}
                         <div className="flex-1">
+                          <label className={`block text-[10px] font-bold uppercase tracking-widest mb-1.5 ${c("text-[#1c1c1e]/50", "text-[#85948b]")}`}>
+                            AI Model
+                          </label>
                           <select
-                            value={getSuggestedModels(selectedProviderId).includes(rule.model_target) ? rule.model_target : "Custom"}
+                            value={OPENROUTER_MODELS.includes(rule.model_target) ? rule.model_target : "Custom"}
                             onChange={(e) => {
                               const val = e.target.value;
                               if (val === "Custom") {
@@ -1153,18 +962,18 @@ export default function Models() {
                                 : "bg-[#F5F5F7] border-black/5 text-[#1c1c1e] focus:border-black/20 focus:bg-white"
                             }`}
                           >
-                            {getSuggestedModels(selectedProviderId).map((model) => (
+                            {OPENROUTER_MODELS.map((model) => (
                               <option key={model} value={model}>
-                                {model}
+                                {model.split('/').pop() || model}
                               </option>
                             ))}
                             <option value="Custom">Custom...</option>
                           </select>
-                          {!getSuggestedModels(selectedProviderId).includes(rule.model_target) && (
+                          {!OPENROUTER_MODELS.includes(rule.model_target) && (
                             <input
                               type="text"
                               required
-                              placeholder="Type model identifier (e.g. gpt-4)..."
+                              placeholder="e.g. meta-llama/llama-3-8b"
                               value={rule.model_target}
                               onChange={(e) => handleRuleChange(idx, "model_target", e.target.value)}
                               className={`w-full mt-1.5 rounded-xl px-3 py-2 text-[12px] font-medium outline-none border ${
@@ -1180,7 +989,7 @@ export default function Models() {
                         <button
                           type="button"
                           onClick={() => handleRemoveRule(idx)}
-                          className={`p-2 rounded-xl transition-colors cursor-pointer ${
+                          className={`mt-5 p-2 rounded-xl transition-colors cursor-pointer ${
                             isDark ? "hover:bg-[#ffb4ab]/10 text-red-400" : "hover:bg-red-50 text-red-500"
                           }`}
                         >
@@ -1212,7 +1021,7 @@ export default function Models() {
                       : "bg-[#1c1c1e] text-[#F5F5F7] hover:bg-black"
                   }`}
                 >
-                  {submitting ? "Saving..." : "Save Settings"}
+                  {submitting ? "Saving..." : "Save Models"}
                 </button>
               </div>
             </form>

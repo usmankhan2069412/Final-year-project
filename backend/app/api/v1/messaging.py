@@ -1,7 +1,10 @@
 import uuid
+import logging
 from typing import List
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
+
+logger = logging.getLogger(__name__)
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_tenant_db, get_current_org_id
@@ -46,7 +49,7 @@ def send_message(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        # In production, use logger.exception(e)
+        logger.exception("[CHAT 500] Unhandled exception in send_message: %s", e)
         raise HTTPException(status_code=500, detail="An internal error occurred during chat processing.")
 
 @router.get("/{conversation_id}/history", response_model=List[MessageResponse])
