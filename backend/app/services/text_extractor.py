@@ -2,6 +2,7 @@ import csv
 import io
 import logging
 import re
+import time
 from collections import deque
 from typing import Optional
 from urllib.parse import urljoin, urlparse
@@ -75,6 +76,10 @@ _PAGE_MARKDOWN_LIMIT = 12_000
 
 # Heading text values that indicate nav/menu noise rather than real content
 _NAV_HEADING_TEXTS = {"menu", "navigation", "quick links", "useful links", "social media"}
+
+# Maximum total wall-clock time for a single URL crawl job.
+# Prevents runaway jobs (e.g. 15 pages × 45 s/page = 675 s worst case).
+_CRAWL_BUDGET_SECS = 90
 
 
 def _build_client() -> httpx.Client:
@@ -209,8 +214,9 @@ def _scrape_page_sync(client: httpx.Client, url: str) -> dict:
                 try:
                     resolved = urlparse(urljoin(url, href))
                     if resolved.scheme in ("http", "https") and resolved.netloc == parsed_origin.netloc:
-                        # Normalise: drop fragment and trailing slash
-                        resolved = resolved._replace(fragment="")
+                        # Strip query params + fragment before dedup to prevent crawl traps
+                        # (e.g. ?page=1, ?sort=asc, ?filter=x all collapse to the same URL)
+                        resolved = resolved._replace(query="", fragment="")
                         resolved_str = resolved.geturl().rstrip("/")
                         path_lower = resolved.path.lower()
                         if not any(path_lower.endswith(ext) for ext in _SKIP_EXTENSIONS):
@@ -301,9 +307,17 @@ def _crawl_site_sync(
     queue: deque = deque()
     queue.append((start_url, 0))
     results: list[dict] = []
+    crawl_start = time.monotonic()
 
     with _build_client() as client:
         while queue and len(results) < max_pages:
+            if time.monotonic() - crawl_start > _CRAWL_BUDGET_SECS:
+                logger.warning(
+                    "Crawl budget of %ds exceeded for %s — stopping after %d pages.",
+                    _CRAWL_BUDGET_SECS, start_url, len(results)
+                )
+                break
+
             url, depth = queue.popleft()
 
             # Normalise URL for dedup (strip trailing slash beyond origin)

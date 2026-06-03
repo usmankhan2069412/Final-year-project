@@ -3,12 +3,22 @@ import faiss
 import numpy as np
 import json
 import re
+import structlog
+from collections import OrderedDict
 from contextlib import contextmanager
 from typing import List, Dict, Any
 from app.core.config import settings
 
+logger = structlog.get_logger()
+
 class VectorStoreService:
-    _bm25_cache: Dict[str, Dict[str, Any]] = {}
+    # BM25 in-memory cache: evicts oldest entry when over _BM25_CACHE_MAXSIZE
+    _bm25_cache: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
+    _BM25_CACHE_MAXSIZE = 100
+
+    # FAISS in-process cache: keyed on (chatbot_id -> (mtime, index, metadata))
+    # Reloads from disk only when the index file's mtime changes.
+    _index_cache: Dict[str, tuple] = {}
 
     @staticmethod
     def _get_index_paths(chatbot_id: str):
@@ -48,17 +58,26 @@ class VectorStoreService:
     def load_index(cls, chatbot_id: str):
         index_file, meta_file_json, _ = cls._get_index_paths(chatbot_id)
         if os.path.exists(index_file):
-            index = faiss.read_index(index_file)
-            metadata = None
-            if os.path.exists(meta_file_json):
-                with open(meta_file_json, "r", encoding="utf-8") as f:
-                    metadata = json.load(f)
-            if metadata is not None:
-                # Ensure compatibility with older structure
-                if "chunk_texts" not in metadata:
-                    metadata["chunk_texts"] = {}
-                return index, metadata
-        
+            try:
+                mtime = os.stat(index_file).st_mtime
+                cached = cls._index_cache.get(str(chatbot_id))
+                if cached and cached[0] == mtime:
+                    return cached[1], cached[2]
+                index = faiss.read_index(index_file)
+                metadata = None
+                if os.path.exists(meta_file_json):
+                    with open(meta_file_json, "r", encoding="utf-8") as f:
+                        metadata = json.load(f)
+                if metadata is not None:
+                    # Ensure compatibility with older structure
+                    if "chunk_texts" not in metadata:
+                        metadata["chunk_texts"] = {}
+                    cls._index_cache[str(chatbot_id)] = (mtime, index, metadata)
+                    return index, metadata
+            except Exception as e:
+                logger.error("faiss_index_load_failed", chatbot_id=chatbot_id, error=str(e), exc_info=True)
+                # Fall back to empty index to avoid crashing client chat
+
         index = faiss.IndexFlatIP(settings.EMBEDDING_DIM)
         return index, {"ids": [], "source_map": {}, "chunk_texts": {}}
 
@@ -68,12 +87,17 @@ class VectorStoreService:
         with cls._index_lock(lock_file):
             cls._save_index_unlocked(index_file, meta_file_json, index, metadata)
             cls._bm25_cache.pop(str(chatbot_id), None)
+            cls._index_cache.pop(str(chatbot_id), None)  # invalidate stale cached index
 
     @staticmethod
     def _save_index_unlocked(index_file: str, meta_file_json: str, index, metadata):
-        faiss.write_index(index, index_file)
-        with open(meta_file_json, "w", encoding="utf-8") as f:
+        tmp_index = index_file + ".tmp"
+        tmp_meta = meta_file_json + ".tmp"
+        faiss.write_index(index, tmp_index)
+        with open(tmp_meta, "w", encoding="utf-8") as f:
             json.dump(metadata, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_index, index_file)
+        os.replace(tmp_meta, meta_file_json)
 
     @classmethod
     def add_vectors(cls, chatbot_id: str, vectors: np.ndarray, chunk_ids: List[str], source_id: str, chunk_texts: List[str]):
@@ -103,6 +127,7 @@ class VectorStoreService:
             index_file, meta_file_json, _ = cls._get_index_paths(chatbot_id)
             cls._save_index_unlocked(index_file, meta_file_json, index, metadata)
             cls._bm25_cache.pop(str(chatbot_id), None)
+            cls._index_cache.pop(str(chatbot_id), None)  # invalidate stale cached index
 
     @classmethod
     def remove_by_source(cls, chatbot_id: str, source_id: str):
@@ -111,6 +136,7 @@ class VectorStoreService:
             index, metadata = cls.load_index(chatbot_id)
             cls._remove_by_source_locked(chatbot_id, source_id, index, metadata)
             cls._bm25_cache.pop(str(chatbot_id), None)
+            cls._index_cache.pop(str(chatbot_id), None)  # invalidate stale cached index
 
     @classmethod
     def _remove_by_source_locked(cls, chatbot_id: str, source_id: str, index, metadata):
@@ -190,6 +216,9 @@ class VectorStoreService:
             "corpus_ids": corpus_ids,
             "bm25": bm25,
         }
+        # LRU eviction: remove oldest entry if over size limit
+        if len(cls._bm25_cache) > cls._BM25_CACHE_MAXSIZE:
+            cls._bm25_cache.popitem(last=False)
         return corpus_ids, bm25
 
     @classmethod

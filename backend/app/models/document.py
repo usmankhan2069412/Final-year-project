@@ -110,5 +110,6 @@ class KnowledgeJob(Base):
     )
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
+    retry_after = Column(DateTime(timezone=True), nullable=True)
 
     source = relationship("KnowledgeSource", back_populates="jobs")

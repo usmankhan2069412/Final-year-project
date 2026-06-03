@@ -1,0 +1,32 @@
+groups:
+  - name: aina_rag
+    rules:
+      - alert: HighFallbackRate
+        expr: rate(aina_fallback_total[5m]) / rate(aina_chat_requests_total[5m]) > 0.3
+        for: 5m
+        annotations:
+          summary: "More than 30% of chats hitting 'I don't know' — knowledge base may be empty or stale."
+
+      - alert: SlowChatLatency
+        expr: histogram_quantile(0.95, aina_chat_latency_seconds_bucket) > 15
+        for: 2m
+        annotations:
+          summary: "p95 chat latency > 15s — LLM or embedding API may be degraded."
+
+      - alert: EmbeddingErrorSpike
+        expr: rate(aina_embedding_errors_total[5m]) > 0.5
+        for: 1m
+        annotations:
+          summary: "Gemini embedding API error rate > 0.5/s — retrieval pipeline is broken."
+
+      - alert: JobQueueBacklog
+        expr: aina_queue_depth > 50
+        for: 10m
+        annotations:
+          summary: "Knowledge job queue > 50 jobs for 10 minutes — worker may be stuck or crashed."
+
+      - alert: WorkerHeartbeatStale
+        expr: time() - aina_worker_last_heartbeat_timestamp > 120
+        for: 1m
+        annotations:
+          summary: "Knowledge worker has not reported a heartbeat in 2 minutes — may be down."

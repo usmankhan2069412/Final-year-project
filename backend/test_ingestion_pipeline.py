@@ -9,7 +9,7 @@ from app.services.text_extractor import TextExtractor
 from app.services.chunker import TextChunker
 from app.services.embedding import embedding_service
 
-async def test_pipeline():
+async def run_pipeline():
     print("\n--- STARTING SECOND STAGE (INGESTION) TEST ---\n")
 
     # STEP 1: Text Extraction
@@ -104,4 +104,4 @@ async def test_pipeline():
     print("--- ALL STEPS WORKING PERFECTLY! ---")
 
 if __name__ == "__main__":
-    asyncio.run(test_pipeline())
+    asyncio.run(run_pipeline())

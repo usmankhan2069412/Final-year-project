@@ -36,9 +36,16 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL: str = "gemini-embedding-2"
     EMBEDDING_DIM: int = 3072            # gemini-embedding-2 output dimension
     GEMINI_API_KEY: str = ""
+    OPENROUTER_API_KEY: str = ""
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     CHUNK_SIZE: int = 500                # Characters per chunk
     CHUNK_OVERLAP: int = 50              # Overlap between chunks
     MAX_UPLOAD_SIZE_MB: int = 50
+
+    # CORS Settings
+    # Production: set to ["https://app.yourdomain.com"] in .env
+    # Development: leave empty — main.py falls back to allowing all localhost ports
+    CORS_ORIGINS: List[str] = []
 
     # Website scraping settings
     SCRAPE_TIMEOUT_SECS: int = 45        # Per-page HTTP timeout in seconds

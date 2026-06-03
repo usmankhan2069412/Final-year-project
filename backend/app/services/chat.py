@@ -20,7 +20,8 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langgraph.graph import StateGraph, END
 
-logger = logging.getLogger(__name__)
+import structlog
+logger = structlog.get_logger()
 
 # --- LangGraph State Definition ---
 class AgentState(TypedDict, total=False):
@@ -56,6 +57,13 @@ class AgentGraphExecutor:
     Pure graph executor operating on state dictionary variables.
     Decoupled entirely from database models/transactions.
     """
+    _graph = None  # Compiled graph singleton — safe to share (stateless)
+
+    @classmethod
+    def _get_graph(cls):
+        if cls._graph is None:
+            cls._graph = cls.build_graph()
+        return cls._graph
     @staticmethod
     def _get_llm(state: AgentState, temperature: float = 0.3) -> Optional[ChatOpenAI]:
         if not state.get("api_key"):
@@ -94,24 +102,23 @@ class AgentGraphExecutor:
     def route_intent(state: AgentState) -> AgentState:
         # 1. Fast Semantic Routing using Embeddings
         intent = SemanticRouter.classify(state["user_message"])
+        chatbot_id = state.get("chatbot_id")
         if intent:
+            logger.info("intent_routed", intent=intent, chatbot_id=chatbot_id)
             return {"intent": intent}
                 
         # 2. Fallback directly to RAG_LOOKUP
+        logger.info("intent_routed", intent="RAG_LOOKUP", chatbot_id=chatbot_id)
         return {"intent": "RAG_LOOKUP"}
 
     @staticmethod
     def agent_handoff_node(state: AgentState) -> AgentState:
+        from app.core.messages import get_initial_handoff_message
         lang = state["persona"].language
         if lang == "multilingual":
             lang = detect_message_language(state["user_message"], state.get("history"))
             
-        if lang == "urdu":
-            text = "میں آپ کی درخواست کو کسٹمر سپورٹ ایجنٹ کو منتقل کر رہا ہوں۔ ہماری ٹیم جلد ہی آپ سے رابطہ کرے گی۔"
-        elif lang == "english":
-            text = "I am transferring your request to a support agent. Someone from our team will contact you shortly."
-        else:
-            text = "Main aap ki request support agent ko transfer kar raha hoon. Thodi der mein humari team aap se rabta karegi."
+        text = get_initial_handoff_message(lang)
             
         return {"response": text, "status": ConversationStatus.ESCALATED}
 
@@ -190,14 +197,15 @@ class AgentGraphExecutor:
     def retrieve_node(state: AgentState) -> AgentState:
         rewritten = state.get("rewritten_query")
         original = state["user_message"]
+        chatbot_id = state["chatbot_id"]
         
         # If no rewrite or exactly the same, do a single search
         if not rewritten or rewritten.lower().strip() == original.lower().strip():
-            sources_list = VectorStoreService.search_hybrid(state["chatbot_id"], original, top_k=4)
+            sources_list = VectorStoreService.search_hybrid(chatbot_id, original, top_k=4)
         else:
             # Multi-Query Retrieval: search both and merge
-            sources_rewritten = VectorStoreService.search_hybrid(state["chatbot_id"], rewritten, top_k=3)
-            sources_original = VectorStoreService.search_hybrid(state["chatbot_id"], original, top_k=3)
+            sources_rewritten = VectorStoreService.search_hybrid(chatbot_id, rewritten, top_k=3)
+            sources_original = VectorStoreService.search_hybrid(chatbot_id, original, top_k=3)
             
             seen_chunks = set()
             sources_list = []
@@ -227,19 +235,35 @@ class AgentGraphExecutor:
             }
             for chunk in sources_list
         ]
+        
+        logger.info(
+            "retrieval_complete",
+            chatbot_id=chatbot_id,
+            chunks=len(sources),
+            used_multi_query=bool(rewritten and rewritten.lower().strip() != original.lower().strip())
+        )
         return {"sources": sources, "context_text": context_text}
 
     @staticmethod
     def validate_node(state: AgentState) -> AgentState:
         sources = state.get("sources", [])
-        if not sources:
+        context_text = state.get("context_text", "")
+        if not sources and not context_text.strip():
+            logger.info("validation_result", is_relevant=False, chunks_before=0, chunks_after=0)
             return {"is_relevant": False, "context_text": ""}
             
         llm = AgentGraphExecutor._get_llm(state)
         query = state.get("rewritten_query") or state["user_message"]
         
         if not llm:
-            return {"is_relevant": AgentGraphExecutor._has_lexical_relevance(query, state.get("context_text", ""))}
+            is_rel = AgentGraphExecutor._has_lexical_relevance(query, state.get("context_text", ""))
+            filtered_sources = state.get("sources", []) if is_rel else []
+            logger.info("validation_result", is_relevant=is_rel, chunks_before=len(sources), chunks_after=len(filtered_sources), no_llm=True)
+            return {
+                "is_relevant": is_rel,
+                "sources": filtered_sources,
+                "context_text": state.get("context_text", "") if is_rel else ""
+            }
             
         try:
             sys_msg = SystemMessage(content=(
@@ -259,6 +283,7 @@ class AgentGraphExecutor:
             answer = llm.invoke([sys_msg, h_msg]).content.strip().upper()
             
             if answer == "NONE" or not answer:
+                logger.info("validation_result", is_relevant=False, chunks_before=len(sources), chunks_after=0)
                 return {"is_relevant": False, "sources": [], "context_text": ""}
                 
             valid_indices = []
@@ -269,6 +294,7 @@ class AgentGraphExecutor:
                         valid_indices.append(idx)
                         
             if not valid_indices:
+                logger.info("validation_result", is_relevant=False, chunks_before=len(sources), chunks_after=0)
                 return {"is_relevant": False, "sources": [], "context_text": ""}
                 
             filtered_sources = [sources[i] for i in valid_indices]
@@ -278,14 +304,23 @@ class AgentGraphExecutor:
                 for idx, chunk in enumerate(filtered_sources)
             )
             
+            logger.info("validation_result", is_relevant=True, chunks_before=len(sources), chunks_after=len(filtered_sources))
             return {
                 "is_relevant": True, 
                 "sources": filtered_sources, 
                 "context_text": new_context_text
             }
         except Exception as e:
-            logger.warning(f"Semantic validation failed: {e}")
-            return {"is_relevant": True}
+            logger.warning("validate_node_llm_failed", error=str(e))
+            # Fall back to lexical relevance check with the original sources
+            is_rel = AgentGraphExecutor._has_lexical_relevance(query, state.get("context_text", ""))
+            filtered_sources = state.get("sources", []) if is_rel else []
+            logger.info("validation_result", is_relevant=is_rel, chunks_before=len(sources), chunks_after=len(filtered_sources), fallback_lexical=True)
+            return {
+                "is_relevant": is_rel,
+                "sources": filtered_sources,
+                "context_text": state.get("context_text", "") if is_rel else ""
+            }
 
     @staticmethod
     def _generate_mock_response(query: str, context: str, persona: Persona, traits: List[str]) -> str:
@@ -419,8 +454,7 @@ class AgentGraphExecutor:
 
     @classmethod
     def execute(cls, initial_state: AgentState) -> AgentState:
-        graph = cls.build_graph()
-        return graph.invoke(initial_state)
+        return cls._get_graph().invoke(initial_state)
 
 
 # --- Chat Service Orchestrator ---
@@ -511,6 +545,16 @@ class ChatService:
         end_date = datetime.now(timezone.utc)
         history = cls.message_repo.fetch_history(db, conversation.id, start_date, end_date)
 
+        # Record user message first to avoid ghost turns on execution failure
+        user_msg = DBMessage(
+            conversation_id=conversation.id,
+            role=MessageRole.USER,
+            content=user_message,
+            config_id=active_config.id if active_config else None
+        )
+        db.add(user_msg)
+        db.flush()
+
         # 4. Invoke graph execution without DB dependencies
         initial_state = {
             "user_message": user_message,
@@ -524,12 +568,26 @@ class ChatService:
             "sources": []
         }
         
+        import time
+        from app.core.metrics import chat_requests_total, chat_latency_seconds, fallback_total
+        
+        t0 = time.monotonic()
         final_state = AgentGraphExecutor.execute(initial_state)
-
+        latency = time.monotonic() - t0
+        chat_latency_seconds.observe(latency)
+        
         # 5. Extract values and update database context
         response_text = final_state.get("response", "An error occurred during generation.")
         new_status = final_state.get("status", conversation.status)
         sources = final_state.get("sources", [])
+        intent = final_state.get("intent", "unknown")
+        
+        # Track metrics
+        is_relevant = final_state.get("is_relevant", False)
+        outcome = "answered" if (is_relevant or new_status == ConversationStatus.ESCALATED) else "fallback"
+        chat_requests_total.labels(intent=intent or "unknown", outcome=outcome).inc()
+        if outcome == "fallback":
+            fallback_total.inc()
 
         if new_status == ConversationStatus.ESCALATED:
             from app.services.escalation_router import EscalationRouter
@@ -543,24 +601,19 @@ class ChatService:
                 language=persona.language,
                 is_new_conv=is_new_conv,
                 active_config_id=active_config.id if active_config else None,
-                sources=sources
+                sources=sources,
+                write_user_message=False
             )
 
         if new_status != conversation.status:
             conversation.status = new_status
             db.add(conversation)
 
-        # Record messages
+        # Record bot reply
         db.add(DBMessage(
-            conversation_id=conversation.id, 
-            role=MessageRole.USER, 
-            content=user_message, 
-            config_id=active_config.id if active_config else None
-        ))
-        db.add(DBMessage(
-            conversation_id=conversation.id, 
-            role=MessageRole.BOT, 
-            content=response_text, 
+            conversation_id=conversation.id,
+            role=MessageRole.BOT,
+            content=response_text,
             config_id=active_config.id if active_config else None
         ))
 

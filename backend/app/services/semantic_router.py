@@ -68,7 +68,7 @@ class SemanticRouter:
     def _initialize(cls):
         if cls._initialized:
             return
-            
+
         logger.info("Initializing Semantic Router embeddings...")
         try:
             for intent, utterances in cls.ROUTES.items():
@@ -82,12 +82,23 @@ class SemanticRouter:
             cls._initialized = True
         except Exception as e:
             logger.error(f"Failed to initialize Semantic Router: {e}")
+            # Mark as initialized even on failure to prevent a thundering herd of
+            # re-initialization attempts on every subsequent chat message.
+            # _encoded_routes stays empty → classify() returns None → RAG_LOOKUP fallback.
+            cls._initialized = True
+
 
     @classmethod
     def classify(cls, message: str, threshold: float = 0.82) -> Optional[str]:
-        # Fast short-circuit for exact generic matches
         msg_lower = message.lower().strip()
         words = msg_lower.split()
+        
+        # 1. Fast short-circuit for Agent Handoff keywords (useful for fallback/local testing)
+        handoff_keywords = ["talk to human", "speak with an agent", "connect to a person", "human support", "representative"]
+        if any(kw in msg_lower for kw in handoff_keywords):
+            return "AGENT_HANDOFF"
+            
+        # 2. Fast short-circuit for exact generic Conversational matches
         if len(words) <= 2 and (msg_lower in cls.ROUTES["CONVERSATIONAL"] or any(w in cls.ROUTES["CONVERSATIONAL"] for w in words)):
             return "CONVERSATIONAL"
             

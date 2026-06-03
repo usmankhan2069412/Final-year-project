@@ -5,14 +5,18 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+import asyncio
+
 class ConnectionManager:
     def __init__(self):
         # Maps user_id to their active WebSocket connection
         self.active_connections: Dict[uuid.UUID, WebSocket] = {}
+        self.loop = None
 
     async def connect(self, websocket: WebSocket, user_id: uuid.UUID):
         await websocket.accept()
         self.active_connections[user_id] = websocket
+        self.loop = asyncio.get_running_loop()
         logger.info(f"WebSocket connected for user: {user_id}")
 
     def disconnect(self, user_id: uuid.UUID):

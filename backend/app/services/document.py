@@ -5,8 +5,9 @@ import ipaddress
 import socket
 from pathlib import Path
 from urllib.parse import urlparse
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from fastapi import UploadFile
 
 from app.core.config import settings
@@ -294,16 +295,22 @@ class KnowledgeService:
                 loop = asyncio.get_running_loop()
                 loop.create_task(send_updates())
             except RuntimeError:
-                asyncio.run(send_updates())
+                # If there's no running loop in the current thread, try to run on the captured main loop
+                if manager.loop and manager.loop.is_running():
+                    asyncio.run_coroutine_threadsafe(send_updates(), manager.loop)
+                else:
+                    logger.warning("ws_notify_skipped: no event loop in worker process")
                 
         except Exception as e:
             logger.error(f"Failed to notify users of knowledge update: {e}")
 
     @classmethod
     def process_next_job(cls, db: Session) -> bool:
+        now = datetime.now(timezone.utc)
         job = db.query(KnowledgeJob).filter(
             KnowledgeJob.status == KnowledgeJobStatus.QUEUED,
             KnowledgeJob.attempts < KnowledgeJob.max_attempts,
+            or_(KnowledgeJob.retry_after == None, KnowledgeJob.retry_after <= now)
         ).order_by(KnowledgeJob.created_at.asc()).first()
         if not job:
             return False
@@ -330,7 +337,13 @@ class KnowledgeService:
             source = db.query(KnowledgeSource).filter(KnowledgeSource.id == job.source_id).first() if job else None
             if job:
                 job.error_message = str(exc)
-                job.status = KnowledgeJobStatus.FAILED if job.attempts >= job.max_attempts else KnowledgeJobStatus.QUEUED
+                if job.attempts >= job.max_attempts:
+                    job.status = KnowledgeJobStatus.FAILED
+                else:
+                    job.status = KnowledgeJobStatus.QUEUED
+                    # Apply exponential backoff: 30s, 60s, 120s...
+                    backoff_seconds = 30 * (2 ** (job.attempts - 1))
+                    job.retry_after = datetime.now(timezone.utc) + timedelta(seconds=min(backoff_seconds, 3600))
             if source:
                 source.status = SourceStatus.FAILED if job and job.status == KnowledgeJobStatus.FAILED else SourceStatus.QUEUED
                 source.error_message = str(exc)

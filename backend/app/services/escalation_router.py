@@ -18,35 +18,31 @@ class EscalationRouter:
     @staticmethod
     def get_escalation_message(language: Optional[str], user_message: Optional[str] = None) -> str:
         """Get standard handoff message based on persona language."""
+        from app.core.messages import get_escalated_wait_message
         if language == "multilingual" and user_message:
             language = detect_message_language(user_message)
-            
-        if language == "urdu":
-            return "سپورٹ ایجنٹ آپ کے پیغام کا جائزہ لے رہے ہیں اور جلد ہی جواب دیں گے۔"
-        elif language == "english":
-            return "A support agent is reviewing your message and will respond shortly."
-        else:
-            return "Support agent aap ke message ka jaiza le rahe hain aur jald hi jawab denge."
+        return get_escalated_wait_message(language)
 
     @staticmethod
     def find_least_busy_agent(db: Session, org_id: uuid.UUID) -> Optional[uuid.UUID]:
         """Find the least-busy agent (OWNER or ADMIN role) in the organization."""
-        agents = db.query(User).join(
+        agent_counts = db.query(
+            User.id,
+            func.count(Conversation.id)
+        ).select_from(User).join(
             OrgMember, OrgMember.user_id == User.id
+        ).outerjoin(
+            Conversation,
+            (Conversation.assigned_agent_id == User.id) &
+            (Conversation.status == ConversationStatus.ESCALATED) &
+            (Conversation.deleted_at == None)
         ).filter(
             OrgMember.org_id == org_id,
             OrgMember.role.in_([OrgRole.OWNER, OrgRole.ADMIN]),
             User.deleted_at == None
-        ).all()
+        ).group_by(User.id).all()
         
-        agent_escalated_counts = {}
-        for agent in agents:
-            count = db.query(func.count(Conversation.id)).filter(
-                Conversation.assigned_agent_id == agent.id,
-                Conversation.status == ConversationStatus.ESCALATED,
-                Conversation.deleted_at == None
-            ).scalar() or 0
-            agent_escalated_counts[agent.id] = count
+        agent_escalated_counts = {user_id: count for user_id, count in agent_counts}
 
         if agent_escalated_counts:
             return min(agent_escalated_counts, key=agent_escalated_counts.get)
@@ -54,6 +50,115 @@ class EscalationRouter:
         # Fallback to org owner
         org = db.query(Organization).filter(Organization.id == org_id).first()
         return org.owner_id if org else None
+
+    @classmethod
+    def _record_and_broadcast(
+        cls,
+        db: Session,
+        conversation: Conversation,
+        chatbot: Chatbot,
+        org_id: uuid.UUID,
+        user_message: str,
+        response_text: str,
+        active_config_id: Optional[uuid.UUID],
+        write_user_message: bool,
+        is_new_conv: bool = False,
+        is_escalation_event: bool = False
+    ):
+        import asyncio
+        import threading
+        from app.services.sse_manager import sse_manager
+        
+        if write_user_message:
+            user_msg = DBMessage(
+                id=uuid.uuid4(),
+                conversation_id=conversation.id,
+                role=MessageRole.USER,
+                content=user_message,
+                config_id=active_config_id,
+                created_at=datetime.now(timezone.utc),
+            )
+            db.add(user_msg)
+            user_msg_id = str(user_msg.id)
+            user_msg_created_at = user_msg.created_at
+        else:
+            last_msg = db.query(DBMessage).filter(
+                DBMessage.conversation_id == conversation.id,
+                DBMessage.role == MessageRole.USER
+            ).order_by(DBMessage.created_at.desc()).first()
+            if last_msg:
+                user_msg_id = str(last_msg.id)
+                user_msg_created_at = last_msg.created_at
+            else:
+                user_msg_id = str(uuid.uuid4())
+                user_msg_created_at = datetime.now(timezone.utc)
+
+        bot_msg = DBMessage(
+            id=uuid.uuid4(),
+            conversation_id=conversation.id,
+            role=MessageRole.BOT,
+            content=response_text,
+            config_id=active_config_id,
+            created_at=datetime.now(timezone.utc),
+        )
+        db.add(bot_msg)
+        
+        chatbot.total_messages += 2
+        if is_new_conv:
+            chatbot.total_conversations += 1
+        db.add(chatbot)
+        
+        db.commit()
+
+        user_msg_data = {
+            "conversation_id": str(conversation.id),
+            "message": {
+                "id": user_msg_id,
+                "role": "user",
+                "content": user_message,
+                "created_at": user_msg_created_at.isoformat()
+            }
+        }
+        bot_msg_data = {
+            "conversation_id": str(conversation.id),
+            "message": {
+                "id": str(bot_msg.id),
+                "role": "bot",
+                "content": response_text,
+                "created_at": bot_msg.created_at.isoformat()
+            }
+        }
+        
+        escalation_event = None
+        if is_escalation_event:
+            escalation_event = {
+                "conversation_id": str(conversation.id),
+                "status": ConversationStatus.ESCALATED.value,
+                "assigned_agent_id": str(conversation.assigned_agent_id) if conversation.assigned_agent_id else None,
+                "chatbot_id": str(chatbot.id)
+            }
+
+        def _run_sse():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(sse_manager.broadcast(str(org_id), "message", user_msg_data))
+                loop.run_until_complete(sse_manager.broadcast(str(org_id), "message", bot_msg_data))
+                if escalation_event:
+                    loop.run_until_complete(sse_manager.broadcast(str(org_id), "escalation", escalation_event))
+            except Exception as e:
+                logger.error(f"SSE broadcast failed in thread: {e}")
+            finally:
+                loop.close()
+
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(sse_manager.broadcast(str(org_id), "message", user_msg_data))
+            loop.create_task(sse_manager.broadcast(str(org_id), "message", bot_msg_data))
+            if escalation_event:
+                loop.create_task(sse_manager.broadcast(str(org_id), "escalation", escalation_event))
+        except RuntimeError:
+            threading.Thread(target=_run_sse, daemon=True).start()
 
     @classmethod
     def escalate(
@@ -67,87 +172,32 @@ class EscalationRouter:
         language: Optional[str],
         is_new_conv: bool = False,
         active_config_id: Optional[uuid.UUID] = None,
-        sources: Optional[list] = None
+        sources: Optional[list] = None,
+        write_user_message: bool = True
     ) -> Dict[str, Any]:
         """
         Escalates the conversation: assigns least busy agent, updates status,
         saves message, updates chatbot statistics, and broadcasts SSE events.
         """
-        import asyncio
-        from app.services.sse_manager import sse_manager
-        
-        # 1. Update status
         conversation.status = ConversationStatus.ESCALATED
         
-        # 2. Assign agent if not already assigned
         if not conversation.assigned_agent_id:
             conversation.assigned_agent_id = cls.find_least_busy_agent(db, org_id)
             
         db.add(conversation)
         
-        # 3. Record messages with IDs now so live inbox events can dedupe safely.
-        user_msg = DBMessage(
-            id=uuid.uuid4(),
-            conversation_id=conversation.id,
-            role=MessageRole.USER,
-            content=user_message,
-            config_id=active_config_id,
-            created_at=datetime.now(timezone.utc),
+        cls._record_and_broadcast(
+            db=db,
+            conversation=conversation,
+            chatbot=chatbot,
+            org_id=org_id,
+            user_message=user_message,
+            response_text=response_text,
+            active_config_id=active_config_id,
+            write_user_message=write_user_message,
+            is_new_conv=is_new_conv,
+            is_escalation_event=True
         )
-        bot_msg = DBMessage(
-            id=uuid.uuid4(),
-            conversation_id=conversation.id,
-            role=MessageRole.BOT,
-            content=response_text,
-            config_id=active_config_id,
-            created_at=datetime.now(timezone.utc),
-        )
-        db.add(user_msg)
-        db.add(bot_msg)
-        
-        # 4. Update chatbot statistics
-        chatbot.total_messages += 2
-        if is_new_conv:
-            chatbot.total_conversations += 1
-        db.add(chatbot)
-        
-        db.commit()
-        
-        # 5. Broadcast escalation status event
-        escalation_event = {
-            "conversation_id": str(conversation.id),
-            "status": ConversationStatus.ESCALATED.value,
-            "assigned_agent_id": str(conversation.assigned_agent_id) if conversation.assigned_agent_id else None,
-            "chatbot_id": str(chatbot.id)
-        }
-        
-        # 6. Broadcast user and bot messages
-        user_msg_data = {
-            "conversation_id": str(conversation.id),
-            "message": {
-                "id": str(user_msg.id),
-                "role": "user",
-                "content": user_message,
-                "created_at": user_msg.created_at.isoformat()
-            }
-        }
-        bot_msg_data = {
-            "conversation_id": str(conversation.id),
-            "message": {
-                "id": str(bot_msg.id),
-                "role": "bot",
-                "content": response_text,
-                "created_at": bot_msg.created_at.isoformat()
-            }
-        }
-        
-        try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(sse_manager.broadcast(str(org_id), "escalation", escalation_event))
-            loop.create_task(sse_manager.broadcast(str(org_id), "message", user_msg_data))
-            loop.create_task(sse_manager.broadcast(str(org_id), "message", bot_msg_data))
-        except RuntimeError:
-            pass
             
         return {
             "response": response_text,
@@ -168,60 +218,20 @@ class EscalationRouter:
         active_config_id: Optional[uuid.UUID] = None
     ) -> Dict[str, Any]:
         """Handles messages sent to an already escalated conversation by bypassing standard RAG."""
-        import asyncio
-        from app.services.sse_manager import sse_manager
-        
         response_text = cls.get_escalation_message(language, user_message=user_message)
         
-        user_msg = DBMessage(
-            id=uuid.uuid4(),
-            conversation_id=conversation.id,
-            role=MessageRole.USER,
-            content=user_message,
-            config_id=active_config_id,
-            created_at=datetime.now(timezone.utc),
+        cls._record_and_broadcast(
+            db=db,
+            conversation=conversation,
+            chatbot=chatbot,
+            org_id=org_id,
+            user_message=user_message,
+            response_text=response_text,
+            active_config_id=active_config_id,
+            write_user_message=True,
+            is_new_conv=False,
+            is_escalation_event=False
         )
-        bot_msg = DBMessage(
-            id=uuid.uuid4(),
-            conversation_id=conversation.id,
-            role=MessageRole.BOT,
-            content=response_text,
-            config_id=active_config_id,
-            created_at=datetime.now(timezone.utc),
-        )
-        db.add(user_msg)
-        db.add(bot_msg)
-        
-        # Update chatbot statistics
-        chatbot.total_messages += 2
-        db.add(chatbot)
-        
-        db.commit()
-        
-        user_msg_data = {
-            "conversation_id": str(conversation.id),
-            "message": {
-                "id": str(user_msg.id),
-                "role": "user",
-                "content": user_message,
-                "created_at": user_msg.created_at.isoformat()
-            }
-        }
-        bot_msg_data = {
-            "conversation_id": str(conversation.id),
-            "message": {
-                "id": str(bot_msg.id),
-                "role": "bot",
-                "content": response_text,
-                "created_at": bot_msg.created_at.isoformat()
-            }
-        }
-        try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(sse_manager.broadcast(str(org_id), "message", user_msg_data))
-            loop.create_task(sse_manager.broadcast(str(org_id), "message", bot_msg_data))
-        except RuntimeError:
-            pass
             
         return {
             "response": response_text,

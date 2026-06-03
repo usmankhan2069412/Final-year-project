@@ -1,7 +1,7 @@
 import re
 from typing import List
 from app.core.config import settings
-from langchain.text_splitter import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
+from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 
 class TextChunker:

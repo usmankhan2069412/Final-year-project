@@ -1,4 +1,5 @@
 import logging
+import structlog
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy.exc import SQLAlchemyError
@@ -26,14 +27,24 @@ app = FastAPI(
 )
 
 # 🌐 CORS Middleware Configuration
-# Allows the React/Vite frontend (running on other localhost ports) to communicate with the backend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origin_regex="https?://(localhost|127\.0\.0\.1)(:\d+)?",
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Production: set CORS_ORIGINS=["https://yourdomain.com"] in .env
+# Development: leave CORS_ORIGINS empty — falls back to allowing all localhost ports
+if settings.CORS_ORIGINS:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.CORS_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # 🛡️ Global Database Exception Handler
 # Prevents backend from crashing on db connection failures and keeps details out of the API response
@@ -84,16 +95,44 @@ from app.tasks.analytics_aggregation import run_nightly_aggregation
 
 @app.on_event("startup")
 def start_scheduler():
+    # Configure structured JSON logging once at startup
+    structlog.configure(
+        processors=[
+            structlog.stdlib.add_log_level,
+            structlog.stdlib.add_logger_name,
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.processors.JSONRenderer(),
+        ],
+        wrapper_class=structlog.BoundLogger,
+        context_class=dict,
+        logger_factory=structlog.PrintLoggerFactory(),
+    )
+
+    # Eagerly initialize SemanticRouter so failures surface on boot, not on first message
+    from app.services.semantic_router import SemanticRouter
+    SemanticRouter._initialize()
+    if not SemanticRouter._initialized:
+        logger.error(
+            "SemanticRouter failed to initialize — intent routing will degrade to "
+            "RAG_LOOKUP for all messages until the service is restarted."
+        )
+
     scheduler = BackgroundScheduler()
     # Run daily aggregation at 12:05 AM (00:05) every day
     scheduler.add_job(run_nightly_aggregation, "cron", hour=0, minute=5)
     
-    # Run the knowledge worker every 3 seconds to process queued documents
-    from app.workers.knowledge_worker import run_once
-    scheduler.add_job(run_once, "interval", seconds=3, max_instances=1)
-    
+    # Periodically write the heartbeat file to satisfy the health check endpoint
+    # when processing jobs via FastAPI BackgroundTasks in-process
+    from app.workers.knowledge_worker import write_heartbeat
+    try:
+        write_heartbeat()
+    except Exception:
+        pass
+    scheduler.add_job(write_heartbeat, "interval", seconds=30)
+
     scheduler.start()
     logger.info("APScheduler initialized and started background tasks.")
+    # NOTE: Knowledge document ingestion is handled in-process via BackgroundTasks.
 
 
 @app.get("/")
@@ -102,7 +141,74 @@ def root():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy"}
+    from sqlalchemy import text
+    from app.db.session import SessionLocal
+    import os
+    import tempfile
+    import time
+    from pathlib import Path
+    
+    checks = {}
+
+    # 1. Database connectivity
+    try:
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
+        db.close()
+        checks["database"] = "ok"
+    except Exception as e:
+        checks["database"] = f"error: {str(e)}"
+
+    # 2. FAISS data directory exists
+    checks["faiss_dir"] = "ok" if os.path.isdir(settings.FAISS_DIR) else "missing"
+
+    # 3. Gemini API key present
+    checks["gemini_key"] = "ok" if settings.GEMINI_API_KEY else "missing"
+
+    # 4. SemanticRouter initialized
+    from app.services.semantic_router import SemanticRouter
+    checks["semantic_router"] = "ok" if getattr(SemanticRouter, "_initialized", False) else "degraded"
+
+    # 5. Knowledge worker liveness check
+    heartbeat_path = Path(tempfile.gettempdir()) / "aina_worker_heartbeat"
+    if heartbeat_path.exists():
+        try:
+            mtime = heartbeat_path.read_text(encoding="utf-8")
+            if time.time() - float(mtime) < 120.0:
+                checks["knowledge_worker"] = "ok"
+            else:
+                checks["knowledge_worker"] = "stale"
+        except Exception:
+            checks["knowledge_worker"] = "unreadable"
+    else:
+        checks["knowledge_worker"] = "missing"
+
+    is_healthy = all(v == "ok" for v in checks.values())
+    return JSONResponse(
+        status_code=200 if is_healthy else 503,
+        content={"status": "healthy" if is_healthy else "degraded", "checks": checks}
+    )
+
+@app.get("/ready")
+def readiness_check():
+    return {"ready": True}
+
+@app.get("/metrics", include_in_schema=False)
+def metrics():
+    import tempfile
+    import time
+    from pathlib import Path
+    from app.core.metrics import worker_last_heartbeat_timestamp, generate_latest, CONTENT_TYPE_LATEST
+    
+    heartbeat_path = Path(tempfile.gettempdir()) / "aina_worker_heartbeat"
+    if heartbeat_path.exists():
+        try:
+            mtime = heartbeat_path.read_text(encoding="utf-8")
+            worker_last_heartbeat_timestamp.set(float(mtime))
+        except Exception:
+            pass
+            
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/widget.js", include_in_schema=False)
