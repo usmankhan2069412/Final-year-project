@@ -2,7 +2,7 @@ import uuid
 from enum import Enum as PyEnum
 from datetime import datetime, timezone
 from sqlalchemy import Column, String, Text, DateTime, Enum, ForeignKey, Index, Boolean
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from app.db.session import Base
 
@@ -58,6 +58,7 @@ class Conversation(Base):
     sender_phone = Column(String(20), nullable=True)  # WhatsApp sender phone number
     started_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     deleted_at = Column(DateTime(timezone=True), nullable=True)
+    memory = Column(JSONB, nullable=True)  # Structured conversation memory (lazy summarization)
 
     # Relationships
     chatbot = relationship("Chatbot")

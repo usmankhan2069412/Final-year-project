@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useTheme } from "../../../contexts/ThemeContext";
+import MarkdownRenderer from "../../../components/MarkdownRenderer";
 
 interface ChatMessage {
   role: "bot" | "user";
@@ -144,9 +145,12 @@ export default function ChatSimulator({
                       "bg-[#1f1f23] border-white/[0.04] text-[#e4e1e7] font-medium rounded-tl-md"
                     )
               }`}
-              style={{ whiteSpace: "pre-line" }}
             >
-              {msg.text}
+              {msg.role === "user" ? (
+                <div style={{ whiteSpace: "pre-line" }}>{msg.text}</div>
+              ) : (
+                <MarkdownRenderer content={msg.text} isDark={isDark} />
+              )}
             </div>
           </div>
         ))}

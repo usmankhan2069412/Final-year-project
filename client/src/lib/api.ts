@@ -154,6 +154,73 @@ export const api = {
   sendBuilderMessage: (chatbotId: string, payload: { message: string; conversation_id?: string | null }) =>
     apiRequest<ChatResponse>(`/api/v1/chat/${chatbotId}/message`, { method: "POST", body: JSON.stringify(payload) }),
 
+  streamBuilderMessage: async (
+    chatbotId: string,
+    payload: { message: string; conversation_id?: string | null },
+    onToken: (token: string) => void,
+    onError?: (error: string) => void
+  ): Promise<ChatResponse> => {
+    const response = await fetch(`${API_BASE_URL}/api/v1/chat/${chatbotId}/message?stream=true`, {
+      method: "POST",
+      headers: { ...authHeaders(true) } as HeadersInit,
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      let message = response.statusText;
+      try {
+        const data = await response.json();
+        message = data.detail || message;
+      } catch {}
+      if (onError) onError(message);
+      throw new ApiError(message, response.status);
+    }
+
+    if (!response.body) throw new Error("No response body");
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let done = false;
+    let finalData: ChatResponse | null = null;
+    let buffer = "";
+
+    while (!done) {
+      const { value, done: doneReading } = await reader.read();
+      done = doneReading;
+      if (value) {
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith("data: ")) {
+            const dataStr = trimmed.slice(6);
+            if (dataStr === "[DONE]") continue;
+            let parsed;
+            try {
+              parsed = JSON.parse(dataStr);
+            } catch (e) {
+              console.error("Error parsing SSE data", e, dataStr);
+              continue;
+            }
+
+            if (parsed.type === "token") {
+              onToken(parsed.content);
+            } else if (parsed.type === "final") {
+              finalData = parsed.data;
+            } else if (parsed.type === "error") {
+              if (onError) onError(parsed.error);
+              throw new Error(parsed.error);
+            }
+          }
+        }
+      }
+    }
+    if (finalData) return finalData;
+    throw new Error("Stream closed without final data");
+  },
+
   listDeployments: (chatbotId: string) => apiRequest<DeploymentResponse[]>(`/api/v1/deployments/${chatbotId}`),
 
   createDeployment: (payload: { chatbot_id: string; channel: Channel; whatsapp_phone_number_id?: string | null; whatsapp_business_account_id?: string | null }) =>

@@ -2,6 +2,7 @@ import uuid
 import logging
 import re
 import os
+import json
 import httpx
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional, TypedDict
@@ -44,9 +45,13 @@ class AgentState(TypedDict, total=False):
     routing_rules: Dict[str, str]
     default_model: str
     
+    # Conversation memory (lazy summarization)
+    conversation_memory: Optional[dict]
+    
     # Final Output
     response: str
     status: ConversationStatus
+    callbacks: Optional[List[Any]]
 
 
 from app.services.semantic_router import SemanticRouter
@@ -54,6 +59,17 @@ from app.services.semantic_router import SemanticRouter
 # --- Intent Heuristics Classifier (DEPRECATED) ---
 # We keep this strictly for reference or completely remove it. It's been replaced by SemanticRouter.
 # ------------------------------------------------
+
+def _resolve_openrouter_key(api_key: str) -> tuple[Optional[str], Optional[str]]:
+    """Resolve an API key that may be 'managed-by-openrouter' into (effective_key, base_url).
+    Returns (None, None) if no key can be resolved."""
+    if api_key != "managed-by-openrouter":
+        return api_key, None
+    effective = getattr(settings, "OPENROUTER_API_KEY", None) or os.getenv("OPENROUTER_API_KEY")
+    if effective:
+        return effective, "https://openrouter.ai/api/v1"
+    effective = getattr(settings, "OPENAI_API_KEY", None) or os.getenv("OPENAI_API_KEY")
+    return (effective, None) if effective else (None, None)
 
 # --- Agent Graph Executor ---
 class AgentGraphExecutor:
@@ -75,6 +91,7 @@ class AgentGraphExecutor:
             return None
             
         model = state.get("model_name", "openai/gpt-4o-mini")
+        callbacks = state.get("callbacks")
         
         # If it's a managed OpenRouter key, use OpenRouter API
         if api_key == "managed-by-openrouter":
@@ -89,11 +106,13 @@ class AgentGraphExecutor:
                     api_key=real_key,
                     model=model,
                     temperature=temperature,
-                    base_url="https://openrouter.ai/api/v1"
+                    base_url="https://openrouter.ai/api/v1",
+                    streaming=bool(callbacks),
+                    callbacks=callbacks
                 )
                 
         # Standard fallback (e.g. native OpenAI)
-        return ChatOpenAI(api_key=api_key, model=model, temperature=temperature)
+        return ChatOpenAI(api_key=api_key, model=model, temperature=temperature, streaming=bool(callbacks), callbacks=callbacks)
 
     @staticmethod
     def _content_terms(text: str) -> set[str]:
@@ -125,8 +144,15 @@ class AgentGraphExecutor:
     # --- Node Functions ---
     @staticmethod
     def route_intent(state: AgentState) -> AgentState:
-        # 1. Fast Semantic Routing using Embeddings
-        intent = SemanticRouter.classify(state["user_message"])
+        # Persona-aware, context-aware intent classification
+        intent = SemanticRouter.classify(
+            message=state["user_message"],
+            persona=state.get("persona"),
+            traits=state.get("traits"),
+            history=state.get("history"),
+            conversation_memory=state.get("conversation_memory"),
+            api_key=state.get("api_key"),
+        )
         chatbot_id = state.get("chatbot_id")
         
         final_intent = intent if intent else "RAG_LOOKUP"
@@ -140,13 +166,8 @@ class AgentGraphExecutor:
         elif "General Inquiries" in rules:
             model_name = rules["General Inquiries"]
 
-        if intent:
-            logger.info("intent_routed", intent=final_intent, chatbot_id=chatbot_id, mapped_model=model_name)
-            return {"intent": final_intent, "model_name": model_name}
-                
-        # 2. Fallback directly to RAG_LOOKUP
-        logger.info("intent_routed", intent="RAG_LOOKUP", chatbot_id=chatbot_id, mapped_model=model_name)
-        return {"intent": "RAG_LOOKUP", "model_name": model_name}
+        logger.info("intent_routed", intent=final_intent, chatbot_id=chatbot_id, mapped_model=model_name)
+        return {"intent": final_intent, "model_name": model_name}
 
     @staticmethod
     def agent_handoff_node(state: AgentState) -> AgentState:
@@ -175,10 +196,18 @@ class AgentGraphExecutor:
 
                 desc = getattr(state["persona"], "description", None) or ""
                 desc_str = f"Description/Role: {desc}\n" if desc else ""
+                
+                # Build conversation context from memory for richer responses
+                memory = state.get("conversation_memory")
+                context_str = ""
+                if memory and memory.get("summary"):
+                    context_str = f"Conversation so far: {memory['summary']}\n"
+                
                 sys_msg = SystemMessage(content=(
                     f"You are {state['persona'].name or 'Aina Bot'}. "
                     f"Your traits are: {', '.join(state['traits'])}. "
                     f"{desc_str}"
+                    f"{context_str}"
                     "IMPORTANT GUIDELINES:\n"
                     "1. Act strictly as a human representative. Never mention that you are an AI, a bot, or reading from a 'context' or 'database'.\n"
                     "2. Use natural, conversational language. Be polite and empathetic.\n"
@@ -464,6 +493,105 @@ class AgentGraphExecutor:
         )
         return {"response": ans}
 
+    @staticmethod
+    def maybe_summarize_node(state: AgentState) -> AgentState:
+        """Conditionally summarize conversation memory (lazy — only when needed)."""
+        from app.services.semantic_router import MEMORY_THRESHOLD, MEMORY_REFRESH_INTERVAL
+        from app.core.metrics import memory_summarization_total
+
+        history = state.get("history", [])
+        memory = state.get("conversation_memory") or {}
+        # +1 for the current user message that was added to DB before graph execution
+        history_len = len(history) + 1
+
+        # Check if summarization is needed
+        if history_len <= MEMORY_THRESHOLD:
+            return {}  # Too short, skip
+
+        if memory.get("summary"):
+            covered = memory.get("summary_covers_until_turn", 0)
+            unsummarized = history_len - covered
+            if unsummarized < MEMORY_REFRESH_INTERVAL:
+                return {}  # Summary is fresh enough, skip
+
+        # Summarization needed
+        api_key = state.get("api_key")
+        if not api_key:
+            return {}
+
+        try:
+            effective_key, base_url = _resolve_openrouter_key(api_key)
+            if not effective_key:
+                return {}
+
+            llm_kwargs = {
+                "api_key": effective_key,
+                "model": "openai/gpt-4o-mini" if base_url else "gpt-4o-mini",
+                "temperature": 0.0,
+                "max_tokens": 150,
+            }
+            if base_url:
+                llm_kwargs["base_url"] = base_url
+
+            llm = ChatOpenAI(**llm_kwargs)
+
+            # Build messages to summarize (only unsummarized ones)
+            covered = memory.get("summary_covers_until_turn", 0)
+            unsummarized_msgs = history[covered:] if covered < len(history) else history[-4:]
+            msg_lines = []
+            for m in unsummarized_msgs:
+                role_label = "USER" if m.role == MessageRole.USER else "BOT"
+                msg_lines.append(f"{role_label}: {m.content}")
+            # Include the current exchange
+            msg_lines.append(f"USER: {state['user_message']}")
+            bot_response = state.get("response", "")
+            if bot_response:
+                msg_lines.append(f"BOT: {bot_response}")
+
+            existing_summary = memory.get("summary", "")
+            prev_context = f"Previous summary: {existing_summary}" if existing_summary else "Previous summary: None (new conversation)"
+
+            sys_prompt = (
+                "Analyze this conversation and output a JSON object.\n\n"
+                f"{prev_context}\n\n"
+                f"New messages since last summary:\n" + "\n".join(msg_lines) + "\n\n"
+                "Output this exact JSON structure (no other text):\n"
+                '{\n'
+                '  "summary": "<1-2 sentence summary of entire conversation so far>",\n'
+                '  "topics": ["<topic1>", "<topic2>"],\n'
+                '  "user_mood": "<neutral|friendly|interested|confused|frustrated|closing>",\n'
+                '  "phase": "<greeting|active|closing>"\n'
+                '}'
+            )
+
+            result = llm.invoke([
+                SystemMessage(content=sys_prompt),
+                HumanMessage(content="Generate the JSON:")
+            ]).content.strip()
+
+            # Parse JSON response
+            # Strip markdown code fences if present
+            if result.startswith("```"):
+                result = result.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+
+            parsed = json.loads(result)
+            new_memory = {
+                "summary": parsed.get("summary", ""),
+                "turn_count": history_len,
+                "summary_covers_until_turn": history_len,
+                "topics": parsed.get("topics", []),
+                "user_mood": parsed.get("user_mood", "neutral"),
+                "phase": parsed.get("phase", "active"),
+            }
+
+            memory_summarization_total.inc()
+            logger.info("conversation_memory_updated", turn_count=history_len, phase=new_memory["phase"])
+            return {"conversation_memory": new_memory}
+
+        except Exception as e:
+            logger.warning(f"Memory summarization failed (non-fatal): {e}")
+            return {}
+
     @classmethod
     def build_graph(cls):
         workflow = StateGraph(AgentState)
@@ -475,6 +603,7 @@ class AgentGraphExecutor:
         workflow.add_node("retrieve", cls.retrieve_node)
         workflow.add_node("validate", cls.validate_node)
         workflow.add_node("rag_answer", cls.rag_answer_node)
+        workflow.add_node("maybe_summarize", cls.maybe_summarize_node)
         
         workflow.set_entry_point("route")
         
@@ -489,11 +618,12 @@ class AgentGraphExecutor:
         })
         
         workflow.add_edge("agent_handoff", END)
-        workflow.add_edge("conversational", END)
+        workflow.add_edge("conversational", "maybe_summarize")
         workflow.add_edge("rewrite", "retrieve")
         workflow.add_edge("retrieve", "validate")
         workflow.add_edge("validate", "rag_answer")
-        workflow.add_edge("rag_answer", END)
+        workflow.add_edge("rag_answer", "maybe_summarize")
+        workflow.add_edge("maybe_summarize", END)
         
         return workflow.compile()
 
@@ -517,7 +647,7 @@ class ChatService:
 
     @classmethod
     def get_rag_response(
-        cls, db: Session, org_id: uuid.UUID, chatbot_id: uuid.UUID, user_message: str, conversation_id: Optional[uuid.UUID] = None, deployment_id: Optional[uuid.UUID] = None
+        cls, db: Session, org_id: uuid.UUID, chatbot_id: uuid.UUID, user_message: str, conversation_id: Optional[uuid.UUID] = None, deployment_id: Optional[uuid.UUID] = None, callbacks: Optional[List[Any]] = None
     ) -> Dict[str, Any]:
         
         # 1. Fetch resources
@@ -617,7 +747,9 @@ class ChatService:
             "status": conversation.status,
             "sources": [],
             "routing_rules": routing_rules_dict,
-            "default_model": "openai/gpt-4o-mini"
+            "default_model": "openai/gpt-4o-mini",
+            "callbacks": callbacks,
+            "conversation_memory": conversation.memory,  # Load memory from DB
         }
         
         import time
@@ -632,6 +764,12 @@ class ChatService:
         new_status = final_state.get("status", conversation.status)
         sources = final_state.get("sources", [])
         intent = final_state.get("intent", "unknown")
+        
+        # Persist conversation memory if it was updated
+        updated_memory = final_state.get("conversation_memory")
+        if updated_memory and updated_memory != conversation.memory:
+            conversation.memory = updated_memory
+            db.add(conversation)
         
         # Track metrics
         is_relevant = final_state.get("is_relevant", False)
@@ -679,6 +817,68 @@ class ChatService:
         return {
             "response": response_text,
             "conversation_id": conversation.id,
-            "sources": sources,
-            "status": new_status
+            "status": new_status,
+            "sources": sources
         }
+
+    @classmethod
+    def get_rag_stream(
+        cls, db: Session, org_id: uuid.UUID, chatbot_id: uuid.UUID, user_message: str, conversation_id: Optional[uuid.UUID] = None, deployment_id: Optional[uuid.UUID] = None
+    ):
+        import queue
+        import threading
+        import json
+        from app.services.streaming import StreamingCallbackHandler
+        
+        q = queue.Queue()
+        handler = StreamingCallbackHandler(q)
+        
+        result_container = []
+        error_container = []
+        
+        def run_sync():
+            from app.db.session import SessionLocal
+            from sqlalchemy import text
+            
+            thread_db = SessionLocal()
+            try:
+                # Bind tenant organization context for RLS in this thread's session
+                thread_db.execute(
+                    text("SELECT set_config('app.current_org_id', :org_id, true)"),
+                    {"org_id": str(org_id)},
+                )
+                res = cls.get_rag_response(
+                    thread_db, org_id, chatbot_id, user_message, conversation_id, deployment_id, callbacks=[handler]
+                )
+                result_container.append(res)
+            except Exception as e:
+                error_container.append(str(e))
+                logger.error("Error in RAG streaming thread", exc_info=True)
+            finally:
+                thread_db.close()
+                q.put(None)  # Sentinel to stop generator
+                
+        thread = threading.Thread(target=run_sync)
+        thread.start()
+        
+        def generate():
+            while True:
+                token = q.get()
+                if token is None:
+                    break
+                yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+                
+            if error_container:
+                yield f"data: {json.dumps({'type': 'error', 'error': error_container[0]})}\n\n"
+            elif result_container:
+                res = result_container[0]
+                res["conversation_id"] = str(res["conversation_id"])
+                # stringify chunk uuids if needed
+                for src in res.get("sources", []):
+                    if "chunk_id" in src: src["chunk_id"] = str(src["chunk_id"])
+                    if "source_id" in src: src["source_id"] = str(src["source_id"])
+                yield f"data: {json.dumps({'type': 'final', 'data': res})}\n\n"
+                
+            yield "data: [DONE]\n\n"
+            
+        return generate()

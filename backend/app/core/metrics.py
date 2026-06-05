@@ -38,3 +38,21 @@ worker_last_heartbeat_timestamp = Gauge(
     "aina_worker_last_heartbeat_timestamp",
     "Epoch timestamp of the last successful knowledge worker loop iteration"
 )
+
+# Intent classification metrics
+intent_classification_method = Counter(
+    "aina_intent_classification_method_total",
+    "How the intent was classified",
+    ["method"]  # "keyword_shortcircuit", "llm", "embedding_fallback"
+)
+
+intent_classification_latency = Histogram(
+    "aina_intent_classification_latency_seconds",
+    "Time taken for intent classification",
+    buckets=(0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0)
+)
+
+memory_summarization_total = Counter(
+    "aina_memory_summarization_total",
+    "Number of times conversation memory was summarized"
+)

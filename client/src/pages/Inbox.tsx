@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useTheme } from "../contexts/ThemeContext";
 import { useLayoutConfig } from "../contexts/LayoutContext";
 import { api } from "../lib/api";
+import MarkdownRenderer from "../components/MarkdownRenderer";
 
 interface Message {
   id: string;
@@ -592,9 +593,12 @@ export default function Inbox() {
                                     "bg-[#1f1f23] border-white/[0.04] text-[#e4e1e7] font-medium rounded-bl-none"
                                   )
                             }`}
-                            style={{ whiteSpace: "pre-line" }}
                           >
-                            {msg.content}
+                            {isAgentReply ? (
+                              <MarkdownRenderer content={msg.content} isDark={isDark} />
+                            ) : (
+                              <div style={{ whiteSpace: "pre-line" }}>{msg.content}</div>
+                            )}
                           </div>
                           <span
                             className={`text-[9px] mt-1 font-semibold tracking-wider ${

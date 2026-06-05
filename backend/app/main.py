@@ -109,14 +109,11 @@ def start_scheduler():
         logger_factory=structlog.PrintLoggerFactory(),
     )
 
-    # Eagerly initialize SemanticRouter so failures surface on boot, not on first message
+    # Initialize SemanticRouter in a background thread to prevent blocking FastAPI startup.
+    # Failures will be logged from within the initialization function.
     from app.services.semantic_router import SemanticRouter
-    SemanticRouter._initialize()
-    if not SemanticRouter._initialized:
-        logger.error(
-            "SemanticRouter failed to initialize — intent routing will degrade to "
-            "RAG_LOOKUP for all messages until the service is restarted."
-        )
+    import threading
+    threading.Thread(target=SemanticRouter._initialize, name="semantic-router-init", daemon=True).start()
 
     scheduler = BackgroundScheduler()
     # Run daily aggregation at 12:05 AM (00:05) every day

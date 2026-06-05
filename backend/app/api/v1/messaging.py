@@ -2,7 +2,8 @@ import uuid
 import logging
 from typing import List
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import StreamingResponse
 
 logger = logging.getLogger(__name__)
 from sqlalchemy.orm import Session
@@ -17,10 +18,11 @@ from app.models.chatbot import Chatbot
 router = APIRouter()
 message_repo = MessageRepository()
 
-@router.post("/{chatbot_id}/message", response_model=ChatResponse)
+@router.post("/{chatbot_id}/message")
 def send_message(
     chatbot_id: uuid.UUID,
     request: ChatRequest,
+    stream: bool = False,
     db: Session = Depends(get_tenant_db),
     org_id: uuid.UUID = Depends(get_current_org_id),
 ):
@@ -38,6 +40,18 @@ def send_message(
         raise HTTPException(status_code=404, detail="Chatbot not found")
         
     try:
+        if stream:
+            return StreamingResponse(
+                ChatService.get_rag_stream(
+                    db=db,
+                    org_id=org_id,
+                    chatbot_id=chatbot_id,
+                    user_message=request.message,
+                    conversation_id=request.conversation_id
+                ),
+                media_type="text/event-stream"
+            )
+            
         result = ChatService.get_rag_response(
             db=db,
             org_id=org_id,
@@ -78,10 +92,11 @@ def get_chat_history(
     return history
 
 
-@router.post("/public/deployments/{deployment_id}/message", response_model=ChatResponse)
+@router.post("/public/deployments/{deployment_id}/message")
 def send_public_deployment_message(
     deployment_id: uuid.UUID,
     request: ChatRequest,
+    stream: bool = False,
     db: Session = Depends(get_db),
 ):
     """Public web-widget runtime endpoint scoped by an active deployment id."""
@@ -98,6 +113,19 @@ def send_public_deployment_message(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chatbot not found")
 
     try:
+        if stream:
+            return StreamingResponse(
+                ChatService.get_rag_stream(
+                    db=db,
+                    org_id=chatbot.org_id,
+                    chatbot_id=chatbot.id,
+                    user_message=request.message,
+                    conversation_id=request.conversation_id,
+                    deployment_id=deployment.id,
+                ),
+                media_type="text/event-stream"
+            )
+            
         return ChatService.get_rag_response(
             db=db,
             org_id=chatbot.org_id,

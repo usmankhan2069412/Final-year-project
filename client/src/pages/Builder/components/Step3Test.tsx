@@ -39,17 +39,79 @@ export default function Step3Test({ persona, botName, chatbotId, onRequireDraft 
       const id = chatbotId || (await onRequireDraft());
       if (!id) throw new Error("Save the bot before testing.");
 
-      const result = await api.sendBuilderMessage(id, {
-        message: userMsg,
-        conversation_id: conversationId,
+      let currentResponse = "";
+      let botMessageAdded = false;
+      let rafId: number | null = null;
+      let pendingFlush = false;
+
+      // Batch token updates into animation frames for smooth rendering
+      const flushTokens = () => {
+        pendingFlush = false;
+        rafId = null;
+        const snapshot = currentResponse;
+        setMessages((prev) => {
+          const updated = [...prev];
+          updated[updated.length - 1] = {
+            ...updated[updated.length - 1],
+            text: snapshot,
+          };
+          return updated;
+        });
+      };
+
+      const result = await api.streamBuilderMessage(
+        id,
+        {
+          message: userMsg,
+          conversation_id: conversationId,
+        },
+        (token) => {
+          currentResponse += token;
+
+          if (!botMessageAdded) {
+            // First token: hide typing dots and add the bot message in one go
+            botMessageAdded = true;
+            setIsTyping(false);
+            setMessages((prev) => [...prev, { role: "bot", text: currentResponse }]);
+            return;
+          }
+
+          // Subsequent tokens: batch into animation frames
+          if (!pendingFlush) {
+            pendingFlush = true;
+            rafId = requestAnimationFrame(flushTokens);
+          }
+        }
+      );
+
+      // Final flush to ensure last tokens are rendered
+      if (rafId) cancelAnimationFrame(rafId);
+      setMessages((prev) => {
+        const updated = [...prev];
+        if (updated[updated.length - 1]?.role === "bot") {
+          updated[updated.length - 1] = {
+            ...updated[updated.length - 1],
+            text: currentResponse,
+          };
+        }
+        return updated;
       });
+
       setConversationId(result.conversation_id);
       setLastSources(result.sources || []);
-      setMessages((prev) => [...prev, { role: "bot", text: result.response }]);
     } catch (err: any) {
       const message = err?.message || "Failed to test chatbot";
       setTestError(message);
-      setMessages((prev) => [...prev, { role: "bot", text: message }]);
+      // If bot message was never added, add one with the error
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last?.role === "bot" && last.text === "") {
+          const updated = [...prev];
+          updated[updated.length - 1] = { ...last, text: `Error: ${message}` };
+          return updated;
+        }
+        return [...prev, { role: "bot", text: `Error: ${message}` }];
+      });
     } finally {
       setIsTyping(false);
     }
