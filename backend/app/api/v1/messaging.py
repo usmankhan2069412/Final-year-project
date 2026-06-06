@@ -2,7 +2,7 @@ import uuid
 import logging
 from typing import List
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 from fastapi.responses import StreamingResponse
 
 logger = logging.getLogger(__name__)
@@ -22,6 +22,7 @@ message_repo = MessageRepository()
 def send_message(
     chatbot_id: uuid.UUID,
     request: ChatRequest,
+    background_tasks: BackgroundTasks,
     stream: bool = False,
     db: Session = Depends(get_tenant_db),
     org_id: uuid.UUID = Depends(get_current_org_id),
@@ -57,7 +58,8 @@ def send_message(
             org_id=org_id,
             chatbot_id=chatbot_id,
             user_message=request.message,
-            conversation_id=request.conversation_id
+            conversation_id=request.conversation_id,
+            background_tasks=background_tasks
         )
         return result
     except ValueError as e:
@@ -96,6 +98,7 @@ def get_chat_history(
 def send_public_deployment_message(
     deployment_id: uuid.UUID,
     request: ChatRequest,
+    background_tasks: BackgroundTasks,
     stream: bool = False,
     db: Session = Depends(get_db),
 ):
@@ -133,6 +136,7 @@ def send_public_deployment_message(
             user_message=request.message,
             conversation_id=request.conversation_id,
             deployment_id=deployment.id,
+            background_tasks=background_tasks
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

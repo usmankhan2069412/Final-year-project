@@ -3,7 +3,7 @@ import json
 import asyncio
 from datetime import datetime, timezone
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -74,6 +74,7 @@ def get_escalated_conversations(
 def reply_to_conversation(
     conversation_id: uuid.UUID,
     payload: AgentReplyRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_tenant_db),
     org_id: uuid.UUID = Depends(get_current_org_id),
 ):
@@ -141,11 +142,7 @@ def reply_to_conversation(
         }
     }
     
-    try:
-        loop = asyncio.get_running_loop()
-        loop.create_task(sse_manager.broadcast(str(org_id), "message", agent_msg_data))
-    except RuntimeError:
-        pass
+    background_tasks.add_task(sse_manager.broadcast, str(org_id), "message", agent_msg_data)
 
     return {"status": "success", "message": agent_msg_data["message"]}
 
@@ -153,6 +150,7 @@ def reply_to_conversation(
 @router.post("/conversations/{conversation_id}/resolve")
 def resolve_conversation(
     conversation_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_tenant_db),
     org_id: uuid.UUID = Depends(get_current_org_id),
 ):
@@ -181,11 +179,7 @@ def resolve_conversation(
         "status": "resolved"
     }
     
-    try:
-        loop = asyncio.get_running_loop()
-        loop.create_task(sse_manager.broadcast(str(org_id), "resolve", resolve_event))
-    except RuntimeError:
-        pass
+    background_tasks.add_task(sse_manager.broadcast, str(org_id), "resolve", resolve_event)
 
     return {"status": "success", "conversation_id": conversation.id}
 

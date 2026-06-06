@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { ChatMessage } from "../types";
 import ChatSimulator from "./ChatSimulator";
@@ -26,6 +26,45 @@ export default function Step3Test({ persona, botName, chatbotId, onRequireDraft 
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [lastSources, setLastSources] = useState<ChatResponse["sources"]>([]);
   const [testError, setTestError] = useState("");
+
+  // Poll for out-of-band messages (e.g. human agent replies)
+  useEffect(() => {
+    if (!conversationId || isTyping) return;
+
+    const intervalId = setInterval(async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch(`${api.baseUrl}/api/v1/chat/${conversationId}/history`, {
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        });
+        if (!response.ok) return;
+        
+        const history = await response.json();
+        
+        setMessages((prev) => {
+          // Local messages array starts with 1 dummy greeting not in DB.
+          // So expected DB history length is prev.length - 1.
+          const expectedHistoryLength = prev.length - 1;
+          
+          if (history.length > expectedHistoryLength) {
+            const newMsgs = history.slice(expectedHistoryLength);
+            const appended = newMsgs.map((msg: any) => ({
+              role: msg.role === "user" ? "user" : "bot",
+              text: msg.content,
+            }));
+            return [...prev, ...appended];
+          }
+          return prev;
+        });
+      } catch (err) {
+        console.error("Failed to poll chat history:", err);
+      }
+    }, 3000);
+
+    return () => clearInterval(intervalId);
+  }, [conversationId, isTyping]);
 
   const sendMessage = async () => {
     if (!input.trim()) return;

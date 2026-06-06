@@ -31,7 +31,7 @@ const CANNED_RESPONSES = [
 
 export default function Inbox() {
   const { isDark } = useTheme();
-  useLayoutConfig({ title: "Escalated Chats", searchPlaceholder: "Search active live chat sessions..." });
+  useLayoutConfig({ title: "Escalated Chats", searchPlaceholder: "Search active live chat sessions…" });
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filterAssigned, setFilterAssigned] = useState(false);
@@ -40,9 +40,11 @@ export default function Inbox() {
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const sseAbortControllerRef = useRef<AbortController | null>(null);
+  const escalationDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
   const c = (light: string, dark: string) => (isDark ? dark : light);
 
@@ -81,6 +83,11 @@ export default function Inbox() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [selectedId, conversations]);
 
+  // Reset details panel open state on selected chat change
+  useEffect(() => {
+    setIsDetailsOpen(false);
+  }, [selectedId]);
+
   // Real-time SSE stream reader
   useEffect(() => {
     let active = true;
@@ -104,6 +111,9 @@ export default function Inbox() {
         }
 
         setIsConnected(true);
+        // Sync conversations on successful connection/reconnection to avoid missed events
+        fetchConversations();
+        
         const reader = response.body?.getReader();
         if (!reader) return;
 
@@ -138,7 +148,7 @@ export default function Inbox() {
       } catch (err) {
         const error = err as Error;
         if (error.name !== "AbortError") {
-          console.warn("SSE disconnected. Reconnecting in 3s...", error);
+          console.warn("SSE disconnected. Reconnecting in 3s…", error);
           setIsConnected(false);
           if (active) {
             setTimeout(connectSSE, 3000);
@@ -171,8 +181,11 @@ export default function Inbox() {
   // SSE event router
   function handleSSEEvent(event: string, data: SSEEventPayload) {
     if (event === "escalation") {
-      // Re-fetch list on new escalation
-      fetchConversations();
+      // Re-fetch list on new escalation with debouncing
+      if (escalationDebounceRef.current) clearTimeout(escalationDebounceRef.current);
+      escalationDebounceRef.current = setTimeout(() => {
+        fetchConversations();
+      }, 500);
     } else if (event === "resolve") {
       const resolvedId = data.conversation_id;
       if (resolvedId) {
@@ -361,34 +374,43 @@ export default function Inbox() {
               <div className="flex items-center justify-between">
                 <h1
                   className={`text-2xl font-bold font-serif ${c("text-[#1c1c1e]", "text-white")}`}
-                  style={{ fontFamily: "'Playfair Display', serif" }}
+                  style={{ fontFamily: "'Playfair Display', serif", textWrap: "balance" }}
                 >
                   Agent Inbox
                 </h1>
-                <div className="flex items-center gap-1.5">
+                <div
+                  className="flex items-center gap-1.5"
+                  aria-live="polite"
+                  aria-label={`Connection status: ${isConnected ? "Live" : "Connecting"}`}
+                >
                   <div
+                    aria-hidden="true"
                     className={`w-2 h-2 rounded-full ${
                       isConnected ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-amber-500 animate-pulse"
                     }`}
                   />
                   <span className={`text-[10px] font-bold uppercase tracking-wider ${c("text-black/40", "text-white/40")}`}>
-                    {isConnected ? "Live" : "Connecting"}
+                    {isConnected ? "Live" : "Connecting…"}
                   </span>
                 </div>
               </div>
 
               {/* Search input */}
               <div
-                className={`flex items-center gap-2 border px-3.5 py-2 rounded-xl transition-all shadow-inner ${
+                className={`flex items-center gap-2 border px-3.5 py-2 rounded-xl transition-all shadow-inner focus-within:ring-2 focus-within:ring-purple-500/40 focus-within:border-purple-500 ${
                   isDark ? "bg-[#131317] border-white/[0.06]" : "bg-[#F5F5F7] border-black/10"
                 }`}
               >
-                <span className={`material-symbols-outlined text-[18px] ${c("text-black/30", "text-white/30")}`}>
+                <span className={`material-symbols-outlined text-[18px] ${c("text-black/30", "text-white/30")}`} aria-hidden="true">
                   search
                 </span>
                 <input
                   type="text"
-                  placeholder="Search chats, bots, messages..."
+                  name="search"
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-label="Search chats, bots, and messages"
+                  placeholder="Search chats, bots, messages…"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className={`flex-1 bg-transparent text-[13px] font-medium outline-none ${
@@ -401,7 +423,7 @@ export default function Inbox() {
               <div className={`grid grid-cols-2 p-1 rounded-xl gap-1 ${c("bg-black/5", "bg-black/30")}`}>
                 <button
                   onClick={() => setFilterAssigned(false)}
-                  className={`py-1.5 text-[11px] font-bold uppercase tracking-widest rounded-lg transition-all ${
+                  className={`py-1.5 text-[11px] font-bold uppercase tracking-widest rounded-lg transition-all focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:outline-none ${
                     !filterAssigned
                       ? isDark
                         ? "bg-[#1f1f23] text-white shadow-sm border border-white/5"
@@ -413,7 +435,7 @@ export default function Inbox() {
                 </button>
                 <button
                   onClick={() => setFilterAssigned(true)}
-                  className={`py-1.5 text-[11px] font-bold uppercase tracking-widest rounded-lg transition-all ${
+                  className={`py-1.5 text-[11px] font-bold uppercase tracking-widest rounded-lg transition-all focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:outline-none ${
                     filterAssigned
                       ? isDark
                         ? "bg-[#1f1f23] text-white shadow-sm border border-white/5"
@@ -427,7 +449,7 @@ export default function Inbox() {
             </div>
 
             {/* Chats List */}
-            <div className="flex-1 overflow-y-auto no-scrollbar divide-y divide-white/[0.04] p-2 space-y-1">
+            <div className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-white/[0.04] p-2 space-y-1">
               {loading ? (
                 <ChatsSkeleton />
               ) : filteredConversations.length === 0 ? (
@@ -442,7 +464,7 @@ export default function Inbox() {
                     <button
                       key={conv.id}
                       onClick={() => setSelectedId(conv.id)}
-                      className={`w-full text-left p-4 rounded-2xl transition-all flex items-start gap-3.5 group relative border ${
+                      className={`w-full text-left p-4 rounded-2xl transition-all flex items-start gap-3.5 group relative border focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:outline-none ${
                         isSelected
                           ? isDark
                             ? "bg-[#EBDCFF]/10 border-[#EBDCFF]/20 text-white"
@@ -464,14 +486,22 @@ export default function Inbox() {
                             : "bg-[#F5F5F7] border-black/5 text-[#1c1c1e]/50 group-hover:text-[#1c1c1e]"
                         }`}
                       >
-                        <span className="material-symbols-outlined">support_agent</span>
+                        <span className="material-symbols-outlined" aria-hidden="true">support_agent</span>
                       </div>
 
                       {/* Snippet info */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="font-mono text-[12px] font-bold tracking-tight">{displayId}</span>
-                          <span className={`text-[10px] font-medium ${isSelected ? "opacity-70" : "opacity-40"}`}>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-[12px] font-bold tracking-tight">{displayId}</span>
+                            {conv.assigned_agent_id && !isSelected && (
+                              <div className="flex items-center gap-0.5 bg-emerald-500/10 text-emerald-500 px-1.5 py-0.5 rounded">
+                                <span className="material-symbols-outlined text-[10px]" aria-hidden="true">lock</span>
+                                <span className="text-[8px] font-bold uppercase tracking-widest">Assigned</span>
+                              </div>
+                            )}
+                          </div>
+                          <span className={`text-[10px] font-medium flex-shrink-0 ${isSelected ? "opacity-70" : "opacity-40"}`}>
                             {getRelativeTime(conv.started_at)}
                           </span>
                         </div>
@@ -481,13 +511,6 @@ export default function Inbox() {
                         </p>
                       </div>
 
-                      {/* Small assignment dot indicator */}
-                      {conv.assigned_agent_id && !isSelected && (
-                        <div className="absolute right-2.5 bottom-2.5 flex items-center gap-1">
-                          <span className="material-symbols-outlined text-[10px] text-emerald-500">lock</span>
-                          <span className="text-[8px] font-bold text-emerald-500 uppercase tracking-widest">Assigned</span>
-                        </div>
-                      )}
                     </button>
                   );
                 })
@@ -497,7 +520,7 @@ export default function Inbox() {
 
           {/* Middle/Right Columns: Chat Viewport & Details Panel */}
           {activeChat ? (
-            <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 flex overflow-hidden relative">
               
               {/* Middle Column: Chat Workspace */}
               <div className="flex-1 flex flex-col overflow-hidden bg-transparent">
@@ -511,11 +534,12 @@ export default function Inbox() {
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => setSelectedId(null)}
-                      className={`md:hidden w-8 h-8 rounded-full flex items-center justify-center border hover:bg-black/5 ${
+                      aria-label="Go back to conversation list"
+                      className={`md:hidden w-8 h-8 rounded-full flex items-center justify-center border hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:outline-none ${
                         c("border-black/5", "border-white/10")
                       }`}
                     >
-                      <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+                      <span className="material-symbols-outlined text-[18px]" aria-hidden="true">arrow_back</span>
                     </button>
                     <div>
                       <div className="flex items-center gap-2">
@@ -532,24 +556,33 @@ export default function Inbox() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
                     <button
                       onClick={handleResolveChat}
-                      className={`px-4 py-2 rounded-xl text-[12px] font-bold flex items-center gap-1.5 transition-all shadow-sm border outline-none ${
+                      className={`px-4 py-2 rounded-xl text-[12px] font-bold flex items-center gap-1.5 transition-all shadow-sm border focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-purple-500 focus-visible:outline-none ${
                         isDark
                           ? "bg-[#EBDCFF] hover:bg-[#d8bfff] text-[#1c1c1e] border-transparent"
                           : "bg-[#1c1c1e] hover:bg-black text-white border-transparent"
                       }`}
                     >
-                      <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                      <span className="material-symbols-outlined text-[16px]" aria-hidden="true">check_circle</span>
                       Resolve &amp; Close
+                    </button>
+                    <button
+                      onClick={() => setIsDetailsOpen((prev) => !prev)}
+                      aria-label="Toggle takeover details and quick answers"
+                      className={`lg:hidden w-9 h-9 rounded-xl flex items-center justify-center border hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:outline-none ${
+                        c("border-black/5 bg-white text-[#1c1c1e]", "border-white/10 bg-[#1f1f23] text-white")
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[20px]" aria-hidden="true">info</span>
                     </button>
                   </div>
                 </div>
 
                 {/* Messages Log area */}
                 <div
-                  className={`flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 no-scrollbar ${
+                  className={`flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 custom-scrollbar ${
                     c("bg-black/[0.01]", "bg-[#111114]")
                   }`}
                 >
@@ -565,7 +598,7 @@ export default function Inbox() {
                         {/* Avatar */}
                         {isAgentReply ? (
                           <div
-                            className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-[#1c1c1e] flex-shrink-0 shadow-sm border bg-[#EBDCFF] border-transparent`}
+                            className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-[#1c1c1e] flex-shrink-0 shadow-sm border bg-[#EBDCFF] border-transparent"
                           >
                             ME
                           </div>
@@ -575,7 +608,7 @@ export default function Inbox() {
                               c("bg-white border-black/5 text-[#1c1c1e]", "bg-[#1f1f23] border-white/5 text-white")
                             }`}
                           >
-                            <span className="material-symbols-outlined text-[16px]">person</span>
+                            <span className="material-symbols-outlined text-[16px]" aria-hidden="true">person</span>
                           </div>
                         )}
 
@@ -622,15 +655,18 @@ export default function Inbox() {
                 >
                   <form onSubmit={handleSendReply} className="flex items-center gap-3">
                     <div
-                      className={`flex-1 flex items-center gap-3 border px-4 py-3 rounded-2xl transition-all shadow-inner ${
+                      className={`flex-1 flex items-center gap-3 border px-4 py-3 rounded-2xl transition-all shadow-inner focus-within:ring-2 focus-within:ring-purple-500/40 focus-within:border-purple-500 ${
                         isDark ? "bg-[#131317] border-white/[0.06]" : "bg-[#F5F5F7] border-black/10"
                       }`}
                     >
                       <input
                         type="text"
+                        name="reply"
+                        autoComplete="off"
                         value={replyText}
                         onChange={(e) => setReplyText(e.target.value)}
-                        placeholder="Write a message response..."
+                        placeholder="Write a message response…"
+                        aria-label="Write a message response"
                         disabled={sending}
                         className={`flex-1 bg-transparent text-[13.5px] font-medium outline-none ${
                           isDark ? "text-white placeholder:text-white/20" : "text-[#1c1c1e] placeholder:text-black/30"
@@ -640,13 +676,14 @@ export default function Inbox() {
                     <button
                       type="submit"
                       disabled={!replyText.trim() || sending}
-                      className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed ${
+                      aria-label="Send message response"
+                      className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:outline-none ${
                         isDark
                           ? "bg-[#EBDCFF] hover:bg-[#d8bfff] text-[#1c1c1e]"
                           : "bg-[#1c1c1e] hover:bg-black text-[#F5F5F7]"
                       }`}
                     >
-                      <span className="material-symbols-outlined text-[20px] translate-x-[2px] -translate-y-[0.5px]">
+                      <span className="material-symbols-outlined text-[20px] translate-x-[2px] -translate-y-[0.5px]" aria-hidden="true">
                         send
                       </span>
                     </button>
@@ -654,17 +691,44 @@ export default function Inbox() {
                 </div>
               </div>
 
-              {/* Right Column: Chat Metadata & Quick Answers */}
+              {/* Mobile details drawer backdrop overlay */}
+              {isDetailsOpen && (
+                <div
+                  onClick={() => setIsDetailsOpen(false)}
+                  className="lg:hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-30 transition-opacity"
+                />
+              )}
+
+              {/* Right Column: Chat Metadata & Quick Answers (Drawer on mobile/tablet, static sidebar on desktop) */}
               <div
-                className={`hidden lg:flex w-80 flex-col border-l flex-shrink-0 overflow-y-auto no-scrollbar transition-colors ${
-                  c("bg-white border-black/5", "bg-[#17171a] border-white/[0.06]")
-                }`}
+                className={`fixed lg:static top-0 right-0 h-full lg:h-auto w-full sm:w-80 lg:w-80 flex flex-col flex-shrink-0 overflow-y-auto custom-scrollbar transition-all duration-300 z-40 border-l ${
+                  isDetailsOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"
+                } ${c("bg-white border-black/5", "bg-[#17171a] border-white/[0.06]")}`}
               >
                 {/* Details Section */}
                 <div className="p-6 border-b border-white/[0.04]">
+                  {/* Drawer Header Close Button (Mobile Only) */}
+                  <div className="flex items-center justify-between mb-4 lg:hidden">
+                    <h3
+                      className={`text-[16px] font-serif font-bold ${c("text-[#1c1c1e]", "text-white")}`}
+                      style={{ fontFamily: "'Playfair Display', serif", textWrap: "balance" }}
+                    >
+                      Takeover Details
+                    </h3>
+                    <button
+                      onClick={() => setIsDetailsOpen(false)}
+                      aria-label="Close details panel"
+                      className={`w-8 h-8 rounded-full flex items-center justify-center border hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:outline-none ${
+                        c("border-black/5 text-[#1c1c1e]", "border-white/10 text-white")
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[18px]" aria-hidden="true">close</span>
+                    </button>
+                  </div>
+
                   <h3
-                    className={`text-[16px] font-serif font-bold mb-4 ${c("text-[#1c1c1e]", "text-white")}`}
-                    style={{ fontFamily: "'Playfair Display', serif" }}
+                    className={`hidden lg:block text-[16px] font-serif font-bold mb-4 ${c("text-[#1c1c1e]", "text-white")}`}
+                    style={{ fontFamily: "'Playfair Display', serif", textWrap: "balance" }}
                   >
                     Takeover Details
                   </h3>
@@ -690,7 +754,7 @@ export default function Inbox() {
                         Assigned Agent
                       </span>
                       <p className="text-[13px] font-bold mt-0.5 text-emerald-500 flex items-center gap-1.5">
-                        <span className="material-symbols-outlined text-[16px]">lock_open</span>
+                        <span className="material-symbols-outlined text-[16px]" aria-hidden="true">lock_open</span>
                         You (Least-Busy Route)
                       </p>
                     </div>
@@ -701,7 +765,7 @@ export default function Inbox() {
                 <div className="p-6">
                   <h3
                     className={`text-[16px] font-serif font-bold mb-4 ${c("text-[#1c1c1e]", "text-white")}`}
-                    style={{ fontFamily: "'Playfair Display', serif" }}
+                    style={{ fontFamily: "'Playfair Display', serif", textWrap: "balance" }}
                   >
                     Canned Replies
                   </h3>
@@ -709,14 +773,17 @@ export default function Inbox() {
                     {CANNED_RESPONSES.map((res) => (
                       <button
                         key={res.label}
-                        onClick={() => setReplyText(res.text)}
-                        className={`w-full text-left p-3.5 rounded-xl border text-[12px] font-semibold transition-all ${
+                        onClick={() => {
+                          setReplyText(res.text);
+                          setIsDetailsOpen(false);
+                        }}
+                        className={`w-full text-left p-3.5 rounded-xl border text-[12px] font-semibold transition-all focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:outline-none ${
                           isDark
                             ? "bg-[#1f1f23] border-white/[0.04] text-white/70 hover:border-white/10 hover:text-white"
                             : "bg-[#F5F5F7] border-black/5 text-[#1c1c1e]/70 hover:border-black/20 hover:text-[#1c1c1e]"
                         }`}
                       >
-                        <p className="font-bold text-[#EBDCFF] mb-1">{res.label}</p>
+                        <p className={`font-bold mb-1 ${c("text-violet-700", "text-[#EBDCFF]")}`}>{res.label}</p>
                         <p className="line-clamp-2 leading-relaxed opacity-85">{res.text}</p>
                       </button>
                     ))}
@@ -733,11 +800,11 @@ export default function Inbox() {
                   isDark ? "bg-[#1f1f23] border-white/[0.06] text-white/30" : "bg-white border-black/5 text-black/20"
                 }`}
               >
-                <span className="material-symbols-outlined text-[40px]">forum</span>
+                <span className="material-symbols-outlined text-[40px]" aria-hidden="true">forum</span>
               </div>
               <h2
                 className={`text-2xl font-serif font-bold mb-2 ${c("text-[#1c1c1e]", "text-white")}`}
-                style={{ fontFamily: "'Playfair Display', serif" }}
+                style={{ fontFamily: "'Playfair Display', serif", textWrap: "balance" }}
               >
                 No Selected Session
               </h2>

@@ -10,7 +10,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   return (
     <div
-      className={`min-h-screen flex font-sans selection:bg-[#EBDCFF] selection:text-[#1c1c1e] transition-colors duration-300 ${
+      className={`h-screen flex font-sans overflow-hidden selection:bg-[#EBDCFF] selection:text-[#1c1c1e] transition-colors duration-300 ${
         isDark ? "bg-[#131317] text-[#e4e1e7]" : "bg-[#F5F5F7] text-[#1c1c1e]"
       }`}
     >

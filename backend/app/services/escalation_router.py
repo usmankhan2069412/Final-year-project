@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from fastapi import BackgroundTasks
 
 from app.core.language import detect_message_language
 
@@ -63,10 +64,10 @@ class EscalationRouter:
         active_config_id: Optional[uuid.UUID],
         write_user_message: bool,
         is_new_conv: bool = False,
-        is_escalation_event: bool = False
+        is_escalation_event: bool = False,
+        background_tasks: Optional[BackgroundTasks] = None
     ):
         import asyncio
-        import threading
         from app.services.sse_manager import sse_manager
         
         if write_user_message:
@@ -138,27 +139,34 @@ class EscalationRouter:
                 "chatbot_id": str(chatbot.id)
             }
 
-        def _run_sse():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                loop.run_until_complete(sse_manager.broadcast(str(org_id), "message", user_msg_data))
-                loop.run_until_complete(sse_manager.broadcast(str(org_id), "message", bot_msg_data))
-                if escalation_event:
-                    loop.run_until_complete(sse_manager.broadcast(str(org_id), "escalation", escalation_event))
-            except Exception as e:
-                logger.error(f"SSE broadcast failed in thread: {e}")
-            finally:
-                loop.close()
-
-        try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(sse_manager.broadcast(str(org_id), "message", user_msg_data))
-            loop.create_task(sse_manager.broadcast(str(org_id), "message", bot_msg_data))
+        if background_tasks:
+            background_tasks.add_task(sse_manager.broadcast, str(org_id), "message", user_msg_data)
+            background_tasks.add_task(sse_manager.broadcast, str(org_id), "message", bot_msg_data)
             if escalation_event:
-                loop.create_task(sse_manager.broadcast(str(org_id), "escalation", escalation_event))
-        except RuntimeError:
-            threading.Thread(target=_run_sse, daemon=True).start()
+                background_tasks.add_task(sse_manager.broadcast, str(org_id), "escalation", escalation_event)
+        else:
+            def _run_sse():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(sse_manager.broadcast(str(org_id), "message", user_msg_data))
+                    loop.run_until_complete(sse_manager.broadcast(str(org_id), "message", bot_msg_data))
+                    if escalation_event:
+                        loop.run_until_complete(sse_manager.broadcast(str(org_id), "escalation", escalation_event))
+                except Exception as e:
+                    logger.error(f"SSE broadcast failed in thread: {e}")
+                finally:
+                    loop.close()
+
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(sse_manager.broadcast(str(org_id), "message", user_msg_data))
+                loop.create_task(sse_manager.broadcast(str(org_id), "message", bot_msg_data))
+                if escalation_event:
+                    loop.create_task(sse_manager.broadcast(str(org_id), "escalation", escalation_event))
+            except RuntimeError:
+                import threading
+                threading.Thread(target=_run_sse, daemon=True).start()
 
     @classmethod
     def escalate(
@@ -173,7 +181,8 @@ class EscalationRouter:
         is_new_conv: bool = False,
         active_config_id: Optional[uuid.UUID] = None,
         sources: Optional[list] = None,
-        write_user_message: bool = True
+        write_user_message: bool = True,
+        background_tasks: Optional[BackgroundTasks] = None
     ) -> Dict[str, Any]:
         """
         Escalates the conversation: assigns least busy agent, updates status,
@@ -196,7 +205,8 @@ class EscalationRouter:
             active_config_id=active_config_id,
             write_user_message=write_user_message,
             is_new_conv=is_new_conv,
-            is_escalation_event=True
+            is_escalation_event=True,
+            background_tasks=background_tasks
         )
             
         return {
@@ -215,7 +225,8 @@ class EscalationRouter:
         org_id: uuid.UUID,
         user_message: str,
         language: Optional[str],
-        active_config_id: Optional[uuid.UUID] = None
+        active_config_id: Optional[uuid.UUID] = None,
+        background_tasks: Optional[BackgroundTasks] = None
     ) -> Dict[str, Any]:
         """Handles messages sent to an already escalated conversation by bypassing standard RAG."""
         response_text = cls.get_escalation_message(language, user_message=user_message)
@@ -230,7 +241,8 @@ class EscalationRouter:
             active_config_id=active_config_id,
             write_user_message=True,
             is_new_conv=False,
-            is_escalation_event=False
+            is_escalation_event=False,
+            background_tasks=background_tasks
         )
             
         return {

@@ -7,6 +7,7 @@ import httpx
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional, TypedDict
 from sqlalchemy.orm import Session
+from fastapi import BackgroundTasks
 
 from app.core.config import settings
 from app.core.language import detect_message_language
@@ -647,7 +648,7 @@ class ChatService:
 
     @classmethod
     def get_rag_response(
-        cls, db: Session, org_id: uuid.UUID, chatbot_id: uuid.UUID, user_message: str, conversation_id: Optional[uuid.UUID] = None, deployment_id: Optional[uuid.UUID] = None, callbacks: Optional[List[Any]] = None
+        cls, db: Session, org_id: uuid.UUID, chatbot_id: uuid.UUID, user_message: str, conversation_id: Optional[uuid.UUID] = None, deployment_id: Optional[uuid.UUID] = None, callbacks: Optional[List[Any]] = None, background_tasks: Optional[BackgroundTasks] = None
     ) -> Dict[str, Any]:
         
         # 1. Fetch resources
@@ -718,7 +719,8 @@ class ChatService:
                 org_id=org_id,
                 user_message=user_message,
                 language=persona.language,
-                active_config_id=active_config.id if active_config else None
+                active_config_id=active_config.id if active_config else None,
+                background_tasks=background_tasks
             )
 
         start_date = conversation.started_at
@@ -791,7 +793,8 @@ class ChatService:
                 is_new_conv=is_new_conv,
                 active_config_id=active_config.id if active_config else None,
                 sources=sources,
-                write_user_message=False
+                write_user_message=False,
+                background_tasks=background_tasks
             )
 
         if new_status != conversation.status:
