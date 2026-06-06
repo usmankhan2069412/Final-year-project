@@ -6,6 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Background
 from fastapi.responses import StreamingResponse
 
 logger = logging.getLogger(__name__)
+import json
+from app.services.sse_manager import sse_manager
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_tenant_db, get_current_org_id
@@ -142,3 +144,83 @@ def send_public_deployment_message(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An internal error occurred during chat processing.")
+
+@router.get("/{chatbot_id}/conversations/{conversation_id}/stream")
+async def builder_sse_stream(
+    chatbot_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+    db: Session = Depends(get_tenant_db),
+    org_id: uuid.UUID = Depends(get_current_org_id),
+):
+    """Authenticated SSE stream for the builder/test chat interface."""
+    chatbot = db.query(Chatbot).filter(
+        Chatbot.id == chatbot_id,
+        Chatbot.org_id == org_id,
+        Chatbot.deleted_at == None
+    ).first()
+    
+    if not chatbot:
+        raise HTTPException(status_code=404, detail="Chatbot not found or inaccessible")
+        
+    conversation = db.query(Conversation).filter(
+        Conversation.id == conversation_id,
+        Conversation.chatbot_id == chatbot_id,
+        Conversation.deleted_at == None
+    ).first()
+    
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+        
+    async def event_generator():
+        channel = f"conversation:{conversation_id}"
+        queue = await sse_manager.subscribe(channel)
+        try:
+            while True:
+                payload = await queue.get()
+                event_type = payload.get("event")
+                data = payload.get("data")
+                yield f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+        finally:
+            await sse_manager.unsubscribe(channel, queue)
+            
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@router.get("/public/deployments/{deployment_id}/conversations/{conversation_id}/stream")
+async def public_sse_stream(
+    deployment_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    """Public SSE stream for deployed widgets."""
+    deployment = db.query(Deployment).join(Chatbot, Deployment.chatbot_id == Chatbot.id).filter(
+        Deployment.id == deployment_id,
+        Deployment.is_active == True,
+        Chatbot.deleted_at == None,
+    ).first()
+    
+    if not deployment:
+        raise HTTPException(status_code=404, detail="Active deployment not found")
+        
+    conversation = db.query(Conversation).filter(
+        Conversation.id == conversation_id,
+        Conversation.chatbot_id == deployment.chatbot_id,
+        Conversation.deleted_at == None
+    ).first()
+    
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+        
+    async def event_generator():
+        channel = f"conversation:{conversation_id}"
+        queue = await sse_manager.subscribe(channel)
+        try:
+            while True:
+                payload = await queue.get()
+                event_type = payload.get("event")
+                data = payload.get("data")
+                yield f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+        finally:
+            await sse_manager.unsubscribe(channel, queue)
+            
+    return StreamingResponse(event_generator(), media_type="text/event-stream")

@@ -2,7 +2,7 @@ import uuid
 from enum import Enum as PyEnum
 from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, DateTime, Enum, ForeignKey, Index, Text, BigInteger
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, TSVECTOR
 from sqlalchemy.orm import relationship
 from app.db.session import Base
 from pgvector.sqlalchemy import Vector
@@ -89,6 +89,7 @@ class KnowledgeChunk(Base):
     chunk_index = Column(Integer, nullable=False)
     index_status = Column(Enum(ChunkStatus, name="enum_chunk_status"), nullable=False, default=ChunkStatus.QUEUED)
     embedding = Column(Vector(settings.EMBEDDING_DIM), nullable=True)
+    text_search_vector = Column(TSVECTOR, nullable=True)
 
     source = relationship("KnowledgeSource", back_populates="chunks")
 

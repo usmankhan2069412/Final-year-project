@@ -142,7 +142,8 @@ def reply_to_conversation(
         }
     }
     
-    background_tasks.add_task(sse_manager.broadcast, str(org_id), "message", agent_msg_data)
+    background_tasks.add_task(sse_manager.broadcast, f"organization:{org_id}", "message", agent_msg_data)
+    background_tasks.add_task(sse_manager.broadcast, f"conversation:{conversation.id}", "message", agent_msg_data)
 
     return {"status": "success", "message": agent_msg_data["message"]}
 
@@ -179,7 +180,8 @@ def resolve_conversation(
         "status": "resolved"
     }
     
-    background_tasks.add_task(sse_manager.broadcast, str(org_id), "resolve", resolve_event)
+    background_tasks.add_task(sse_manager.broadcast, f"organization:{org_id}", "resolve", resolve_event)
+    background_tasks.add_task(sse_manager.broadcast, f"conversation:{conversation.id}", "resolve", resolve_event)
 
     return {"status": "success", "conversation_id": conversation.id}
 
@@ -190,7 +192,7 @@ async def sse_stream(
     org_id: uuid.UUID = Depends(get_current_org_id),
 ):
     async def event_generator():
-        queue = await sse_manager.subscribe(str(org_id))
+        queue = await sse_manager.subscribe(f"organization:{org_id}")
         try:
             while True:
                 payload = await queue.get()
@@ -198,6 +200,6 @@ async def sse_stream(
                 data = payload.get("data")
                 yield f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
         finally:
-            await sse_manager.unsubscribe(str(org_id), queue)
+            await sse_manager.unsubscribe(f"organization:{org_id}", queue)
             
     return StreamingResponse(event_generator(), media_type="text/event-stream")

@@ -157,10 +157,7 @@ def health_check():
     except Exception as e:
         checks["database"] = f"error: {str(e)}"
 
-    # 2. FAISS data directory exists
-    checks["faiss_dir"] = "ok" if os.path.isdir(settings.FAISS_DIR) else "missing"
-
-    # 3. Gemini API key present
+    # 2. Gemini API key present
     checks["gemini_key"] = "ok" if settings.GEMINI_API_KEY else "missing"
 
     # 4. SemanticRouter initialized
@@ -256,6 +253,32 @@ def widget_script():
   }
 
   var conversationId = null;
+  var eventSource = null;
+
+  function connectSSE(convId) {
+    if (eventSource) return;
+    var streamUrl = apiBaseUrl + "/api/v1/chat/public/deployments/" + config.deploymentId + "/conversations/" + convId + "/stream";
+    eventSource = new EventSource(streamUrl);
+
+    eventSource.addEventListener("message", function(e) {
+      try {
+        var payload = JSON.parse(e.data);
+        if (payload.message && payload.message.content) {
+            addMessage(payload.message.role, payload.message.content);
+        }
+      } catch (err) {}
+    });
+
+    eventSource.addEventListener("resolve", function(e) {
+      addMessage("bot", "This conversation has been resolved by the agent.");
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+      conversationId = null;
+    });
+  }
+
   launcher.onclick = function () {
     panel.style.display = panel.style.display === "none" ? "block" : "none";
   };
@@ -273,7 +296,10 @@ def widget_script():
       if (!res.ok) throw new Error("Chat request failed");
       return res.json();
     }).then(function (data) {
-      conversationId = data.conversation_id;
+      if (!conversationId) {
+        conversationId = data.conversation_id;
+        connectSSE(conversationId);
+      }
       addMessage("bot", data.response || "I could not generate a response.");
     }).catch(function () {
       addMessage("bot", "Sorry, the chatbot is unavailable right now.");

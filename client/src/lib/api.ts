@@ -228,4 +228,61 @@ export const api = {
 
   activateDeployment: (deploymentId: string) =>
     apiRequest<DeploymentResponse>(`/api/v1/deployments/${deploymentId}/activate`, { method: "PATCH" }),
+
+  streamConversationEvents: async (
+    chatbotId: string,
+    conversationId: string,
+    onMessage: (message: any) => void,
+    onResolve: () => void,
+    signal: AbortSignal
+  ) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/chat/${chatbotId}/conversations/${conversationId}/stream`, {
+        headers: { ...authHeaders(false) } as HeadersInit,
+        signal,
+      });
+
+      if (!response.ok) throw new Error("Stream connection failed");
+      if (!response.body) return;
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let currentEvent = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (value) {
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+          
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith("event: ")) {
+              currentEvent = trimmed.slice(7);
+            } else if (trimmed.startsWith("data: ")) {
+              const dataStr = trimmed.slice(6);
+              if (dataStr === "[DONE]") continue;
+              try {
+                const parsed = JSON.parse(dataStr);
+                if (currentEvent === "message" && parsed.message) {
+                  onMessage(parsed.message);
+                } else if (currentEvent === "resolve") {
+                  onResolve();
+                }
+              } catch (e) {
+                console.error("Error parsing stream data", e, dataStr);
+              }
+            }
+          }
+        }
+      }
+    } catch (e: any) {
+      if (e.name !== "AbortError") {
+        console.error("Conversation stream error:", e);
+      }
+    }
+  },
 };

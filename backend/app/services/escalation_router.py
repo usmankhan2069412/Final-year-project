@@ -140,19 +140,19 @@ class EscalationRouter:
             }
 
         if background_tasks:
-            background_tasks.add_task(sse_manager.broadcast, str(org_id), "message", user_msg_data)
-            background_tasks.add_task(sse_manager.broadcast, str(org_id), "message", bot_msg_data)
+            background_tasks.add_task(sse_manager.broadcast, f"organization:{org_id}", "message", user_msg_data)
+            background_tasks.add_task(sse_manager.broadcast, f"organization:{org_id}", "message", bot_msg_data)
             if escalation_event:
-                background_tasks.add_task(sse_manager.broadcast, str(org_id), "escalation", escalation_event)
+                background_tasks.add_task(sse_manager.broadcast, f"organization:{org_id}", "escalation", escalation_event)
         else:
             def _run_sse():
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 try:
-                    loop.run_until_complete(sse_manager.broadcast(str(org_id), "message", user_msg_data))
-                    loop.run_until_complete(sse_manager.broadcast(str(org_id), "message", bot_msg_data))
+                    loop.run_until_complete(sse_manager.broadcast(f"organization:{org_id}", "message", user_msg_data))
+                    loop.run_until_complete(sse_manager.broadcast(f"organization:{org_id}", "message", bot_msg_data))
                     if escalation_event:
-                        loop.run_until_complete(sse_manager.broadcast(str(org_id), "escalation", escalation_event))
+                        loop.run_until_complete(sse_manager.broadcast(f"organization:{org_id}", "escalation", escalation_event))
                 except Exception as e:
                     logger.error(f"SSE broadcast failed in thread: {e}")
                 finally:
@@ -160,10 +160,10 @@ class EscalationRouter:
 
             try:
                 loop = asyncio.get_running_loop()
-                loop.create_task(sse_manager.broadcast(str(org_id), "message", user_msg_data))
-                loop.create_task(sse_manager.broadcast(str(org_id), "message", bot_msg_data))
+                loop.create_task(sse_manager.broadcast(f"organization:{org_id}", "message", user_msg_data))
+                loop.create_task(sse_manager.broadcast(f"organization:{org_id}", "message", bot_msg_data))
                 if escalation_event:
-                    loop.create_task(sse_manager.broadcast(str(org_id), "escalation", escalation_event))
+                    loop.create_task(sse_manager.broadcast(f"organization:{org_id}", "escalation", escalation_event))
             except RuntimeError:
                 import threading
                 threading.Thread(target=_run_sse, daemon=True).start()

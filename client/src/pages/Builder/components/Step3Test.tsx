@@ -27,44 +27,34 @@ export default function Step3Test({ persona, botName, chatbotId, onRequireDraft 
   const [lastSources, setLastSources] = useState<ChatResponse["sources"]>([]);
   const [testError, setTestError] = useState("");
 
-  // Poll for out-of-band messages (e.g. human agent replies)
+  // Listen for out-of-band messages (e.g. human agent replies) via SSE
   useEffect(() => {
-    if (!conversationId || isTyping) return;
+    if (!conversationId || !chatbotId) return;
 
-    const intervalId = setInterval(async () => {
-      try {
-        const token = localStorage.getItem("token");
-        const response = await fetch(`${api.baseUrl}/api/v1/chat/${conversationId}/history`, {
-          headers: {
-            "Authorization": `Bearer ${token}`
-          }
-        });
-        if (!response.ok) return;
-        
-        const history = await response.json();
-        
-        setMessages((prev) => {
-          // Local messages array starts with 1 dummy greeting not in DB.
-          // So expected DB history length is prev.length - 1.
-          const expectedHistoryLength = prev.length - 1;
-          
-          if (history.length > expectedHistoryLength) {
-            const newMsgs = history.slice(expectedHistoryLength);
-            const appended = newMsgs.map((msg: any) => ({
-              role: msg.role === "user" ? "user" : "bot",
-              text: msg.content,
-            }));
-            return [...prev, ...appended];
-          }
-          return prev;
-        });
-      } catch (err) {
-        console.error("Failed to poll chat history:", err);
-      }
-    }, 3000);
+    const abortController = new AbortController();
 
-    return () => clearInterval(intervalId);
-  }, [conversationId, isTyping]);
+    api.streamConversationEvents(
+      chatbotId,
+      conversationId,
+      (msg: any) => {
+        setMessages((prev) => [
+          ...prev,
+          { role: msg.role === "user" ? "user" : "bot", text: msg.content }
+        ]);
+      },
+      () => {
+        setMessages((prev) => [
+          ...prev,
+          { role: "bot", text: "This conversation has been resolved by the agent." }
+        ]);
+      },
+      abortController.signal
+    );
+
+    return () => {
+      abortController.abort();
+    };
+  }, [conversationId, chatbotId]);
 
   const sendMessage = async () => {
     if (!input.trim()) return;

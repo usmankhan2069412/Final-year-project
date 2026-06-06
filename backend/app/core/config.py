@@ -32,7 +32,6 @@ class Settings(BaseSettings):
 
     # Document Processing & Vector DB Settings
     UPLOAD_DIR: str = "data/uploads"
-    FAISS_DIR: str = "data/faiss"
     EMBEDDING_MODEL: str = "gemini-embedding-2"
     EMBEDDING_DIM: int = 3072            # gemini-embedding-2 output dimension
     GEMINI_API_KEY: str = ""
