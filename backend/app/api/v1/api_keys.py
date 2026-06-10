@@ -31,7 +31,11 @@ def create_key(
     current_user = Depends(require_role("owner", "admin"))
 ):
     """Generate a new secure API key. Requires owner or admin role."""
-    res = ApiKeyService.create_key(db, org_id, key_in.name)
+    res = ApiKeyService.create_key(
+        db, org_id, key_in.name,
+        expires_at=key_in.expires_at,
+        created_by_user_id=current_user.id,
+    )
     from app.services.notification import NotificationService
     NotificationService.create_notification(
         db,

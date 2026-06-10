@@ -82,18 +82,24 @@ class KnowledgeService:
         cleaned_value = value.strip()
         if not cleaned_value:
             raise ValueError("Knowledge source value cannot be empty")
-        source = KnowledgeSource(
-            org_id=org_id,
-            chatbot_id=chatbot_id,
-            source_type=source_type,
-            label=KnowledgeService._clean_label(label, source_type.value.title()),
-            value=cleaned_value,
-            status=SourceStatus.INDEXED
-        )
-        db.add(source)
-        db.commit()
-        db.refresh(source)
-        return source
+        try:
+            source = KnowledgeSource(
+                org_id=org_id,
+                chatbot_id=chatbot_id,
+                source_type=source_type,
+                label=KnowledgeService._clean_label(label, source_type.value.title()),
+                value=cleaned_value,
+                status=SourceStatus.INDEXED
+            )
+            db.add(source)
+            db.commit()
+            db.refresh(source)
+            return source
+        except Exception as e:
+            db.rollback()
+            logger.error("Database error in create_metadata_source: %s", str(e), exc_info=True)
+            raise e
+
 
     @classmethod
     def upload_file(cls, db: Session, org_id: uuid.UUID, chatbot_id: uuid.UUID, file: UploadFile) -> KnowledgeSource:
@@ -132,32 +138,42 @@ class KnowledgeService:
         from app.services.storage import StorageService
         StorageService.save_file(storage_path, content)
 
-        source = KnowledgeSource(
-            org_id=org_id,
-            chatbot_id=chatbot_id,
-            source_type=SourceType.FILE,
-            label="Documents",
-            value=filename,
-            status=SourceStatus.QUEUED
-        )
-        db.add(source)
-        db.flush()
+        try:
+            source = KnowledgeSource(
+                org_id=org_id,
+                chatbot_id=chatbot_id,
+                source_type=SourceType.FILE,
+                label="Documents",
+                value=filename,
+                status=SourceStatus.QUEUED
+            )
+            db.add(source)
+            db.flush()
 
-        doc = Document(
-            source_id=source.id,
-            chatbot_id=chatbot_id,
-            org_id=org_id,
-            filename=filename,
-            storage_path=storage_path,
-            file_type=FileType(ext),
-            file_size_bytes=size,
-            uploaded_at=datetime.now(timezone.utc)
-        )
-        db.add(doc)
-        cls._enqueue_job(db, source)
-        db.commit()
-        db.refresh(source)
-        return source
+            doc = Document(
+                source_id=source.id,
+                chatbot_id=chatbot_id,
+                org_id=org_id,
+                filename=filename,
+                storage_path=storage_path,
+                file_type=FileType(ext),
+                file_size_bytes=size,
+                uploaded_at=datetime.now(timezone.utc)
+            )
+            db.add(doc)
+            cls._enqueue_job(db, source)
+            db.commit()
+            db.refresh(source)
+            return source
+        except Exception as e:
+            db.rollback()
+            try:
+                StorageService.delete_file(storage_path)
+            except Exception:
+                pass
+            logger.error("Database error in upload_file: %s", str(e), exc_info=True)
+            raise e
+
 
     @classmethod
     def create_text_source(cls, db: Session, org_id: uuid.UUID, chatbot_id: uuid.UUID, text: str, label: str) -> KnowledgeSource:
@@ -165,39 +181,51 @@ class KnowledgeService:
         cleaned_text = text.strip()
         if not cleaned_text:
             raise ValueError("Text knowledge source cannot be empty")
-        source = KnowledgeSource(
-            org_id=org_id,
-            chatbot_id=chatbot_id,
-            source_type=SourceType.TEXT,
-            label=cls._clean_label(label, "Text"),
-            value=cleaned_text,
-            status=SourceStatus.QUEUED
-        )
-        db.add(source)
-        db.flush()
-        cls._enqueue_job(db, source)
-        db.commit()
-        db.refresh(source)
-        return source
+        try:
+            source = KnowledgeSource(
+                org_id=org_id,
+                chatbot_id=chatbot_id,
+                source_type=SourceType.TEXT,
+                label=cls._clean_label(label, "Text"),
+                value=cleaned_text,
+                status=SourceStatus.QUEUED
+            )
+            db.add(source)
+            db.flush()
+            cls._enqueue_job(db, source)
+            db.commit()
+            db.refresh(source)
+            return source
+        except Exception as e:
+            db.rollback()
+            logger.error("Database error in create_text_source: %s", str(e), exc_info=True)
+            raise e
+
 
     @classmethod
     def create_website_source(cls, db: Session, org_id: uuid.UUID, chatbot_id: uuid.UUID, url: str) -> KnowledgeSource:
         cls.ensure_chatbot_access(db, org_id, chatbot_id)
         url = cls._validate_public_url(url)
-        source = KnowledgeSource(
-            org_id=org_id,
-            chatbot_id=chatbot_id,
-            source_type=SourceType.WEBSITE,
-            label="Website URL",
-            value=url,
-            status=SourceStatus.QUEUED
-        )
-        db.add(source)
-        db.flush()
-        cls._enqueue_job(db, source)
-        db.commit()
-        db.refresh(source)
-        return source
+        try:
+            source = KnowledgeSource(
+                org_id=org_id,
+                chatbot_id=chatbot_id,
+                source_type=SourceType.WEBSITE,
+                label="Website URL",
+                value=url,
+                status=SourceStatus.QUEUED
+            )
+            db.add(source)
+            db.flush()
+            cls._enqueue_job(db, source)
+            db.commit()
+            db.refresh(source)
+            return source
+        except Exception as e:
+            db.rollback()
+            logger.error("Database error in create_website_source: %s", str(e), exc_info=True)
+            raise e
+
 
     @classmethod
     def process_source_background(cls, source_id: uuid.UUID):
@@ -278,6 +306,10 @@ class KnowledgeService:
         import asyncio
 
         try:
+            # Optimize: exit early if there are no active websocket connections in this process (e.g. inside worker process)
+            if not manager.active_connections:
+                return
+
             members = db.query(OrgMember).filter(OrgMember.org_id == job.org_id).all()
             if not members:
                 return
@@ -362,16 +394,22 @@ class KnowledgeService:
         if not source:
             return False
 
-        if source.source_type == SourceType.FILE and source.document:
-            from app.services.storage import StorageService
-            StorageService.delete_file(source.document.storage_path)
+        try:
+            if source.source_type == SourceType.FILE and source.document:
+                from app.services.storage import StorageService
+                StorageService.delete_file(source.document.storage_path)
 
-        if source.source_type in [SourceType.FILE, SourceType.TEXT, SourceType.WEBSITE]:
-            try:
-                VectorStoreService.remove_by_source(str(source.chatbot_id), str(source.id))
-            except Exception:
-                pass
+            if source.source_type in [SourceType.FILE, SourceType.TEXT, SourceType.WEBSITE]:
+                try:
+                    VectorStoreService.remove_by_source(str(source.chatbot_id), str(source.id))
+                except Exception:
+                    pass
 
-        db.delete(source)
-        db.commit()
-        return True
+            db.delete(source)
+            db.commit()
+            return True
+        except Exception as e:
+            db.rollback()
+            logger.error("Database error in delete_source: %s", str(e), exc_info=True)
+            raise e
+

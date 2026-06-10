@@ -130,8 +130,8 @@ def run_tests():
             api_key=raw_key,
             secret_ref="org-a-openai-ref",
             routing_rules=[
-                RoutingRuleCreate(intent="customer_support", model_target="gpt-4o"),
-                RoutingRuleCreate(intent="coding", model_target="gpt-4-turbo")
+                RoutingRuleCreate(intent="customer_support"),
+                RoutingRuleCreate(intent="coding")
             ]
         )
         config_a = model_config_service.create_model_config(db=db, org_id=org_a.id, config_in=config_a_in)

@@ -12,5 +12,6 @@ from app.models.subscription import SubscriptionPlan, Subscription  # noqa
 from app.models.api_key import ApiKey  # noqa
 from app.models.notification import Notification  # noqa
 from app.models.analytics import AnalyticsDaily, AnalyticsByChannel, AnalyticsByLang  # noqa
+from app.models.semantic_cache import SemanticCache # noqa
 
 

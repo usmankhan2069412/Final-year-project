@@ -1,7 +1,7 @@
 import uuid
 from enum import Enum as PyEnum
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Text, DateTime, Enum, ForeignKey, Index, Boolean
+from sqlalchemy import Column, String, Text, DateTime, Enum, ForeignKey, Index, Boolean, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from app.db.session import Base
@@ -67,6 +67,8 @@ class Conversation(Base):
 
     __table_args__ = (
         Index("idx_conversations_active", "id", postgresql_where=(deleted_at == None)),
+        UniqueConstraint("id", "chatbot_id", name="uq_conversations_id_chatbot"),
+        Index("idx_conversations_chatbot_started", "chatbot_id", started_at.desc()),
     )
 
 
@@ -81,11 +83,15 @@ class Message(Base):
         nullable=False
     )
     content = Column(Text, nullable=False)
-    created_at = Column(DateTime(timezone=True), primary_key=True, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     conversation = relationship("Conversation")
     config = relationship("AIModelConfig")
+
+    __table_args__ = (
+        Index("idx_messages_conversation_created", "conversation_id", "created_at"),
+    )
 
 
 class ProcessedEvent(Base):

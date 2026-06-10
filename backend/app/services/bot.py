@@ -28,24 +28,30 @@ class BotService:
     @staticmethod
     def create_persona(db: Session, org_id: uuid.UUID, persona_in: PersonaCreate) -> Persona:
         """Create a new persona and its associated traits."""
-        db_persona = Persona(
-            org_id=org_id,
-            name=persona_in.name,
-            language=persona_in.language,
-            greeting=persona_in.greeting,
-            fallback=persona_in.fallback,
-            description=persona_in.description
-        )
-        db.add(db_persona)
-        db.flush()
+        try:
+            db_persona = Persona(
+                org_id=org_id,
+                name=persona_in.name,
+                language=persona_in.language,
+                greeting=persona_in.greeting,
+                fallback=persona_in.fallback,
+                description=persona_in.description
+            )
+            db.add(db_persona)
+            db.flush()
 
-        for trait_name in persona_in.traits:
-            trait = PersonaTrait(persona_id=db_persona.id, trait_name=trait_name)
-            db.add(trait)
+            for trait_name in persona_in.traits:
+                trait = PersonaTrait(persona_id=db_persona.id, trait_name=trait_name)
+                db.add(trait)
 
-        db.commit()
-        db.refresh(db_persona)
-        return db_persona
+            db.commit()
+            db.refresh(db_persona)
+            return db_persona
+        except Exception as e:
+            db.rollback()
+            logger.error("Database error in create_persona: %s", str(e), exc_info=True)
+            raise e
+
 
     @staticmethod
     def get_personas(db: Session, org_id: uuid.UUID) -> List[Persona]:
@@ -78,28 +84,34 @@ class BotService:
         if not db_persona:
             return None
 
-        if persona_in.name is not None:
-            db_persona.name = persona_in.name
-        if persona_in.language is not None:
-            db_persona.language = persona_in.language
-        if persona_in.greeting is not None:
-            db_persona.greeting = persona_in.greeting
-        if persona_in.fallback is not None:
-            db_persona.fallback = persona_in.fallback
-        if persona_in.description is not None:
-            db_persona.description = persona_in.description
+        try:
+            if persona_in.name is not None:
+                db_persona.name = persona_in.name
+            if persona_in.language is not None:
+                db_persona.language = persona_in.language
+            if persona_in.greeting is not None:
+                db_persona.greeting = persona_in.greeting
+            if persona_in.fallback is not None:
+                db_persona.fallback = persona_in.fallback
+            if persona_in.description is not None:
+                db_persona.description = persona_in.description
 
-        if persona_in.traits is not None:
-            # Remove old traits
-            db.query(PersonaTrait).filter(PersonaTrait.persona_id == persona_id).delete()
-            # Add new traits
-            for trait_name in persona_in.traits:
-                trait = PersonaTrait(persona_id=persona_id, trait_name=trait_name)
-                db.add(trait)
+            if persona_in.traits is not None:
+                # Remove old traits
+                db.query(PersonaTrait).filter(PersonaTrait.persona_id == persona_id).delete()
+                # Add new traits
+                for trait_name in persona_in.traits:
+                    trait = PersonaTrait(persona_id=persona_id, trait_name=trait_name)
+                    db.add(trait)
 
-        db.commit()
-        db.refresh(db_persona)
-        return db_persona
+            db.commit()
+            db.refresh(db_persona)
+            return db_persona
+        except Exception as e:
+            db.rollback()
+            logger.error("Database error in update_persona: %s", str(e), exc_info=True)
+            raise e
+
 
     @staticmethod
     def delete_persona(db: Session, org_id: uuid.UUID, persona_id: uuid.UUID) -> bool:
@@ -113,10 +125,16 @@ class BotService:
         if not db_persona:
             return False
 
-        from datetime import datetime, timezone
-        db_persona.deleted_at = datetime.now(timezone.utc)
-        db.commit()
-        return True
+        try:
+            from datetime import datetime, timezone
+            db_persona.deleted_at = datetime.now(timezone.utc)
+            db.commit()
+            return True
+        except Exception as e:
+            db.rollback()
+            logger.error("Database error in delete_persona: %s", str(e), exc_info=True)
+            raise e
+
 
     @staticmethod
     def create_chatbot(db: Session, org_id: uuid.UUID, chatbot_in: ChatbotCreate) -> Chatbot:
@@ -130,17 +148,23 @@ class BotService:
         if not persona:
             raise ValueError("Accessible Persona not found")
 
-        db_chatbot = Chatbot(
-            org_id=org_id,
-            persona_id=chatbot_in.persona_id,
-            name=chatbot_in.name.strip() or "Aina Bot",
-            description=chatbot_in.description,
-            status=chatbot_in.status
-        )
-        db.add(db_chatbot)
-        db.commit()
-        db.refresh(db_chatbot)
-        return db_chatbot
+        try:
+            db_chatbot = Chatbot(
+                org_id=org_id,
+                persona_id=chatbot_in.persona_id,
+                name=chatbot_in.name.strip() or "Aina Bot",
+                description=chatbot_in.description,
+                status=chatbot_in.status
+            )
+            db.add(db_chatbot)
+            db.commit()
+            db.refresh(db_chatbot)
+            return db_chatbot
+        except Exception as e:
+            db.rollback()
+            logger.error("Database error in create_chatbot: %s", str(e), exc_info=True)
+            raise e
+
 
     @staticmethod
     def get_chatbots(db: Session, org_id: uuid.UUID) -> List[Chatbot]:
@@ -173,32 +197,38 @@ class BotService:
         if not db_chatbot:
             return None
 
-        if chatbot_in.persona_id is not None:
-            # Ensure new persona exists and is accessible
-            persona = db.query(Persona).filter(
-                Persona.id == chatbot_in.persona_id,
-                (Persona.org_id == org_id) | (Persona.org_id == None),
-                Persona.deleted_at == None
-            ).first()
-            if not persona:
-                raise ValueError("Accessible Persona not found")
-            db_chatbot.persona_id = chatbot_in.persona_id
+        try:
+            if chatbot_in.persona_id is not None:
+                # Ensure new persona exists and is accessible
+                persona = db.query(Persona).filter(
+                    Persona.id == chatbot_in.persona_id,
+                    (Persona.org_id == org_id) | (Persona.org_id == None),
+                    Persona.deleted_at == None
+                ).first()
+                if not persona:
+                    raise ValueError("Accessible Persona not found")
+                db_chatbot.persona_id = chatbot_in.persona_id
 
-        if chatbot_in.name is not None:
-            cleaned_name = chatbot_in.name.strip()
-            if not cleaned_name:
-                raise ValueError("Chatbot name cannot be empty")
-            db_chatbot.name = cleaned_name
+            if chatbot_in.name is not None:
+                cleaned_name = chatbot_in.name.strip()
+                if not cleaned_name:
+                    raise ValueError("Chatbot name cannot be empty")
+                db_chatbot.name = cleaned_name
 
-        if chatbot_in.description is not None:
-            db_chatbot.description = chatbot_in.description
+            if chatbot_in.description is not None:
+                db_chatbot.description = chatbot_in.description
 
-        if chatbot_in.status is not None:
-            db_chatbot.status = chatbot_in.status
+            if chatbot_in.status is not None:
+                db_chatbot.status = chatbot_in.status
 
-        db.commit()
-        db.refresh(db_chatbot)
-        return db_chatbot
+            db.commit()
+            db.refresh(db_chatbot)
+            return db_chatbot
+        except Exception as e:
+            db.rollback()
+            logger.error("Database error in update_chatbot: %s", str(e), exc_info=True)
+            raise e
+
 
     @staticmethod
     def delete_chatbot(db: Session, org_id: uuid.UUID, chatbot_id: uuid.UUID) -> bool:
@@ -212,10 +242,16 @@ class BotService:
         if not db_chatbot:
             return False
 
-        from datetime import datetime, timezone
-        db_chatbot.deleted_at = datetime.now(timezone.utc)
-        db.commit()
-        return True
+        try:
+            from datetime import datetime, timezone
+            db_chatbot.deleted_at = datetime.now(timezone.utc)
+            db.commit()
+            return True
+        except Exception as e:
+            db.rollback()
+            logger.error("Database error in delete_chatbot: %s", str(e), exc_info=True)
+            raise e
+
 
 
 class ModelConfigService:
@@ -223,12 +259,18 @@ class ModelConfigService:
     @staticmethod
     def seed_providers(db: Session) -> None:
         """Helper to pre-populate standard providers if none exist."""
-        default_providers = ["OpenRouter", "OpenAI", "Anthropic", "Google Gemini"]
-        for p_name in default_providers:
-            existing = db.query(AIProvider).filter(AIProvider.name == p_name).first()
-            if not existing:
-                db.add(AIProvider(name=p_name))
-        db.commit()
+        try:
+            default_providers = ["OpenRouter", "OpenAI", "Anthropic", "Google Gemini"]
+            for p_name in default_providers:
+                existing = db.query(AIProvider).filter(AIProvider.name == p_name).first()
+                if not existing:
+                    db.add(AIProvider(name=p_name))
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            logger.error("Database error in seed_providers: %s", str(e), exc_info=True)
+            raise e
+
 
     @staticmethod
     def get_providers(db: Session) -> List[AIProvider]:
@@ -264,27 +306,40 @@ class ModelConfigService:
         else:
             encrypted_api_key = ModelConfigService.encrypt_key("managed-by-openrouter")
 
-        db_config = AIModelConfig(
-            org_id=org_id,
-            provider_id=config_in.provider_id,
-            encrypted_api_key=encrypted_api_key,
-            secret_ref=config_in.secret_ref
-        )
-        db.add(db_config)
-        db.flush()
+        try:
+            db_config = AIModelConfig(
+                org_id=org_id,
+                provider_id=config_in.provider_id,
+                model_name=config_in.model_name,
+                display_name=config_in.display_name,
+                encrypted_api_key=encrypted_api_key,
+                secret_ref=config_in.secret_ref
+            )
+            db.add(db_config)
+            db.flush()
 
-        if config_in.routing_rules:
-            for rule_in in config_in.routing_rules:
-                rule = RoutingRule(
-                    config_id=db_config.id,
-                    intent=rule_in.intent,
-                    model_target=rule_in.model_target
-                )
-                db.add(rule)
+            if config_in.routing_rules:
+                for rule_in in config_in.routing_rules:
+                    rule = RoutingRule(
+                        config_id=db_config.id,
+                        org_id=org_id,
+                        chatbot_id=rule_in.chatbot_id,
+                        intent=rule_in.intent,
+                        model_target=rule_in.model_target,
+                        priority=rule_in.priority,
+                        fallback_config_id=rule_in.fallback_config_id,
+                        is_active=rule_in.is_active,
+                    )
+                    db.add(rule)
 
-        db.commit()
-        db.refresh(db_config)
-        return db_config
+            db.commit()
+            db.refresh(db_config)
+            return db_config
+        except Exception as e:
+            db.rollback()
+            logger.error("Database error in create_model_config: %s", str(e), exc_info=True)
+            raise e
+
 
     @staticmethod
     def get_model_configs(db: Session, org_id: uuid.UUID) -> List[AIModelConfig]:
@@ -314,33 +369,56 @@ class ModelConfigService:
         if not db_config:
             return None
 
-        if config_in.provider_id is not None:
-            provider = db.query(AIProvider).filter(AIProvider.id == config_in.provider_id).first()
-            if not provider:
-                raise ValueError("AI Provider not found")
-            db_config.provider_id = config_in.provider_id
+        try:
+            if config_in.provider_id is not None:
+                provider = db.query(AIProvider).filter(AIProvider.id == config_in.provider_id).first()
+                if not provider:
+                    raise ValueError("AI Provider not found")
+                db_config.provider_id = config_in.provider_id
 
-        if config_in.api_key is not None:
-            db_config.encrypted_api_key = ModelConfigService.encrypt_key(config_in.api_key)
+            if config_in.api_key is not None:
+                db_config.encrypted_api_key = ModelConfigService.encrypt_key(config_in.api_key)
 
-        if config_in.secret_ref is not None:
-            db_config.secret_ref = config_in.secret_ref
+            if config_in.secret_ref is not None:
+                db_config.secret_ref = config_in.secret_ref
 
-        if config_in.routing_rules is not None:
-            # Delete old routing rules
-            db.query(RoutingRule).filter(RoutingRule.config_id == config_id).delete()
-            # Add new routing rules
-            for rule_in in config_in.routing_rules:
-                rule = RoutingRule(
-                    config_id=config_id,
-                    intent=rule_in.intent,
-                    model_target=rule_in.model_target
-                )
-                db.add(rule)
+            if config_in.model_name is not None:
+                db_config.model_name = config_in.model_name
 
-        db.commit()
-        db.refresh(db_config)
-        return db_config
+            if config_in.display_name is not None:
+                db_config.display_name = config_in.display_name
+
+            if config_in.is_active is not None:
+                db_config.is_active = config_in.is_active
+
+            if config_in.is_default is not None:
+                db_config.is_default = config_in.is_default
+
+            if config_in.routing_rules is not None:
+                # Delete old routing rules
+                db.query(RoutingRule).filter(RoutingRule.config_id == config_id).delete()
+                # Add new routing rules
+                for rule_in in config_in.routing_rules:
+                    rule = RoutingRule(
+                        config_id=config_id,
+                        org_id=org_id,
+                        chatbot_id=rule_in.chatbot_id,
+                        intent=rule_in.intent,
+                        model_target=rule_in.model_target,
+                        priority=rule_in.priority,
+                        fallback_config_id=rule_in.fallback_config_id,
+                        is_active=rule_in.is_active,
+                    )
+                    db.add(rule)
+
+            db.commit()
+            db.refresh(db_config)
+            return db_config
+        except Exception as e:
+            db.rollback()
+            logger.error("Database error in update_model_config: %s", str(e), exc_info=True)
+            raise e
+
 
     @staticmethod
     def delete_model_config(db: Session, org_id: uuid.UUID, config_id: uuid.UUID) -> bool:
@@ -353,9 +431,15 @@ class ModelConfigService:
         if not db_config:
             return False
 
-        db.delete(db_config)
-        db.commit()
-        return True
+        try:
+            db.delete(db_config)
+            db.commit()
+            return True
+        except Exception as e:
+            db.rollback()
+            logger.error("Database error in delete_model_config: %s", str(e), exc_info=True)
+            raise e
+
 
 
 bot_service = BotService()

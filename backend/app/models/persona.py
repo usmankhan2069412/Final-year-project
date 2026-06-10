@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, DateTime, ForeignKey, Index
+from sqlalchemy import Column, String, DateTime, ForeignKey, Index, Integer, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.db.session import Base
@@ -11,9 +11,10 @@ class Persona(Base):
     org_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True)  # NULL = Built-in system persona
     name = Column(String(80), nullable=False)
     language = Column(String(30), nullable=False)
-    greeting = Column(String(500), nullable=True)
-    fallback = Column(String(500), nullable=True)
-    description = Column(String(1000), nullable=True)
+    persona_version = Column(Integer, nullable=False, default=1)
+    greeting = Column(Text, nullable=True)
+    fallback = Column(Text, nullable=True)
+    description = Column(Text, nullable=True)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
 
     # Relationships

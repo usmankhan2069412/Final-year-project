@@ -2,7 +2,7 @@ import secrets
 import hashlib
 from datetime import datetime, timezone
 import uuid
-from typing import List
+from typing import List, Optional
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
@@ -15,9 +15,15 @@ class ApiKeyService:
         """List all API keys (masked) for the organization."""
         keys = db.query(ApiKey).filter(ApiKey.org_id == org_id).order_by(ApiKey.created_at.desc()).all()
         
+        now = datetime.now(timezone.utc)
         response = []
         for k in keys:
-            status_str = "revoked" if k.revoked_at is not None else "active"
+            if k.revoked_at is not None:
+                status_str = "revoked"
+            elif k.expires_at is not None and k.expires_at <= now:
+                status_str = "expired"
+            else:
+                status_str = "active"
             response.append(
                 ApiKeyResponse(
                     id=k.id,
@@ -25,13 +31,20 @@ class ApiKeyService:
                     prefix=k.key_prefix,
                     created_at=k.created_at,
                     last_used=k.last_used_at,
+                    expires_at=k.expires_at,
                     status=status_str
                 )
             )
         return response
 
     @staticmethod
-    def create_key(db: Session, org_id: uuid.UUID, name: str) -> ApiKeyCreateResponse:
+    def create_key(
+        db: Session,
+        org_id: uuid.UUID,
+        name: str,
+        expires_at: Optional[datetime] = None,
+        created_by_user_id: Optional[uuid.UUID] = None,
+    ) -> ApiKeyCreateResponse:
         """Generate a new secure API key, store its hash, and return it once."""
         # 1. Generate secure random key
         token = secrets.token_urlsafe(32)
@@ -46,9 +59,11 @@ class ApiKeyService:
         # 4. Save to DB
         db_key = ApiKey(
             org_id=org_id,
+            created_by_user_id=created_by_user_id,
             name=name,
             key_hash=key_hash,
-            key_prefix=prefix
+            key_prefix=prefix,
+            expires_at=expires_at,
         )
         db.add(db_key)
         db.commit()
@@ -59,7 +74,8 @@ class ApiKeyService:
             name=db_key.name,
             key=raw_key,
             prefix=prefix,
-            created_at=db_key.created_at
+            created_at=db_key.created_at,
+            expires_at=db_key.expires_at,
         )
 
     @staticmethod
@@ -81,3 +97,4 @@ class ApiKeyService:
             db.commit()
             
         return True
+

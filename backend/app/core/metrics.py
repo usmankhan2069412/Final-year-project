@@ -56,3 +56,16 @@ memory_summarization_total = Counter(
     "aina_memory_summarization_total",
     "Number of times conversation memory was summarized"
 )
+
+# Semantic Cache metrics
+semantic_cache_requests_total = Counter(
+    "aina_semantic_cache_requests_total",
+    "Total requests to semantic cache",
+    ["result"] # "hit" or "miss"
+)
+
+semantic_cache_similarity_score = Histogram(
+    "aina_semantic_cache_similarity_score",
+    "Cosine similarity score for cache hits",
+    buckets=(0.85, 0.90, 0.92, 0.94, 0.95, 0.96, 0.97, 0.98, 0.99, 1.0)
+)

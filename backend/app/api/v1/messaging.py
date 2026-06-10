@@ -50,7 +50,8 @@ def send_message(
                     org_id=org_id,
                     chatbot_id=chatbot_id,
                     user_message=request.message,
-                    conversation_id=request.conversation_id
+                    conversation_id=request.conversation_id,
+                    background_tasks=background_tasks
                 ),
                 media_type="text/event-stream"
             )
@@ -127,6 +128,7 @@ def send_public_deployment_message(
                     user_message=request.message,
                     conversation_id=request.conversation_id,
                     deployment_id=deployment.id,
+                    background_tasks=background_tasks,
                 ),
                 media_type="text/event-stream"
             )

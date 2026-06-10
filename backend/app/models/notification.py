@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, DateTime, ForeignKey, Boolean
+from sqlalchemy import Column, String, DateTime, ForeignKey, Boolean, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -17,3 +17,7 @@ class Notification(Base):
 
     # Relationships
     user = relationship("User")
+
+    __table_args__ = (
+        Index("idx_notifications_user_read", "user_id", "read"),
+    )

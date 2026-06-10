@@ -213,7 +213,16 @@ def _scrape_page_sync(client: httpx.Client, url: str) -> dict:
             ):
                 try:
                     resolved = urlparse(urljoin(url, href))
-                    if resolved.scheme in ("http", "https") and resolved.netloc == parsed_origin.netloc:
+                    
+                    # Normalize domains by stripping port and 'www.' subdomain to prevent mismatch
+                    resolved_host = resolved.netloc.split(":")[0].lower()
+                    origin_host = parsed_origin.netloc.split(":")[0].lower()
+                    if resolved_host.startswith("www."):
+                        resolved_host = resolved_host[4:]
+                    if origin_host.startswith("www."):
+                        origin_host = origin_host[4:]
+                        
+                    if resolved.scheme in ("http", "https") and resolved_host == origin_host:
                         # Strip query params + fragment before dedup to prevent crawl traps
                         # (e.g. ?page=1, ?sort=asc, ?filter=x all collapse to the same URL)
                         resolved = resolved._replace(query="", fragment="")
@@ -224,6 +233,7 @@ def _scrape_page_sync(client: httpx.Client, url: str) -> dict:
                 except Exception:
                     pass
 
+        logger.info("Url: %s - Extracted %d raw links, filtered to %d internal links", url, len(soup.find_all("a")), len(links))
         _clean_soup(soup)
         content_markdown = _html_to_markdown(soup)
 

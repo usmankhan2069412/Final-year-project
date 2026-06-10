@@ -20,10 +20,67 @@ logger = logging.getLogger(__name__)
 
 from fastapi.middleware.cors import CORSMiddleware
 
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Ensure database columns for personas can hold larger texts
+    try:
+        from sqlalchemy import create_engine, text
+        engine = create_engine(settings.DATABASE_URL)
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE personas ALTER COLUMN description TYPE TEXT;"))
+            conn.execute(text("ALTER TABLE personas ALTER COLUMN greeting TYPE TEXT;"))
+            conn.execute(text("ALTER TABLE personas ALTER COLUMN fallback TYPE TEXT;"))
+        logger.info("Successfully migrated personas table columns to TEXT type.")
+    except Exception as db_err:
+        logger.error("Failed to run automatic personas schema update: %s", str(db_err))
+
+    # Configure structured JSON logging once at startup
+    structlog.configure(
+        processors=[
+            structlog.stdlib.add_log_level,
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.processors.JSONRenderer(),
+        ],
+        wrapper_class=structlog.BoundLogger,
+        context_class=dict,
+        logger_factory=structlog.PrintLoggerFactory(),
+    )
+
+    # Initialize SemanticRouter in a background thread to prevent blocking FastAPI startup.
+    from app.services.semantic_router import SemanticRouter
+    import threading
+    threading.Thread(target=SemanticRouter._initialize, name="semantic-router-init", daemon=True).start()
+
+    from apscheduler.schedulers.background import BackgroundScheduler
+    from app.tasks.analytics_aggregation import run_nightly_aggregation
+    
+    scheduler = BackgroundScheduler()
+    # Run daily aggregation at 12:05 AM (00:05) every day
+    scheduler.add_job(run_nightly_aggregation, "cron", hour=0, minute=5)
+    
+    # Periodically write the heartbeat file
+    from app.workers.knowledge_worker import write_heartbeat
+    try:
+        write_heartbeat()
+    except Exception:
+        pass
+    scheduler.add_job(write_heartbeat, "interval", seconds=30)
+
+    scheduler.start()
+    logger.info("APScheduler initialized and started background tasks.")
+    
+    yield
+    
+    # Shutdown
+    scheduler.shutdown()
+
 # 🗄️ Auto-create database tables on startup if they don't exist
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    openapi_url=f"{settings.API_V1_STR}/openapi.json"
+    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    lifespan=lifespan
 )
 
 # 🌐 CORS Middleware Configuration
@@ -90,46 +147,6 @@ app.include_router(api_keys_router, prefix=f"{settings.API_V1_STR}")
 app.include_router(notifications_router, prefix=f"{settings.API_V1_STR}")
 
 
-from apscheduler.schedulers.background import BackgroundScheduler
-from app.tasks.analytics_aggregation import run_nightly_aggregation
-
-@app.on_event("startup")
-def start_scheduler():
-    # Configure structured JSON logging once at startup
-    structlog.configure(
-        processors=[
-            structlog.stdlib.add_log_level,
-            # NOTE: add_logger_name requires a stdlib logger (.name attr).
-            # PrintLoggerFactory's PrintLogger has no .name — omit this processor.
-            structlog.processors.TimeStamper(fmt="iso"),
-            structlog.processors.JSONRenderer(),
-        ],
-        wrapper_class=structlog.BoundLogger,
-        context_class=dict,
-        logger_factory=structlog.PrintLoggerFactory(),
-    )
-
-    # Initialize SemanticRouter in a background thread to prevent blocking FastAPI startup.
-    # Failures will be logged from within the initialization function.
-    from app.services.semantic_router import SemanticRouter
-    import threading
-    threading.Thread(target=SemanticRouter._initialize, name="semantic-router-init", daemon=True).start()
-
-    scheduler = BackgroundScheduler()
-    # Run daily aggregation at 12:05 AM (00:05) every day
-    scheduler.add_job(run_nightly_aggregation, "cron", hour=0, minute=5)
-    
-    # Periodically write the heartbeat file to satisfy the health check endpoint
-    # when processing jobs via FastAPI BackgroundTasks in-process
-    from app.workers.knowledge_worker import write_heartbeat
-    try:
-        write_heartbeat()
-    except Exception:
-        pass
-    scheduler.add_job(write_heartbeat, "interval", seconds=30)
-
-    scheduler.start()
-    logger.info("APScheduler initialized and started background tasks.")
     # NOTE: Knowledge document ingestion is handled in-process via BackgroundTasks.
 
 
@@ -316,3 +333,4 @@ def widget_script():
 })();
 """
     return Response(content=script, media_type="application/javascript")
+

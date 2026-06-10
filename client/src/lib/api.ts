@@ -1,5 +1,32 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
+// Intercept window.fetch to automatically handle 401 Unauthorized status codes
+const originalFetch = window.fetch;
+window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  const response = await originalFetch(input, init);
+
+  if (response.status === 401) {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+        ? input.toString()
+        : (input as Request).url;
+
+    const isBackendApi = url.includes("/api/");
+    const isAuthRequest = url.includes("/api/v1/auth/login") ||
+                          url.includes("/api/v1/auth/signup") ||
+                          url.includes("/api/v1/auth/google-login") ||
+                          url.includes("/api/v1/auth/reset-password");
+
+    if (isBackendApi && !isAuthRequest) {
+      window.dispatchEvent(new Event("unauthorized"));
+    }
+  }
+
+  return response;
+};
+
+
 export type SourceType = "file" | "text" | "website" | "email" | "phone" | "app";
 export type SourceStatus = "queued" | "processing" | "indexed" | "failed";
 export type ChatbotStatus = "draft" | "training" | "active" | "paused" | "archived";

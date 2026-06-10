@@ -4,6 +4,7 @@ import re
 import os
 import json
 import httpx
+import time
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional, TypedDict
 from sqlalchemy.orm import Session
@@ -45,6 +46,15 @@ class AgentState(TypedDict, total=False):
     is_relevant: bool
     routing_rules: Dict[str, str]
     default_model: str
+    
+    # Semantic Cache tracking
+    org_id: str
+    knowledge_base_version: int
+    persona_version: int
+    cache_hit: bool
+    cache_similarity: float
+    response_source: str # "semantic_cache" | "rag_generation" | "fallback"
+    validated_chunks_count: int
     
     # Conversation memory (lazy summarization)
     conversation_memory: Optional[dict]
@@ -261,6 +271,40 @@ class AgentGraphExecutor:
             return {"rewritten_query": user_msg}
 
     @staticmethod
+    def semantic_cache_node(state: AgentState) -> AgentState:
+        rewritten = state.get("rewritten_query")
+        if not rewritten:
+            return {"cache_hit": False}
+            
+        from app.services.semantic_cache import SemanticCacheService
+        from app.core.metrics import semantic_cache_requests_total, semantic_cache_similarity_score
+        
+        response_text, chunk_ids, similarity = SemanticCacheService.check_cache(
+            org_id=state["org_id"],
+            chatbot_id=state["chatbot_id"],
+            rewritten_query=rewritten,
+            knowledge_base_version=state.get("knowledge_base_version", 1),
+            persona_version=state.get("persona_version", 1),
+            threshold=0.95
+        )
+        
+        if response_text:
+            semantic_cache_requests_total.labels(result="hit").inc()
+            if similarity is not None:
+                semantic_cache_similarity_score.observe(similarity)
+            return {
+                "cache_hit": True,
+                "response": response_text,
+                "response_source": "semantic_cache",
+                "cache_similarity": similarity,
+                # Simulate valid sources to keep the flow consistent if needed
+                "sources": [{"chunk_id": cid} for cid in chunk_ids] if chunk_ids else []
+            }
+            
+        semantic_cache_requests_total.labels(result="miss").inc()
+        return {"cache_hit": False}
+
+    @staticmethod
     def retrieve_node(state: AgentState) -> AgentState:
         rewritten = state.get("rewritten_query")
         original = state["user_message"]
@@ -383,7 +427,8 @@ class AgentGraphExecutor:
             return {
                 "is_relevant": True, 
                 "sources": filtered_sources, 
-                "context_text": new_context_text
+                "context_text": new_context_text,
+                "validated_chunks_count": len(filtered_sources)
             }
         except Exception as e:
             logger.warning("validate_node_rerank_api_failed", error=str(e))
@@ -394,7 +439,8 @@ class AgentGraphExecutor:
             return {
                 "is_relevant": is_rel,
                 "sources": filtered_sources,
-                "context_text": state.get("context_text", "") if is_rel else ""
+                "context_text": state.get("context_text", "") if is_rel else "",
+                "validated_chunks_count": len(filtered_sources) if is_rel else 0
             }
 
     @staticmethod
@@ -438,7 +484,7 @@ class AgentGraphExecutor:
             # Check for custom fallback in persona first
             fallback_msg = getattr(state["persona"], "fallback", None)
             if fallback_msg:
-                return {"response": fallback_msg}
+                return {"response": fallback_msg, "response_source": "fallback"}
                 
             lang = state["persona"].language
             if lang == "multilingual":
@@ -458,7 +504,7 @@ class AgentGraphExecutor:
                     ans = "I'm sorry, mere paas is waqt iski exact details nahi hain. Kya main aapka rabta apni support team se karwa doon?"
                 else:
                     ans = "I'm sorry, I don't have the exact details for that right now. Would you like me to connect you to someone from our team who can help?"
-            return {"response": ans}
+            return {"response": ans, "response_source": "fallback"}
 
         llm = AgentGraphExecutor._get_llm(state)
         if llm:
@@ -481,7 +527,7 @@ class AgentGraphExecutor:
                 messages.append(HumanMessage(content=state["user_message"]))
                 
                 ans = llm.invoke(messages).content.strip()
-                return {"response": ans}
+                return {"response": ans, "response_source": "rag_generation"}
             except Exception as e:
                 logger.warning(f"RAG generation failed: {e}")
                 
@@ -492,38 +538,104 @@ class AgentGraphExecutor:
             state["persona"], 
             state["traits"]
         )
-        return {"response": ans}
+        return {"response": ans, "response_source": "fallback"}
+
+
+
+    @classmethod
+    def build_graph(cls):
+        workflow = StateGraph(AgentState)
+        
+        workflow.add_node("route", cls.route_intent)
+        workflow.add_node("agent_handoff", cls.agent_handoff_node)
+        workflow.add_node("conversational", cls.conversational_node)
+        workflow.add_node("rewrite", cls.rewrite_node)
+        workflow.add_node("semantic_cache", cls.semantic_cache_node)
+        workflow.add_node("retrieve", cls.retrieve_node)
+        workflow.add_node("validate", cls.validate_node)
+        workflow.add_node("rag_answer", cls.rag_answer_node)
+        
+        workflow.set_entry_point("route")
+        
+        def route_condition(state: AgentState):
+            return state["intent"]
+            
+        workflow.add_conditional_edges("route", route_condition, {
+            "AGENT_HANDOFF": "agent_handoff",
+            "FRUSTRATION": "agent_handoff",
+            "CONVERSATIONAL": "conversational",
+            "RAG_LOOKUP": "rewrite"
+        })
+        
+        workflow.add_edge("agent_handoff", END)
+        workflow.add_edge("conversational", END)
+        workflow.add_edge("rewrite", "semantic_cache")
+        
+        def cache_condition(state: AgentState):
+            return "hit" if state.get("cache_hit") else "miss"
+            
+        workflow.add_conditional_edges("semantic_cache", cache_condition, {
+            "hit": END,
+            "miss": "retrieve"
+        })
+        
+        workflow.add_edge("retrieve", "validate")
+        workflow.add_edge("validate", "rag_answer")
+        workflow.add_edge("rag_answer", END)
+        
+        return workflow.compile()
+
+    @classmethod
+    def execute(cls, initial_state: AgentState) -> AgentState:
+        return cls._get_graph().invoke(initial_state)
+
+
+# --- Chat Service Orchestrator ---
+class ChatService:
+    """
+    Orchestrator class managing DB transactions, security, lookup, and updates.
+    Invokes the pure AgentGraphExecutor for LangGraph execution.
+    """
+    message_repo = MessageRepository()
+    conversation_repo = ConversationRepository()
 
     @staticmethod
-    def maybe_summarize_node(state: AgentState) -> AgentState:
-        """Conditionally summarize conversation memory (lazy — only when needed)."""
+    def background_summarize_memory(conversation_id: uuid.UUID, org_id: uuid.UUID, user_message: str, bot_response: str, api_key: str, history_len: int, memory: dict):
+        """Conditionally summarize conversation memory in a background thread."""
         from app.services.semantic_router import MEMORY_THRESHOLD, MEMORY_REFRESH_INTERVAL
         from app.core.metrics import memory_summarization_total
-
-        history = state.get("history", [])
-        memory = state.get("conversation_memory") or {}
-        # +1 for the current user message that was added to DB before graph execution
-        history_len = len(history) + 1
-
-        # Check if summarization is needed
+        from app.db.session import SessionLocal
+        from sqlalchemy import text
+        from datetime import datetime, timezone
+        
+        # Fast check without DB
         if history_len <= MEMORY_THRESHOLD:
-            return {}  # Too short, skip
-
-        if memory.get("summary"):
+            return
+            
+        if memory and memory.get("summary"):
             covered = memory.get("summary_covers_until_turn", 0)
             unsummarized = history_len - covered
             if unsummarized < MEMORY_REFRESH_INTERVAL:
-                return {}  # Summary is fresh enough, skip
+                return
 
-        # Summarization needed
-        api_key = state.get("api_key")
         if not api_key:
-            return {}
+            return
 
+        db = SessionLocal()
         try:
+            # Bind tenant context for Row-Level Security
+            db.execute(
+                text("SELECT set_config('app.current_org_id', :org_id, true)"),
+                {"org_id": str(org_id)},
+            )
+            
+            conv = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+            if not conv:
+                return
+                
             effective_key, base_url = _resolve_openrouter_key(api_key)
             if not effective_key:
-                return {}
+                return
 
             llm_kwargs = {
                 "api_key": effective_key,
@@ -536,20 +648,24 @@ class AgentGraphExecutor:
 
             llm = ChatOpenAI(**llm_kwargs)
 
-            # Build messages to summarize (only unsummarized ones)
-            covered = memory.get("summary_covers_until_turn", 0)
-            unsummarized_msgs = history[covered:] if covered < len(history) else history[-4:]
+            all_history = ChatService.message_repo.fetch_history(db, conversation_id, conv.started_at, datetime.now(timezone.utc))
+            
+            # Since the user message and bot response have already been committed, they are in all_history.
+            # We don't need to append them manually.
+            covered = memory.get("summary_covers_until_turn", 0) if memory else 0
+            
+            # Take only the unsummarized portion
+            unsummarized_msgs = all_history[covered:] if covered < len(all_history) else all_history[-4:]
+            
+            if not unsummarized_msgs:
+                return
+                
             msg_lines = []
             for m in unsummarized_msgs:
                 role_label = "USER" if m.role == MessageRole.USER else "BOT"
                 msg_lines.append(f"{role_label}: {m.content}")
-            # Include the current exchange
-            msg_lines.append(f"USER: {state['user_message']}")
-            bot_response = state.get("response", "")
-            if bot_response:
-                msg_lines.append(f"BOT: {bot_response}")
 
-            existing_summary = memory.get("summary", "")
+            existing_summary = memory.get("summary", "") if memory else ""
             prev_context = f"Previous summary: {existing_summary}" if existing_summary else "Previous summary: None (new conversation)"
 
             sys_prompt = (
@@ -570,77 +686,29 @@ class AgentGraphExecutor:
                 HumanMessage(content="Generate the JSON:")
             ]).content.strip()
 
-            # Parse JSON response
-            # Strip markdown code fences if present
             if result.startswith("```"):
                 result = result.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
 
             parsed = json.loads(result)
             new_memory = {
                 "summary": parsed.get("summary", ""),
-                "turn_count": history_len,
-                "summary_covers_until_turn": history_len,
+                "turn_count": len(all_history),
+                "summary_covers_until_turn": len(all_history),
                 "topics": parsed.get("topics", []),
                 "user_mood": parsed.get("user_mood", "neutral"),
                 "phase": parsed.get("phase", "active"),
             }
 
+            conv.memory = new_memory
+            db.add(conv)
+            db.commit()
+
             memory_summarization_total.inc()
-            logger.info("conversation_memory_updated", turn_count=history_len, phase=new_memory["phase"])
-            return {"conversation_memory": new_memory}
-
+            logger.info("conversation_memory_updated", turn_count=len(all_history), phase=new_memory["phase"])
         except Exception as e:
-            logger.warning(f"Memory summarization failed (non-fatal): {e}")
-            return {}
-
-    @classmethod
-    def build_graph(cls):
-        workflow = StateGraph(AgentState)
-        
-        workflow.add_node("route", cls.route_intent)
-        workflow.add_node("agent_handoff", cls.agent_handoff_node)
-        workflow.add_node("conversational", cls.conversational_node)
-        workflow.add_node("rewrite", cls.rewrite_node)
-        workflow.add_node("retrieve", cls.retrieve_node)
-        workflow.add_node("validate", cls.validate_node)
-        workflow.add_node("rag_answer", cls.rag_answer_node)
-        workflow.add_node("maybe_summarize", cls.maybe_summarize_node)
-        
-        workflow.set_entry_point("route")
-        
-        def route_condition(state: AgentState):
-            return state["intent"]
-            
-        workflow.add_conditional_edges("route", route_condition, {
-            "AGENT_HANDOFF": "agent_handoff",
-            "FRUSTRATION": "agent_handoff",
-            "CONVERSATIONAL": "conversational",
-            "RAG_LOOKUP": "rewrite"
-        })
-        
-        workflow.add_edge("agent_handoff", END)
-        workflow.add_edge("conversational", "maybe_summarize")
-        workflow.add_edge("rewrite", "retrieve")
-        workflow.add_edge("retrieve", "validate")
-        workflow.add_edge("validate", "rag_answer")
-        workflow.add_edge("rag_answer", "maybe_summarize")
-        workflow.add_edge("maybe_summarize", END)
-        
-        return workflow.compile()
-
-    @classmethod
-    def execute(cls, initial_state: AgentState) -> AgentState:
-        return cls._get_graph().invoke(initial_state)
-
-
-# --- Chat Service Orchestrator ---
-class ChatService:
-    """
-    Orchestrator class managing DB transactions, security, lookup, and updates.
-    Invokes the pure AgentGraphExecutor for LangGraph execution.
-    """
-    message_repo = MessageRepository()
-    conversation_repo = ConversationRepository()
+            logger.warning(f"Background memory summarization failed: {e}")
+        finally:
+            db.close()
 
     @staticmethod
     def route_intent(state: AgentState) -> AgentState:
@@ -673,14 +741,24 @@ class ChatService:
         api_key = None
         routing_rules_dict = {}
         
-        active_config = db.query(AIModelConfig).filter(AIModelConfig.org_id == org_id).first()
+        active_config = db.query(AIModelConfig).filter(
+            AIModelConfig.org_id == org_id,
+            AIModelConfig.is_active == True,
+            AIModelConfig.is_default == True,
+        ).first()
+        if not active_config:
+            active_config = db.query(AIModelConfig).filter(
+                AIModelConfig.org_id == org_id,
+                AIModelConfig.is_active == True,
+            ).first()
         if active_config:
             try:
                 api_key = model_config_service.decrypt_key(active_config.encrypted_api_key)
             except Exception:
                 pass
             for rule in active_config.routing_rules:
-                routing_rules_dict[rule.intent] = rule.model_target
+                if rule.is_active:
+                    routing_rules_dict[rule.intent] = active_config.model_name
 
         if not api_key:
             # If no provider is explicitly configured, use OpenRouter by default
@@ -752,9 +830,10 @@ class ChatService:
             "default_model": "openai/gpt-4o-mini",
             "callbacks": callbacks,
             "conversation_memory": conversation.memory,  # Load memory from DB
+            "org_id": str(org_id),
+            "knowledge_base_version": getattr(chatbot, "knowledge_base_version", 1),
+            "persona_version": getattr(persona, "persona_version", 1)
         }
-        
-        import time
         
         t0 = time.monotonic()
         final_state = AgentGraphExecutor.execute(initial_state)
@@ -766,16 +845,10 @@ class ChatService:
         new_status = final_state.get("status", conversation.status)
         sources = final_state.get("sources", [])
         intent = final_state.get("intent", "unknown")
-        
-        # Persist conversation memory if it was updated
-        updated_memory = final_state.get("conversation_memory")
-        if updated_memory and updated_memory != conversation.memory:
-            conversation.memory = updated_memory
-            db.add(conversation)
-        
         # Track metrics
+        is_cache_hit = final_state.get("response_source") == "semantic_cache"
         is_relevant = final_state.get("is_relevant", False)
-        outcome = "answered" if (is_relevant or new_status == ConversationStatus.ESCALATED) else "fallback"
+        outcome = "answered" if (is_relevant or is_cache_hit or new_status == ConversationStatus.ESCALATED) else "fallback"
         chat_requests_total.labels(intent=intent or "unknown", outcome=outcome).inc()
         if outcome == "fallback":
             fallback_total.inc()
@@ -817,6 +890,57 @@ class ChatService:
         
         db.commit()
 
+        # Update cache on successful new RAG answers
+        if intent == "RAG_LOOKUP" and final_state.get("is_relevant") and final_state.get("response_source") == "rag_generation" and final_state.get("validated_chunks_count", 0) > 0 and response_text:
+            rewritten_query = final_state.get("rewritten_query")
+            source_chunk_ids = [src["chunk_id"] for src in sources] if sources else []
+            if rewritten_query:
+                from app.services.semantic_cache import SemanticCacheService
+                if background_tasks:
+                    background_tasks.add_task(
+                        SemanticCacheService.add_to_cache,
+                        org_id=str(org_id),
+                        chatbot_id=str(chatbot_id),
+                        rewritten_query=rewritten_query,
+                        response_text=response_text,
+                        knowledge_base_version=getattr(chatbot, "knowledge_base_version", 1),
+                        persona_version=getattr(persona, "persona_version", 1),
+                        source_chunk_ids=source_chunk_ids
+                    )
+                else:
+                    import threading
+                    threading.Thread(
+                        target=SemanticCacheService.add_to_cache,
+                        kwargs=dict(
+                            org_id=str(org_id),
+                            chatbot_id=str(chatbot_id),
+                            rewritten_query=rewritten_query,
+                            response_text=response_text,
+                            knowledge_base_version=getattr(chatbot, "knowledge_base_version", 1),
+                            persona_version=getattr(persona, "persona_version", 1),
+                            source_chunk_ids=source_chunk_ids
+                        )
+                    ).start()
+
+        # Queue background summarization
+        if background_tasks:
+            background_tasks.add_task(
+                ChatService.background_summarize_memory,
+                conversation_id=conversation.id,
+                org_id=org_id,
+                user_message=user_message,
+                bot_response=response_text,
+                api_key=api_key,
+                history_len=len(history) + 1,
+                memory=conversation.memory
+            )
+        else:
+            import threading
+            threading.Thread(
+                target=ChatService.background_summarize_memory,
+                args=(conversation.id, org_id, user_message, response_text, api_key, len(history) + 1, conversation.memory)
+            ).start()
+
         return {
             "response": response_text,
             "conversation_id": conversation.id,
@@ -826,7 +950,7 @@ class ChatService:
 
     @classmethod
     def get_rag_stream(
-        cls, db: Session, org_id: uuid.UUID, chatbot_id: uuid.UUID, user_message: str, conversation_id: Optional[uuid.UUID] = None, deployment_id: Optional[uuid.UUID] = None
+        cls, db: Session, org_id: uuid.UUID, chatbot_id: uuid.UUID, user_message: str, conversation_id: Optional[uuid.UUID] = None, deployment_id: Optional[uuid.UUID] = None, background_tasks: Optional[BackgroundTasks] = None
     ):
         import queue
         import threading
@@ -851,7 +975,7 @@ class ChatService:
                     {"org_id": str(org_id)},
                 )
                 res = cls.get_rag_response(
-                    thread_db, org_id, chatbot_id, user_message, conversation_id, deployment_id, callbacks=[handler]
+                    thread_db, org_id, chatbot_id, user_message, conversation_id, deployment_id, callbacks=[handler], background_tasks=background_tasks
                 )
                 result_container.append(res)
             except Exception as e:

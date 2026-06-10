@@ -101,6 +101,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [fetchProfile]);
 
+  // Listen to unauthorized events to automatically log out the user
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      logout();
+    };
+
+    window.addEventListener("unauthorized", handleUnauthorized);
+    return () => {
+      window.removeEventListener("unauthorized", handleUnauthorized);
+    };
+  }, [logout]);
+
   return (
     <AuthContext.Provider value={{ isAuthenticated, userMe, isLoadingProfile, login, logout, fetchProfile }}>
       {children}

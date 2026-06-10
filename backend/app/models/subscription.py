@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Integer, Numeric, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, String, Integer, Numeric, Boolean, DateTime, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -35,3 +35,7 @@ class Subscription(Base):
     # Relationships
     plan = relationship("SubscriptionPlan", back_populates="subscriptions")
     org = relationship("Organization")
+
+    __table_args__ = (
+        Index("uq_subscriptions_active", "org_id", unique=True, postgresql_where=(status.in_(['active', 'trialing', 'past_due']))),
+    )

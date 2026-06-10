@@ -49,45 +49,54 @@ def create_knowledge_source(
     org_id: uuid.UUID = Depends(get_current_org_id)
 ):
     """Create a text, website, phone, email, or app knowledge source."""
-    if source_in.source_type == SourceType.FILE:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="For files, use the /upload endpoint."
-        )
-        
-    # Metadata types don't require processing
-    if source_in.source_type in [SourceType.EMAIL, SourceType.PHONE, SourceType.APP]:
-        return KnowledgeService.create_metadata_source(
-            db=db,
-            org_id=org_id,
-            chatbot_id=source_in.chatbot_id,
-            source_type=source_in.source_type,
-            value=source_in.value,
-            label=source_in.label
-        )
-        
-    if source_in.source_type == SourceType.TEXT:
-        source = KnowledgeService.create_text_source(
-            db=db,
-            org_id=org_id,
-            chatbot_id=source_in.chatbot_id,
-            text=source_in.value,
-            label=source_in.label
-        )
-        background_tasks.add_task(run_knowledge_jobs_task)
-        return source
-        
-    if source_in.source_type == SourceType.WEBSITE:
-        source = KnowledgeService.create_website_source(
-            db=db,
-            org_id=org_id,
-            chatbot_id=source_in.chatbot_id,
-            url=source_in.value
-        )
-        background_tasks.add_task(run_knowledge_jobs_task)
-        return source
+    try:
+        if source_in.source_type == SourceType.FILE:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="For files, use the /upload endpoint."
+            )
+            
+        # Metadata types don't require processing
+        if source_in.source_type in [SourceType.EMAIL, SourceType.PHONE, SourceType.APP]:
+            return KnowledgeService.create_metadata_source(
+                db=db,
+                org_id=org_id,
+                chatbot_id=source_in.chatbot_id,
+                source_type=source_in.source_type,
+                value=source_in.value,
+                label=source_in.label
+            )
+            
+        if source_in.source_type == SourceType.TEXT:
+            source = KnowledgeService.create_text_source(
+                db=db,
+                org_id=org_id,
+                chatbot_id=source_in.chatbot_id,
+                text=source_in.value,
+                label=source_in.label
+            )
+            background_tasks.add_task(run_knowledge_jobs_task)
+            return source
+            
+        if source_in.source_type == SourceType.WEBSITE:
+            source = KnowledgeService.create_website_source(
+                db=db,
+                org_id=org_id,
+                chatbot_id=source_in.chatbot_id,
+                url=source_in.value
+            )
+            background_tasks.add_task(run_knowledge_jobs_task)
+            return source
 
-    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported source type")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported source type")
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error("Error creating knowledge source: %s", str(e), exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error occurred while creating knowledge source."
+        )
 
 @router.get("/chatbots/{chatbot_id}", response_model=List[KnowledgeSourceResponse])
 def list_knowledge_sources(
@@ -98,13 +107,19 @@ def list_knowledge_sources(
     """List all knowledge sources for a chatbot."""
     try:
         KnowledgeService.ensure_chatbot_access(db=db, org_id=org_id, chatbot_id=chatbot_id)
+        sources = db.query(KnowledgeSource).filter(
+            KnowledgeSource.chatbot_id == chatbot_id,
+            KnowledgeSource.org_id == org_id
+        ).all()
+        return sources
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    sources = db.query(KnowledgeSource).filter(
-        KnowledgeSource.chatbot_id == chatbot_id,
-        KnowledgeSource.org_id == org_id
-    ).all()
-    return sources
+    except Exception as e:
+        logger.error("Error listing knowledge sources: %s", str(e), exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error occurred while retrieving knowledge sources."
+        )
 
 @router.get("/jobs/{chatbot_id}", response_model=List[KnowledgeJobResponse])
 def list_knowledge_jobs(
@@ -115,12 +130,18 @@ def list_knowledge_jobs(
     """List indexing jobs for a chatbot so clients can poll durable processing state."""
     try:
         KnowledgeService.ensure_chatbot_access(db=db, org_id=org_id, chatbot_id=chatbot_id)
+        return db.query(KnowledgeJob).filter(
+            KnowledgeJob.chatbot_id == chatbot_id,
+            KnowledgeJob.org_id == org_id
+        ).order_by(KnowledgeJob.created_at.desc()).all()
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    return db.query(KnowledgeJob).filter(
-        KnowledgeJob.chatbot_id == chatbot_id,
-        KnowledgeJob.org_id == org_id
-    ).order_by(KnowledgeJob.created_at.desc()).all()
+    except Exception as e:
+        logger.error("Error listing knowledge jobs: %s", str(e), exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error occurred while retrieving knowledge jobs."
+        )
 
 @router.get("/{source_id}", response_model=KnowledgeSourceDetailResponse)
 def get_knowledge_source(
@@ -129,13 +150,22 @@ def get_knowledge_source(
     org_id: uuid.UUID = Depends(get_current_org_id)
 ):
     """Retrieve details and chunks of a knowledge source."""
-    source = db.query(KnowledgeSource).filter(
-        KnowledgeSource.id == source_id,
-        KnowledgeSource.org_id == org_id
-    ).first()
-    if not source:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Knowledge source not found")
-    return source
+    try:
+        source = db.query(KnowledgeSource).filter(
+            KnowledgeSource.id == source_id,
+            KnowledgeSource.org_id == org_id
+        ).first()
+        if not source:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Knowledge source not found")
+        return source
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error retrieving knowledge source: %s", str(e), exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error occurred while retrieving knowledge source details."
+        )
 
 @router.delete("/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_knowledge_source(
@@ -144,7 +174,18 @@ def delete_knowledge_source(
     org_id: uuid.UUID = Depends(get_current_org_id)
 ):
     """Delete a knowledge source and clean up files/vectors."""
-    success = KnowledgeService.delete_source(db=db, org_id=org_id, source_id=source_id)
-    if not success:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Knowledge source not found")
-    return None
+    try:
+        success = KnowledgeService.delete_source(db=db, org_id=org_id, source_id=source_id)
+        if not success:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Knowledge source not found")
+        return None
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error deleting knowledge source: %s", str(e), exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error occurred while deleting knowledge source."
+        )

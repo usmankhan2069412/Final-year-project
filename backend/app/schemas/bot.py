@@ -81,14 +81,19 @@ class AIProviderResponse(BaseModel):
 # --- Routing Rules ---
 class RoutingRuleBase(BaseModel):
     intent: str
-    model_target: str
+    priority: int = 0
+    is_active: bool = True
+    fallback_config_id: Optional[uuid.UUID] = None
+    chatbot_id: Optional[uuid.UUID] = None
 
 class RoutingRuleCreate(RoutingRuleBase):
-    pass
+    model_target: Optional[str] = None  # deprecated
 
 class RoutingRuleResponse(RoutingRuleBase):
     id: uuid.UUID
     config_id: uuid.UUID
+    org_id: uuid.UUID
+    model_target: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -96,6 +101,8 @@ class RoutingRuleResponse(RoutingRuleBase):
 # --- AI Model Configs ---
 class AIModelConfigBase(BaseModel):
     provider_id: uuid.UUID
+    model_name: str = "default"
+    display_name: Optional[str] = None
     secret_ref: Optional[str] = None
 
 class AIModelConfigCreate(AIModelConfigBase):
@@ -104,13 +111,19 @@ class AIModelConfigCreate(AIModelConfigBase):
 
 class AIModelConfigUpdate(BaseModel):
     provider_id: Optional[uuid.UUID] = None
+    model_name: Optional[str] = None
+    display_name: Optional[str] = None
     api_key: Optional[str] = None
     secret_ref: Optional[str] = None
     routing_rules: Optional[List[RoutingRuleCreate]] = None
+    is_active: Optional[bool] = None
+    is_default: Optional[bool] = None
 
 class AIModelConfigResponse(AIModelConfigBase):
     id: uuid.UUID
     org_id: uuid.UUID
+    is_active: bool
+    is_default: bool
     provider: AIProviderResponse
     routing_rules: List[RoutingRuleResponse] = []
 

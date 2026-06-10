@@ -76,13 +76,13 @@ def update():
         
         if 'greeting' not in persona_columns:
             print("Adding greeting to personas...")
-            conn.execute(text("ALTER TABLE personas ADD COLUMN greeting VARCHAR(500);"))
+            conn.execute(text("ALTER TABLE personas ADD COLUMN greeting TEXT;"))
         if 'fallback' not in persona_columns:
             print("Adding fallback to personas...")
-            conn.execute(text("ALTER TABLE personas ADD COLUMN fallback VARCHAR(500);"))
+            conn.execute(text("ALTER TABLE personas ADD COLUMN fallback TEXT;"))
         if 'description' not in persona_columns:
             print("Adding description to personas...")
-            conn.execute(text("ALTER TABLE personas ADD COLUMN description VARCHAR(1000);"))
+            conn.execute(text("ALTER TABLE personas ADD COLUMN description TEXT;"))
 
         print("Checking knowledge_sources table columns...")
         result = conn.execute(text("""

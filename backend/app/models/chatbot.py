@@ -1,7 +1,7 @@
 import uuid
 from enum import Enum as PyEnum
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, DateTime, Enum, ForeignKey, Index, Text
+from sqlalchemy import Column, Integer, String, DateTime, Enum, ForeignKey, Index, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.db.session import Base
@@ -22,6 +22,7 @@ class Chatbot(Base):
     persona_id = Column(UUID(as_uuid=True), ForeignKey("personas.id", ondelete="RESTRICT"), nullable=False)
     name = Column(String(160), nullable=False, default="Aina Bot")
     description = Column(Text, nullable=True)
+    knowledge_base_version = Column(Integer, nullable=False, default=1)
     total_conversations = Column(Integer, nullable=False, default=0)
     total_messages = Column(Integer, nullable=False, default=0)
     status = Column(
@@ -44,4 +45,6 @@ class Chatbot(Base):
 
     __table_args__ = (
         Index("idx_chatbots_active", "id", postgresql_where=(deleted_at == None)),
+        UniqueConstraint("id", "org_id", name="uq_chatbots_id_org"),
+        Index("idx_chatbots_org_id", "org_id"),
     )
