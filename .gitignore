@@ -1,5 +1,6 @@
 # Dependencies
 **/node_modules
+tests/
 .pnpm-store/
 docs/
 .agent/

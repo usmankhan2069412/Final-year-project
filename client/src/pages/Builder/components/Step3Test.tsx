@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { ChatMessage } from "../types";
 import ChatSimulator from "./ChatSimulator";
@@ -10,6 +10,9 @@ interface Step3TestProps {
   chatbotId: string | null;
   onRequireDraft: () => Promise<string | null>;
 }
+
+const createMessageId = (prefix: string) =>
+  `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 export default function Step3Test({ persona, botName, chatbotId, onRequireDraft }: Step3TestProps) {
   const { isDark } = useTheme();
@@ -23,9 +26,21 @@ export default function Step3Test({ persona, botName, chatbotId, onRequireDraft 
   ]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [isSending, setIsSending] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [lastSources, setLastSources] = useState<ChatResponse["sources"]>([]);
   const [testError, setTestError] = useState("");
+  const streamInFlightRef = useRef(false);
+  const isMountedRef = useRef(true);
+  const activeStreamAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      activeStreamAbortRef.current?.abort();
+    };
+  }, []);
 
   // Listen for out-of-band messages (e.g. human agent replies) via SSE
   useEffect(() => {
@@ -37,15 +52,18 @@ export default function Step3Test({ persona, botName, chatbotId, onRequireDraft 
       chatbotId,
       conversationId,
       (msg: any) => {
-        setMessages((prev) => [
-          ...prev,
-          { role: msg.role === "user" ? "user" : "bot", text: msg.content }
-        ]);
+        setMessages((prev) => {
+          if (msg.id && prev.some((item) => item.id === msg.id)) return prev;
+          return [
+            ...prev,
+            { id: msg.id || createMessageId("event"), role: msg.role === "user" ? "user" : "bot", text: msg.content }
+          ];
+        });
       },
       () => {
         setMessages((prev) => [
           ...prev,
-          { role: "bot", text: "This conversation has been resolved by the agent." }
+          { id: createMessageId("resolve"), role: "bot", text: "This conversation has been resolved by the agent." }
         ]);
       },
       abortController.signal
@@ -57,21 +75,28 @@ export default function Step3Test({ persona, botName, chatbotId, onRequireDraft 
   }, [conversationId, chatbotId]);
 
   const sendMessage = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() || streamInFlightRef.current) return;
     const userMsg = input.trim();
+    const userMessageId = createMessageId("user");
+    const botMessageId = createMessageId("bot");
+    let currentResponse = "";
+    let botMessageAdded = false;
+    let rafId: number | null = null;
+    let pendingFlush = false;
+    const abortController = new AbortController();
+
     setInput("");
     setTestError("");
-    setMessages((prev) => [...prev, { role: "user", text: userMsg }]);
+    setLastSources([]);
+    setMessages((prev) => [...prev, { id: userMessageId, role: "user", text: userMsg }]);
     setIsTyping(true);
+    setIsSending(true);
+    streamInFlightRef.current = true;
+    activeStreamAbortRef.current = abortController;
 
     try {
       const id = chatbotId || (await onRequireDraft());
       if (!id) throw new Error("Save the bot before testing.");
-
-      let currentResponse = "";
-      let botMessageAdded = false;
-      let rafId: number | null = null;
-      let pendingFlush = false;
 
       // Batch token updates into animation frames for smooth rendering
       const flushTokens = () => {
@@ -79,12 +104,9 @@ export default function Step3Test({ persona, botName, chatbotId, onRequireDraft 
         rafId = null;
         const snapshot = currentResponse;
         setMessages((prev) => {
-          const updated = [...prev];
-          updated[updated.length - 1] = {
-            ...updated[updated.length - 1],
-            text: snapshot,
-          };
-          return updated;
+          return prev.map((message) =>
+            message.id === botMessageId ? { ...message, text: snapshot } : message
+          );
         });
       };
 
@@ -101,7 +123,7 @@ export default function Step3Test({ persona, botName, chatbotId, onRequireDraft 
             // First token: hide typing dots and add the bot message in one go
             botMessageAdded = true;
             setIsTyping(false);
-            setMessages((prev) => [...prev, { role: "bot", text: currentResponse }]);
+            setMessages((prev) => [...prev, { id: botMessageId, role: "bot", text: currentResponse }]);
             return;
           }
 
@@ -110,39 +132,52 @@ export default function Step3Test({ persona, botName, chatbotId, onRequireDraft 
             pendingFlush = true;
             rafId = requestAnimationFrame(flushTokens);
           }
-        }
+        },
+        undefined,
+        abortController.signal
       );
 
-      // Final flush to ensure last tokens are rendered
+      // Final payload is the source of truth. Fallback responses do not stream
+      // tokens, so they need to be rendered from result.response.
       if (rafId) cancelAnimationFrame(rafId);
+      const finalResponse = result.response?.trim() || currentResponse || "I couldn't generate a response. Please try again.";
+      currentResponse = finalResponse;
+      setIsTyping(false);
+
       setMessages((prev) => {
-        const updated = [...prev];
-        if (updated[updated.length - 1]?.role === "bot") {
-          updated[updated.length - 1] = {
-            ...updated[updated.length - 1],
-            text: currentResponse,
-          };
+        if (!botMessageAdded && finalResponse) {
+          return [...prev, { id: botMessageId, role: "bot", text: finalResponse }];
         }
-        return updated;
+
+        return prev.map((message) =>
+          message.id === botMessageId ? { ...message, text: finalResponse } : message
+        );
       });
 
       setConversationId(result.conversation_id);
       setLastSources(result.sources || []);
     } catch (err: any) {
+      if (!isMountedRef.current || err?.name === "AbortError") return;
       const message = err?.message || "Failed to test chatbot";
       setTestError(message);
-      // If bot message was never added, add one with the error
+      if (rafId) cancelAnimationFrame(rafId);
       setMessages((prev) => {
-        const last = prev[prev.length - 1];
-        if (last?.role === "bot" && last.text === "") {
-          const updated = [...prev];
-          updated[updated.length - 1] = { ...last, text: `Error: ${message}` };
-          return updated;
+        if (botMessageAdded) {
+          return prev.map((item) =>
+            item.id === botMessageId ? { ...item, text: `Error: ${message}` } : item
+          );
         }
-        return [...prev, { role: "bot", text: `Error: ${message}` }];
+        return [...prev, { id: botMessageId, role: "bot", text: `Error: ${message}` }];
       });
     } finally {
-      setIsTyping(false);
+      if (activeStreamAbortRef.current === abortController) {
+        activeStreamAbortRef.current = null;
+      }
+      streamInFlightRef.current = false;
+      if (isMountedRef.current) {
+        setIsSending(false);
+        setIsTyping(false);
+      }
     }
   };
 
@@ -221,10 +256,11 @@ export default function Step3Test({ persona, botName, chatbotId, onRequireDraft 
                 <button
                   key={prompt}
                   onClick={() => setInput(prompt)}
+                  disabled={isSending}
                   className={`text-[13px] font-bold border px-4 py-2.5 rounded-full transition-all shadow-sm ${
                     isDark
-                      ? "text-[#85948b] border-white/[0.06] hover:border-[#EBDCFF]/40 hover:text-[#EBDCFF] hover:bg-[#EBDCFF]/5"
-                      : "text-[#1c1c1e]/70 border-black/10 hover:border-black/30 hover:text-[#1c1c1e] hover:bg-black/5 bg-[#F5F5F7]"
+                      ? "text-[#85948b] border-white/[0.06] hover:border-[#EBDCFF]/40 hover:text-[#EBDCFF] hover:bg-[#EBDCFF]/5 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-[#85948b] disabled:cursor-not-allowed"
+                      : "text-[#1c1c1e]/70 border-black/10 hover:border-black/30 hover:text-[#1c1c1e] hover:bg-black/5 bg-[#F5F5F7] disabled:opacity-40 disabled:hover:bg-[#F5F5F7] disabled:hover:text-[#1c1c1e]/70 disabled:cursor-not-allowed"
                   }`}
                 >
                   {prompt}
@@ -261,6 +297,7 @@ export default function Step3Test({ persona, botName, chatbotId, onRequireDraft 
           input={input}
           onInputChange={setInput}
           onSend={sendMessage}
+          isSending={isSending}
           isInteractive={true}
         />
       </div>

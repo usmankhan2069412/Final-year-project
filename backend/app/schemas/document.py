@@ -24,6 +24,10 @@ class KnowledgeSourceResponse(BaseModel):
     value: str
     status: SourceStatus
     error_message: Optional[str] = None
+    is_searchable: bool
+    pages_crawled: Optional[int] = None
+    total_content_chars: Optional[int] = None
+    crawl_duration_secs: Optional[int] = None
     created_at: datetime
     updated_at: datetime
     model_config = ConfigDict(from_attributes=True)

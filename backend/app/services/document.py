@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 from fastapi import UploadFile
 
 from app.core.config import settings
@@ -62,19 +62,38 @@ class KnowledgeService:
         return job
 
     @staticmethod
+    def _bump_knowledge_base_version(db: Session, chatbot_id: uuid.UUID) -> None:
+        chatbot = db.query(Chatbot).filter(Chatbot.id == chatbot_id).first()
+        if chatbot:
+            chatbot.knowledge_base_version = (chatbot.knowledge_base_version or 1) + 1
+            db.add(chatbot)
+
+    @staticmethod
     def _validate_public_url(url: str) -> str:
-        parsed = urlparse(url.strip())
-        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-            raise ValueError("Website URL must start with http:// or https://")
+        if not url:
+            raise ValueError("URL cannot be empty")
+        url = url.strip()
+        if len(url) > 2048:
+            raise ValueError("URL is too long")
         try:
+            parsed = urlparse(url)
+            if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+                raise ValueError("Website URL must start with http:// or https://")
+
             addresses = socket.getaddrinfo(parsed.hostname, None)
             for result in addresses:
                 ip = ipaddress.ip_address(result[4][0])
                 if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
                     raise ValueError("Website URL must resolve to a public address")
+        except ValueError as ve:
+            raise ve
         except socket.gaierror:
             raise ValueError("Website URL could not be resolved")
-        return url.strip()
+        except Exception as e:
+            logger.warning("Failed to validate URL %s: %s", url, e)
+            raise ValueError("Invalid website URL format or resolution failed")
+
+        return url
 
     @staticmethod
     def create_metadata_source(db: Session, org_id: uuid.UUID, chatbot_id: uuid.UUID, source_type: SourceType, value: str, label: str) -> KnowledgeSource:
@@ -228,10 +247,12 @@ class KnowledgeService:
 
 
     @classmethod
-    def process_source_background(cls, source_id: uuid.UUID):
+    def process_source_background(cls, source_id: uuid.UUID, org_id: uuid.UUID):
         from app.db.session import SessionLocal
+        from sqlalchemy import text
         db = SessionLocal()
         try:
+            db.execute(text("SELECT set_config('app.current_org_id', :org_id, true)"), {"org_id": str(org_id)})
             source = db.query(KnowledgeSource).filter(KnowledgeSource.id == source_id).first()
             if not source:
                 return
@@ -265,17 +286,53 @@ class KnowledgeService:
         elif source.source_type == SourceType.TEXT:
             text = source.value
         elif source.source_type == SourceType.WEBSITE:
-            text = TextExtractor.extract_url_sync(source.value)
+            result = TextExtractor.extract_url_sync(source.value)
+            text = result.text
+
+            # Populate crawl metadata
+            source.pages_crawled = result.pages_crawled
+            source.total_content_chars = result.total_chars
+            source.crawl_duration_secs = int(result.crawl_duration_secs)
+
+            # Store crawled markdown to disk
+            from app.services.storage import StorageService
+            os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+            storage_filename = f"{source.id}_crawl.md"
+            upload_root = os.path.abspath(settings.UPLOAD_DIR)
+            storage_path = os.path.abspath(os.path.join(upload_root, storage_filename))
+
+            content_bytes = text.encode("utf-8")
+            StorageService.save_file(storage_path, content_bytes)
+
+            # Create a document record to track the stored markdown file
+            # If it already exists (e.g. retry), update it
+            doc = source.document
+            if not doc:
+                doc = Document(
+                    source_id=source.id,
+                    chatbot_id=source.chatbot_id,
+                    org_id=source.org_id,
+                    filename=storage_filename,
+                    storage_path=storage_path,
+                    file_type=FileType.TXT,
+                    file_size_bytes=len(content_bytes),
+                    uploaded_at=datetime.now(timezone.utc)
+                )
+                db.add(doc)
+            else:
+                doc.file_size_bytes = len(content_bytes)
+                doc.uploaded_at = datetime.now(timezone.utc)
+            db.flush()
+
+        if not text or not text.strip():
+            raise ValueError("No readable content could be extracted from this source.")
 
         chunks = TextChunker.split_text(text)
         db.query(KnowledgeChunk).filter(KnowledgeChunk.source_id == source.id).delete()
-        try:
-            VectorStoreService.remove_by_source(str(source.chatbot_id), str(source.id))
-        except Exception:
-            logger.warning("Unable to remove previous vectors for source %s", source.id, exc_info=True)
 
         if not chunks:
             source.status = SourceStatus.INDEXED
+            cls._bump_knowledge_base_version(db, source.chatbot_id)
             return
 
         chunk_records = []
@@ -298,6 +355,7 @@ class KnowledgeService:
         for r in chunk_records:
             r.index_status = ChunkStatus.COMPLETED
         source.status = SourceStatus.INDEXED
+        cls._bump_knowledge_base_version(db, source.chatbot_id)
 
     @classmethod
     def _notify_job_update(cls, db: Session, job: KnowledgeJob):
@@ -343,7 +401,7 @@ class KnowledgeService:
             KnowledgeJob.status == KnowledgeJobStatus.QUEUED,
             KnowledgeJob.attempts < KnowledgeJob.max_attempts,
             or_(KnowledgeJob.retry_after == None, KnowledgeJob.retry_after <= now)
-        ).order_by(KnowledgeJob.created_at.asc()).first()
+        ).order_by(KnowledgeJob.created_at.asc()).with_for_update(skip_locked=True).first()
         if not job:
             return False
 
@@ -395,15 +453,12 @@ class KnowledgeService:
             return False
 
         try:
-            if source.source_type == SourceType.FILE and source.document:
+            if source.document and source.source_type in [SourceType.FILE, SourceType.WEBSITE]:
                 from app.services.storage import StorageService
                 StorageService.delete_file(source.document.storage_path)
 
             if source.source_type in [SourceType.FILE, SourceType.TEXT, SourceType.WEBSITE]:
-                try:
-                    VectorStoreService.remove_by_source(str(source.chatbot_id), str(source.id))
-                except Exception:
-                    pass
+                cls._bump_knowledge_base_version(db, source.chatbot_id)
 
             db.delete(source)
             db.commit()
@@ -412,4 +467,3 @@ class KnowledgeService:
             db.rollback()
             logger.error("Database error in delete_source: %s", str(e), exc_info=True)
             raise e
-

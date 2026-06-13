@@ -3,6 +3,7 @@ import { useTheme } from "../../../contexts/ThemeContext";
 import MarkdownRenderer from "../../../components/MarkdownRenderer";
 
 interface ChatMessage {
+  id?: string;
   role: "bot" | "user";
   text: string;
 }
@@ -18,6 +19,7 @@ interface ChatSimulatorProps {
   input?: string;
   onInputChange?: (val: string) => void;
   onSend?: () => void;
+  isSending?: boolean;
   isInteractive?: boolean;
 }
 
@@ -32,6 +34,7 @@ export default function ChatSimulator({
   input = "",
   onInputChange,
   onSend,
+  isSending = false,
   isInteractive = false,
 }: ChatSimulatorProps) {
   const { isDark } = useTheme();
@@ -118,7 +121,7 @@ export default function ChatSimulator({
       {/* Message Feed */}
       <div className={`flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 no-scrollbar ${c("bg-black/[0.01]", "bg-[#131317]")}`}>
         {activeMessages.map((msg, idx) => (
-          <div key={idx} className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
+          <div key={msg.id ?? `${msg.role}-${idx}`} className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
             {msg.role === "bot" ? (
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-[15px] flex-shrink-0 mt-auto shadow-sm border ${toneBg} ${toneBorder}`}
@@ -196,19 +199,24 @@ export default function ChatSimulator({
             type="text"
             value={input}
             onChange={(e) => onInputChange?.(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && onSend?.()}
-            placeholder={isInteractive ? "Type a test message..." : "Chat simulation active"}
-            disabled={!isInteractive}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !isSending) onSend?.();
+            }}
+            placeholder={isSending ? "Waiting for response..." : isInteractive ? "Type a test message..." : "Chat simulation active"}
+            disabled={!isInteractive || isSending}
             className={`flex-1 bg-transparent text-[13px] font-medium outline-none ${
               isDark ? "text-white placeholder:text-[#55635a]" : "text-[#1c1c1e] placeholder:text-[#1c1c1e]/40"
             }`}
           />
           <button
             onClick={onSend}
-            disabled={!isInteractive || !input.trim()}
+            disabled={!isInteractive || isSending || !input.trim()}
+            aria-label={isSending ? "Waiting for response" : "Send message"}
             className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed bg-primary text-primary-foreground hover:opacity-90`}
           >
-            <span className="material-symbols-outlined text-[16px] translate-x-[1px]">send</span>
+            <span className="material-symbols-outlined text-[16px] translate-x-[1px]">
+              {isSending ? "hourglass_top" : "send"}
+            </span>
           </button>
         </div>
       </div>

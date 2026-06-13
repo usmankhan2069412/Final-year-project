@@ -87,13 +87,12 @@ class RoutingRuleBase(BaseModel):
     chatbot_id: Optional[uuid.UUID] = None
 
 class RoutingRuleCreate(RoutingRuleBase):
-    model_target: Optional[str] = None  # deprecated
+    pass
 
 class RoutingRuleResponse(RoutingRuleBase):
     id: uuid.UUID
     config_id: uuid.UUID
     org_id: uuid.UUID
-    model_target: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -69,3 +69,9 @@ semantic_cache_similarity_score = Histogram(
     "Cosine similarity score for cache hits",
     buckets=(0.85, 0.90, 0.92, 0.94, 0.95, 0.96, 0.97, 0.98, 0.99, 1.0)
 )
+
+validated_chunks_count = Histogram(
+    "aina_validated_chunks_count",
+    "Number of chunks that survived relevance validation",
+    buckets=(0, 1, 2, 3, 4, 5, 10, float("inf"))
+)

@@ -1,12 +1,13 @@
-import time
+﻿import time
 import os
 import json
 import hashlib
 import threading
 from pathlib import Path
 import numpy as np
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, Tuple
 from app.services.embedding import embedding_service
+from app.core.config import resolve_openrouter_key
 import logging
 
 logger = logging.getLogger(__name__)
@@ -15,22 +16,11 @@ logger = logging.getLogger(__name__)
 MEMORY_THRESHOLD = 6        # Don't summarize until this many messages exist
 MEMORY_REFRESH_INTERVAL = 4 # Re-summarize every N new turns after threshold
 
-def _resolve_openrouter_key(api_key: str) -> tuple:
-    """Resolve 'managed-by-openrouter' into (effective_key, base_url)."""
-    from app.core.config import settings
-    if api_key != "managed-by-openrouter":
-        return api_key, None
-    effective = getattr(settings, "OPENROUTER_API_KEY", None) or os.getenv("OPENROUTER_API_KEY")
-    if effective:
-        return effective, "https://openrouter.ai/api/v1"
-    effective = getattr(settings, "OPENAI_API_KEY", None) or os.getenv("OPENAI_API_KEY")
-    return (effective, None) if effective else (None, None)
-
 class SemanticRouter:
     """
     A multi-tier intent router that classifies user messages.
-    
-    Tier 1: Fast keyword short-circuit (AGENT_HANDOFF only)
+
+    Tier 1: Fast keyword short-circuit (AGENT_HANDOFF + history transforms)
     Tier 2: LLM-based classification using persona + conversation context
     Tier 3: Embedding cosine similarity fallback (when LLM unavailable)
     """
@@ -84,16 +74,82 @@ class SemanticRouter:
             "okay"
         ]
     }
-    
+
     _encoded_routes: Dict[str, np.ndarray] = {}
     _initialized = False
     _init_lock = threading.Lock()
+
+    HISTORY_TRANSFORM_CONTEXT_MARKERS = {
+        "it", "this", "that", "them", "these", "those", "above", "previous", "last",
+        "answer", "response", "reply", "message", "content", "text",
+        "isay", "ise", "isko", "usko", "inko", "inhe", "upar", "pehle", "pichla",
+        "pichlay", "jawab", "ans", "baat", "msg",
+    }
+
+    HISTORY_TRANSFORM_VERBS = {
+        "summarize", "summarise", "summary", "shorten", "rewrite", "rephrase",
+        "translate", "simplify", "explain", "convert",
+    }
+
+    HISTORY_TRANSFORM_PHRASES = [
+        "make it shorter",
+        "make this shorter",
+        "make them shorter",
+        "make it concise",
+        "make this concise",
+        "bullet points",
+        "bullet point",
+        "key points",
+        "roman urdu",
+        "urdu mein",
+        "urdu me",
+        "roman urdu mein",
+        "roman urdu me",
+        "dobara likho",
+        "short kar",
+        "short karo",
+        "mukhtasar",
+        "khulasa",
+        "tarjuma",
+        "translate them",
+        "translate this",
+        "translate it",
+        "summarize above",
+        "summarise above",
+        "rewrite above",
+    ]
 
     @classmethod
     def _get_routes_hash(cls) -> str:
         # Generate a stable hash of the static routes dictionary
         routes_str = json.dumps(cls.ROUTES, sort_keys=True)
         return hashlib.sha256(routes_str.encode("utf-8")).hexdigest()
+
+    @classmethod
+    def _matches_history_transform(cls, message: str) -> bool:
+        msg_lower = message.lower().strip()
+        if not msg_lower:
+            return False
+
+        words = msg_lower.split()
+        word_set = set(words)
+        has_context_marker = bool(word_set & cls.HISTORY_TRANSFORM_CONTEXT_MARKERS)
+
+        if any(phrase in msg_lower for phrase in cls.HISTORY_TRANSFORM_PHRASES):
+            if "roman urdu" in msg_lower and not has_context_marker and len(words) > 5:
+                return False
+            return True
+
+        has_transform_verb = any(word in cls.HISTORY_TRANSFORM_VERBS for word in words)
+        if not has_transform_verb:
+            return False
+
+        if has_context_marker:
+            return True
+
+        # Short imperative messages usually refer to the previous answer:
+        # "summarize", "rewrite in bullets", "short kar do".
+        return len(words) <= 4 and not any(ch in message for ch in ['"', "'", ":"])
 
     @classmethod
     def _initialize(cls):
@@ -108,10 +164,10 @@ class SemanticRouter:
             logger.info("Initializing Semantic Router...")
             try:
                 from app.core.config import settings
-                
+
                 current_hash = cls._get_routes_hash()
                 cache_path = Path("data/semantic_router_cache.json")
-                
+
                 loaded_from_cache = False
                 if cache_path.exists():
                     try:
@@ -138,7 +194,7 @@ class SemanticRouter:
                             normalized_vectors = vectors / norms
                             cls._encoded_routes[intent] = normalized_vectors
                             cache_embeddings[intent] = normalized_vectors.tolist()
-                    
+
                     if cls._encoded_routes:
                         try:
                             cache_path.parent.mkdir(parents=True, exist_ok=True)
@@ -171,7 +227,7 @@ class SemanticRouter:
     ) -> Optional[str]:
         """
         Multi-tier intent classification:
-        1. Keyword short-circuit (AGENT_HANDOFF only — free, instant)
+        1. Keyword short-circuit (AGENT_HANDOFF only â€” free, instant)
         2. LLM classification (persona-aware, context-aware)
         3. Embedding fallback (when LLM unavailable)
         """
@@ -180,7 +236,7 @@ class SemanticRouter:
         t0 = time.monotonic()
         msg_lower = message.lower().strip()
 
-        # --- Tier 1: Fast keyword short-circuit for Agent Handoff ---
+        # --- Tier 1: Fast keyword short-circuit for Agent Handoff / History Transform ---
         handoff_keywords = [
             "talk to human", "speak with an agent", "connect to a person",
             "human support", "representative", "agent se connect karo",
@@ -193,7 +249,29 @@ class SemanticRouter:
             intent_classification_method.labels(method="keyword_shortcircuit").inc()
             return "AGENT_HANDOFF"
 
-        # --- Tier 2: LLM-based classification (persona + context aware) ---
+        normalized_msg = msg_lower.strip(" .!?")
+        if normalized_msg in cls.ROUTES.get("CONVERSATIONAL", []):
+            latency = time.monotonic() - t0
+            intent_classification_latency.observe(latency)
+            intent_classification_method.labels(method="keyword_shortcircuit").inc()
+            return "CONVERSATIONAL"
+
+        if cls._matches_history_transform(message):
+            latency = time.monotonic() - t0
+            intent_classification_latency.observe(latency)
+            intent_classification_method.labels(method="keyword_shortcircuit").inc()
+            return "HISTORY_TRANSFORM"
+
+        # --- Tier 2: Embedding Fast-Path (First LLM Avoidance) ---
+        # Prioritize embedding search for high-confidence intents to save LLM costs.
+        emb_intent, emb_score = cls._classify_with_embeddings(message, 0.0) # get best regardless of threshold
+        if emb_score >= 0.85 and emb_intent:
+            latency = time.monotonic() - t0
+            intent_classification_latency.observe(latency)
+            intent_classification_method.labels(method="embedding_fastpath").inc()
+            return emb_intent
+
+        # --- Tier 3: LLM-based classification (persona + context aware) ---
         if persona and api_key:
             llm_result = cls._classify_with_llm(
                 message=message,
@@ -209,12 +287,14 @@ class SemanticRouter:
                 intent_classification_method.labels(method="llm").inc()
                 return llm_result
 
-        # --- Tier 3: Embedding fallback (existing behavior) ---
-        result = cls._classify_with_embeddings(message, threshold)
-        latency = time.monotonic() - t0
-        intent_classification_latency.observe(latency)
-        intent_classification_method.labels(method="embedding_fallback").inc()
-        return result
+        # --- Tier 4: Embedding fallback (existing behavior) ---
+        if emb_score >= threshold and emb_intent:
+            latency = time.monotonic() - t0
+            intent_classification_latency.observe(latency)
+            intent_classification_method.labels(method="embedding_fallback").inc()
+            return emb_intent
+
+        return None
 
     @classmethod
     def _classify_with_llm(
@@ -231,7 +311,7 @@ class SemanticRouter:
             from langchain_openai import ChatOpenAI
             from langchain_core.messages import SystemMessage, HumanMessage
 
-            effective_key, base_url = _resolve_openrouter_key(api_key)
+            effective_key, base_url = resolve_openrouter_key(api_key)
             if not effective_key:
                 return None
 
@@ -264,10 +344,15 @@ class SemanticRouter:
                 "- CONVERSATIONAL: Greetings, small talk, rapport building, thanks, compliments, "
                 "farewells, acknowledgments, social chitchat, emotional expressions, or any "
                 "message where the user is relating socially rather than seeking factual "
-                "information. Consider the persona's role — some personas should handle "
+                "information. Consider the persona's role â€” some personas should handle "
                 "emotional messages conversationally rather than escalating.\n"
                 "- RAG_LOOKUP: Questions or requests that need factual information from the "
-                "knowledge base — topics, policies, products, services, how-to, explanations.\n"
+                "knowledge base â€” topics, policies, products, services, how-to, explanations.\n"
+                "- HISTORY_TRANSFORM: The user wants to transform prior chat content, especially "
+                "the previous assistant answer. Examples: translate this/them, make it shorter, "
+                "summarize above, rewrite this, make bullet points, explain again, or convert to "
+                "Roman Urdu. Do not classify these as RAG_LOOKUP unless the user asks for new "
+                "facts from the knowledge base.\n"
                 "- AGENT_HANDOFF: User explicitly and directly asks to speak with a human agent, "
                 "representative, or real person.\n"
                 "- FRUSTRATION: User expresses strong anger, dissatisfaction, or hostility "
@@ -277,11 +362,11 @@ class SemanticRouter:
 
             result = llm.invoke([
                 SystemMessage(content=sys_prompt),
-                HumanMessage(content=f'User message: "{message}"\nIntent:')
+                HumanMessage(content="User message: " + message + "\n\nIntent:")
             ]).content.strip().upper()
 
             # Validate the LLM returned a known intent
-            valid_intents = {"CONVERSATIONAL", "RAG_LOOKUP", "AGENT_HANDOFF", "FRUSTRATION"}
+            valid_intents = {"CONVERSATIONAL", "RAG_LOOKUP", "HISTORY_TRANSFORM", "AGENT_HANDOFF", "FRUSTRATION"}
             if result in valid_intents:
                 logger.info(f"LLM intent classified: {result} (message: {message[:50]})")
                 return result
@@ -297,7 +382,7 @@ class SemanticRouter:
     def _build_classifier_context(cls, history: List[Any], memory: Optional[dict]) -> str:
         """
         Build conversation context for the intent classifier.
-        Short conversations (≤6 msgs): use raw history directly (zero LLM cost).
+        Short conversations (â‰¤6 msgs): use raw history directly (zero LLM cost).
         Long conversations (>6 msgs): use structured summary + last 4 raw messages.
         """
         from app.models.conversation import MessageRole
@@ -306,14 +391,14 @@ class SemanticRouter:
             return "New conversation"
 
         if len(history) <= MEMORY_THRESHOLD:
-            # Short conversation — raw history is small enough
+            # Short conversation â€” raw history is small enough
             lines = []
             for m in history[-6:]:
                 role_label = "USER" if m.role == MessageRole.USER else "BOT"
                 lines.append(f"{role_label}: {m.content}")
             return "Recent messages:\n" + "\n".join(lines)
 
-        # Long conversation — use summary + recent raw messages
+        # Long conversation â€” use summary + recent raw messages
         if memory and memory.get("summary"):
             summary = memory.get("summary", "")
             mood = memory.get("user_mood", "unknown")
@@ -330,7 +415,7 @@ class SemanticRouter:
                 f"Recent:\n" + "\n".join(lines)
             )
 
-        # Long conversation but no summary yet — use last 6 raw
+        # Long conversation but no summary yet â€” use last 6 raw
         lines = []
         for m in history[-6:]:
             role_label = "USER" if m.role == MessageRole.USER else "BOT"
@@ -338,42 +423,42 @@ class SemanticRouter:
         return "Recent messages:\n" + "\n".join(lines)
 
     @classmethod
-    def _classify_with_embeddings(cls, message: str, threshold: float = 0.82) -> Optional[str]:
-        """Original embedding-based classification — used as fallback when LLM is unavailable."""
+    def _classify_with_embeddings(cls, message: str, threshold: float = 0.82) -> Tuple[Optional[str], float]:
+        """Original embedding-based classification â€” used as fallback when LLM is unavailable."""
         if not cls._initialized:
             cls._initialize()
-            
+
         if not cls._initialized or not cls._encoded_routes:
-            return None
+            return None, 0.0
 
         try:
             # Encode user message
             query_vector = embedding_service.encode([message])[0]
             query_norm = np.linalg.norm(query_vector)
             if query_norm == 0:
-                return None
-            
+                return None, 0.0
+
             normalized_query = query_vector / query_norm
-            
+
             best_intent = None
             best_score = -1.0
-            
+
             for intent, route_vectors in cls._encoded_routes.items():
                 # Compute cosine similarities
                 similarities = np.dot(route_vectors, normalized_query)
                 max_sim = np.max(similarities)
-                
+
                 if max_sim > best_score:
                     best_score = max_sim
                     best_intent = intent
-            
+
             if best_score >= threshold:
                 logger.info(f"Semantic Router matched '{best_intent}' with score {best_score:.3f}")
-                return best_intent
+                return best_intent, float(best_score)
             else:
                 logger.info(f"Semantic Router fallback. Highest score was {best_score:.3f} for '{best_intent}'")
-                return None
-                
+                return best_intent, float(best_score)
+
         except Exception as e:
             logger.error(f"Semantic classification error: {e}")
-            return None
+            return None, 0.0

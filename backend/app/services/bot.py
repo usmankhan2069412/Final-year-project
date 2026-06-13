@@ -17,10 +17,16 @@ from app.schemas.bot import (
 
 logger = logging.getLogger(__name__)
 
-# Derive a valid 32-byte base64 key from settings.SECRET_KEY for Fernet encryption
-_key_bytes = hashlib.sha256(settings.SECRET_KEY.encode()).digest()
-_fernet_key = base64.urlsafe_b64encode(_key_bytes)
-_cipher = Fernet(_fernet_key)
+# Lazy-initialized Fernet cipher derived from settings.SECRET_KEY
+_fernet_cipher = None
+
+def _get_cipher() -> Fernet:
+    global _fernet_cipher
+    if _fernet_cipher is None:
+        key_bytes = hashlib.sha256(settings.SECRET_KEY.encode()).digest()
+        fernet_key = base64.urlsafe_b64encode(key_bytes)
+        _fernet_cipher = Fernet(fernet_key)
+    return _fernet_cipher
 
 
 class BotService:
@@ -85,24 +91,38 @@ class BotService:
             return None
 
         try:
+            changed = False
             if persona_in.name is not None:
+                changed = changed or db_persona.name != persona_in.name
                 db_persona.name = persona_in.name
             if persona_in.language is not None:
+                changed = changed or db_persona.language != persona_in.language
                 db_persona.language = persona_in.language
             if persona_in.greeting is not None:
+                changed = changed or db_persona.greeting != persona_in.greeting
                 db_persona.greeting = persona_in.greeting
             if persona_in.fallback is not None:
+                changed = changed or db_persona.fallback != persona_in.fallback
                 db_persona.fallback = persona_in.fallback
             if persona_in.description is not None:
+                changed = changed or db_persona.description != persona_in.description
                 db_persona.description = persona_in.description
 
             if persona_in.traits is not None:
+                existing_traits = [
+                    t.trait_name
+                    for t in db.query(PersonaTrait).filter(PersonaTrait.persona_id == persona_id).all()
+                ]
+                changed = changed or existing_traits != persona_in.traits
                 # Remove old traits
                 db.query(PersonaTrait).filter(PersonaTrait.persona_id == persona_id).delete()
                 # Add new traits
                 for trait_name in persona_in.traits:
                     trait = PersonaTrait(persona_id=persona_id, trait_name=trait_name)
                     db.add(trait)
+
+            if changed:
+                db_persona.persona_version = (db_persona.persona_version or 1) + 1
 
             db.commit()
             db.refresh(db_persona)
@@ -207,6 +227,8 @@ class BotService:
                 ).first()
                 if not persona:
                     raise ValueError("Accessible Persona not found")
+                if db_chatbot.persona_id != chatbot_in.persona_id:
+                    db_chatbot.knowledge_base_version = (db_chatbot.knowledge_base_version or 1) + 1
                 db_chatbot.persona_id = chatbot_in.persona_id
 
             if chatbot_in.name is not None:
@@ -284,12 +306,12 @@ class ModelConfigService:
     @staticmethod
     def encrypt_key(api_key: str) -> str:
         """Encrypt an API key."""
-        return _cipher.encrypt(api_key.encode()).decode()
+        return _get_cipher().encrypt(api_key.encode()).decode()
 
     @staticmethod
     def decrypt_key(encrypted_key: str) -> str:
         """Decrypt an API key."""
-        return _cipher.decrypt(encrypted_key.encode()).decode()
+        return _get_cipher().decrypt(encrypted_key.encode()).decode()
 
     @staticmethod
     def create_model_config(
@@ -325,7 +347,6 @@ class ModelConfigService:
                         org_id=org_id,
                         chatbot_id=rule_in.chatbot_id,
                         intent=rule_in.intent,
-                        model_target=rule_in.model_target,
                         priority=rule_in.priority,
                         fallback_config_id=rule_in.fallback_config_id,
                         is_active=rule_in.is_active,
@@ -404,7 +425,6 @@ class ModelConfigService:
                         org_id=org_id,
                         chatbot_id=rule_in.chatbot_id,
                         intent=rule_in.intent,
-                        model_target=rule_in.model_target,
                         priority=rule_in.priority,
                         fallback_config_id=rule_in.fallback_config_id,
                         is_active=rule_in.is_active,

@@ -5,6 +5,7 @@ import { useGSAP } from "@gsap/react";
 import { useGoogleLogin } from '@react-oauth/google';
 import { useAuth } from "../contexts/AuthContext";
 import { Button } from "../components/ui/button";
+import { toast } from "sonner";
 
 gsap.registerPlugin(useGSAP);
 
@@ -181,6 +182,7 @@ export default function Signup() {
         login(loginData.access_token);
       }
 
+      toast.success("Successfully registered!");
       setLocation("/dashboard");
     } catch (err: any) {
       setApiError(err.message || "Failed to connect to the backend server.");
@@ -227,6 +229,7 @@ export default function Signup() {
         
         const data = await response.json();
         login(data.access_token);
+        toast.success("Successfully registered with Google!");
         setLocation("/dashboard");
       } catch (err: any) {
         setApiError(err.message || "Failed to authenticate with Google.");

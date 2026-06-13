@@ -55,7 +55,6 @@ class RoutingRule(Base):
     org_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
     chatbot_id = Column(UUID(as_uuid=True), ForeignKey("chatbots.id", ondelete="CASCADE"), nullable=True)
     intent = Column(String(80), nullable=False)
-    model_target = Column(String(80), nullable=True)  # Deprecated in favor of config_id.model_name
     priority = Column(Integer, nullable=False, default=0)
     fallback_config_id = Column(UUID(as_uuid=True), ForeignKey("ai_model_configs.id", ondelete="SET NULL"), nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)

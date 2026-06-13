@@ -104,10 +104,14 @@ class EscalationRouter:
         )
         db.add(bot_msg)
         
-        chatbot.total_messages += 2
+        increment = 2 if write_user_message else 1
+        db.query(Chatbot).filter(Chatbot.id == chatbot.id).update(
+            {Chatbot.total_messages: Chatbot.total_messages + increment}
+        )
         if is_new_conv:
-            chatbot.total_conversations += 1
-        db.add(chatbot)
+            db.query(Chatbot).filter(Chatbot.id == chatbot.id).update(
+                {Chatbot.total_conversations: Chatbot.total_conversations + 1}
+            )
         
         db.commit()
 

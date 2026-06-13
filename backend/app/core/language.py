@@ -47,8 +47,6 @@ def detect_message_language(text: str, history: Optional[List[Any]] = None) -> s
     elif english_score > roman_score:
         return "english"
     else:
-        if roman_score > 0:
-            return "roman_urdu"
         return _fallback_to_history(history)
 
 def _fallback_to_history(history: Optional[List[Any]]) -> str:

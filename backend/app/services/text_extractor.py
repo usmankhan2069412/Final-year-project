@@ -1,21 +1,38 @@
+import asyncio
+import concurrent.futures
 import csv
 import io
 import logging
 import re
+import threading
 import time
 from collections import deque
+from dataclasses import dataclass
 from typing import Optional
 from urllib.parse import urljoin, urlparse
 
 import docx
 import fitz  # PyMuPDF
-import httpx
+from curl_cffi import requests as cffi_requests
+from curl_cffi.requests.errors import RequestsError
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# CrawlResult dataclass
+# ---------------------------------------------------------------------------
+@dataclass
+class CrawlResult:
+    text: str
+    pages_crawled: int
+    total_chars: int
+    crawl_duration_secs: float
+
 
 # ---------------------------------------------------------------------------
 # Noise selectors — mirrors web-analyzer/src/server.js noiseSelectors array
@@ -78,21 +95,52 @@ _PAGE_MARKDOWN_LIMIT = 12_000
 _NAV_HEADING_TEXTS = {"menu", "navigation", "quick links", "useful links", "social media"}
 
 # Maximum total wall-clock time for a single URL crawl job.
-# Prevents runaway jobs (e.g. 15 pages × 45 s/page = 675 s worst case).
-_CRAWL_BUDGET_SECS = 90
+# 5 minutes gives enough headroom for 15 pages × 45 s timeout with concurrent
+# workers, while still bounding runaway jobs.
+_CRAWL_BUDGET_SECS = 300
+
+# Thread-local storage for per-thread curl_cffi sessions
+_thread_local = threading.local()
 
 
-def _build_client() -> httpx.Client:
-    """Return a configured synchronous httpx client."""
-    return httpx.Client(
+def _build_client() -> cffi_requests.Session:
+    """Return a configured synchronous curl_cffi session."""
+    return cffi_requests.Session(
         timeout=settings.SCRAPE_TIMEOUT_SECS,
-        headers={"User-Agent": _USER_AGENT, "Accept": _ACCEPT_HEADER},
-        follow_redirects=True,
+        impersonate="chrome120",
+        headers={"Accept": _ACCEPT_HEADER},
+        allow_redirects=True,
         max_redirects=5,
     )
 
 
-def _clean_soup(soup: BeautifulSoup) -> BeautifulSoup:
+def _get_thread_client() -> cffi_requests.Session:
+    """Lazily create and cache a Session per thread."""
+    client = getattr(_thread_local, "client", None)
+    if client is None:
+        client = _build_client()
+        _thread_local.client = client
+    return client
+
+
+def _normalize_url(url: str) -> str:
+    """Normalize a URL for dedup: strip query/fragment, trailing slash,
+    www. prefix, and lowercase scheme+host."""
+    parsed = urlparse(url)
+    scheme = parsed.scheme.lower()
+    hostname = parsed.hostname or ""
+    if hostname.startswith("www."):
+        hostname = hostname[4:]
+    port = parsed.port
+    netloc = f"{hostname}:{port}" if port else hostname
+    path = parsed.path
+    # Strip trailing slash unless the path is root "/"
+    if path != "/" and path.endswith("/"):
+        path = path.rstrip("/")
+    return f"{scheme}://{netloc}{path}"
+
+
+def _clean_soup(soup: BeautifulSoup) -> None:
     """Remove noise elements from a BeautifulSoup tree in-place."""
     # Remove noise selectors
     for selector in _NOISE_SELECTORS:
@@ -110,31 +158,18 @@ def _clean_soup(soup: BeautifulSoup) -> BeautifulSoup:
             heading.decompose()
 
     # Remove lists that contain only anchor jump-links (#hash)
+    def _is_jump_link_item(li) -> bool:
+        links = li.find_all("a")
+        return bool(links) and all(a.get("href", "").startswith("#") for a in links)
+
     for lst in soup.find_all(["ul", "ol"]):
         items = lst.find_all("li")
-        if not items:
-            continue
-        only_anchors = True
-        for li in items:
-            links_in_li = li.find_all("a")
-            if not links_in_li:
-                only_anchors = False
-                break
-            for a in links_in_li:
-                href = a.get("href", "")
-                if not href.startswith("#"):
-                    only_anchors = False
-                    break
-            if not only_anchors:
-                break
-        if only_anchors:
+        if items and all(_is_jump_link_item(li) for li in items):
             lst.decompose()
 
     # Strip all images (avoids broken markdown image tags)
     for img in soup.find_all("img"):
         img.decompose()
-
-    return soup
 
 
 def _html_to_markdown(soup: BeautifulSoup) -> str:
@@ -142,22 +177,29 @@ def _html_to_markdown(soup: BeautifulSoup) -> str:
     Extract main content from soup and convert to clean Markdown.
     Mirrors the web-analyzer turndown conversion.
     """
-    # Try to find a main content element before falling back to body
-    content_el = (
-        soup.find("main")
-        or soup.find(attrs={"role": "main"})
-        or soup.find("article")
-        or soup.find(id=re.compile(r"content|main", re.I))
-        or soup.find(class_=re.compile(r"content|main", re.I))
-        or soup.find("body")
-    )
+    # Try to find a main content container.
+    # Avoid picking a single <article> if there are multiple (e.g. blog index),
+    # to prevent losing most of the page's content.
+    content_el = None
+    for selector in [
+        lambda: soup.find("main"),
+        lambda: soup.find(attrs={"role": "main"}),
+        lambda: soup.find(id=re.compile(r"content|main", re.I)),
+        lambda: soup.find(class_=re.compile(r"content|main", re.I)),
+        lambda: soup.find("article") if len(soup.find_all("article")) == 1 else None,
+        lambda: soup.find("body"),
+    ]:
+        content_el = selector()
+        if content_el:
+            break
+
     html_fragment = str(content_el) if content_el else str(soup)
 
     raw_md = md(
         html_fragment,
         heading_style="atx",
         bullets="-",
-        strip=["script", "style", "img", "a"],  # strip links to keep only text
+        strip=["script", "style", "img"],  # preserve anchor text for semantic context
     )
 
     # Clean stray symbols and collapse blank lines — mirrors web-analyzer post-processing
@@ -174,12 +216,44 @@ def _html_to_markdown(soup: BeautifulSoup) -> str:
     return cleaned[:_PAGE_MARKDOWN_LIMIT]
 
 
-def _scrape_page_sync(client: httpx.Client, url: str) -> dict:
+def _extract_internal_links(soup: BeautifulSoup, base_url: str) -> list[str]:
+    """Extract and normalize all internal links from the page."""
+    parsed_origin = urlparse(base_url)
+    origin_host = parsed_origin.netloc.split(":")[0].lower()
+    if origin_host.startswith("www."):
+        origin_host = origin_host[4:]
+
+    links = []
+    for a in soup.find_all("a", href=True):
+        href = a["href"].strip()
+        link_text = a.get_text().strip()
+
+        if not href or href.startswith(("#", "javascript")) or len(link_text) <= 1:
+            continue
+
+        try:
+            resolved = urlparse(urljoin(base_url, href))
+            resolved_host = resolved.netloc.split(":")[0].lower()
+            if resolved_host.startswith("www."):
+                resolved_host = resolved_host[4:]
+
+            if resolved.scheme in ("http", "https") and resolved_host == origin_host:
+                resolved_str = _normalize_url(resolved.geturl())
+                if not any(resolved.path.lower().endswith(ext) for ext in _SKIP_EXTENSIONS):
+                    links.append(resolved_str)
+        except Exception:
+            pass
+
+    return links
+
+
+def _scrape_page_sync(url: str) -> dict:
     """
-    Scrape a single page synchronously.
+    Scrape a single page synchronously using a per-thread curl_cffi session.
     Returns a dict with keys: url, title, content_markdown, links, error.
     Mirrors web-analyzer's scrapeURL() function.
     """
+    client = _get_thread_client()
     try:
         resp = client.get(url)
         resp.raise_for_status()
@@ -200,38 +274,7 @@ def _scrape_page_sync(client: httpx.Client, url: str) -> dict:
         )
 
         # Collect internal links before noise removal alters the tree
-        parsed_origin = urlparse(url)
-        links = []
-        for a in soup.find_all("a", href=True):
-            href = a["href"].strip()
-            link_text = a.get_text().strip()
-            if (
-                href
-                and not href.startswith("#")
-                and not href.startswith("javascript")
-                and len(link_text) > 1
-            ):
-                try:
-                    resolved = urlparse(urljoin(url, href))
-                    
-                    # Normalize domains by stripping port and 'www.' subdomain to prevent mismatch
-                    resolved_host = resolved.netloc.split(":")[0].lower()
-                    origin_host = parsed_origin.netloc.split(":")[0].lower()
-                    if resolved_host.startswith("www."):
-                        resolved_host = resolved_host[4:]
-                    if origin_host.startswith("www."):
-                        origin_host = origin_host[4:]
-                        
-                    if resolved.scheme in ("http", "https") and resolved_host == origin_host:
-                        # Strip query params + fragment before dedup to prevent crawl traps
-                        # (e.g. ?page=1, ?sort=asc, ?filter=x all collapse to the same URL)
-                        resolved = resolved._replace(query="", fragment="")
-                        resolved_str = resolved.geturl().rstrip("/")
-                        path_lower = resolved.path.lower()
-                        if not any(path_lower.endswith(ext) for ext in _SKIP_EXTENSIONS):
-                            links.append(resolved_str)
-                except Exception:
-                    pass
+        links = _extract_internal_links(soup, url)
 
         logger.info("Url: %s - Extracted %d raw links, filtered to %d internal links", url, len(soup.find_all("a")), len(links))
         _clean_soup(soup)
@@ -245,41 +288,27 @@ def _scrape_page_sync(client: httpx.Client, url: str) -> dict:
             "error": None,
         }
 
-    except httpx.HTTPStatusError as exc:
-        status_code = exc.response.status_code
-        if status_code == 403:
-            msg = (
-                "Access blocked (403 Forbidden). This site uses Cloudflare or a "
-                "firewall that blocks automated crawlers. Try a different URL."
-            )
-        elif status_code == 401:
-            msg = "This page requires login/authentication and cannot be crawled."
-        elif status_code == 404:
-            msg = "Page not found (404). Please check the URL is correct."
-        elif status_code == 429:
-            msg = "Rate limited (429). The site is blocking too-frequent requests. Try again later."
-        elif status_code >= 500:
-            msg = f"The website's server returned an error ({status_code}). Try again later."
-        else:
-            msg = f"HTTP error {status_code} while crawling this page."
-        logger.warning("Scrape failed for %s: %s", url, msg)
-        return {"url": url, "title": "", "content_markdown": "", "links": [], "error": msg}
+    except RequestsError as exc:
+        status_code = getattr(exc.response, 'status_code', None) if hasattr(exc, 'response') and exc.response else None
 
-    except httpx.TimeoutException:
-        msg = (
-            "Scraping timed out. The site may be too slow or blocking automated access. "
-            "Try a simpler/smaller page URL."
-        )
-        logger.warning("Scrape timed out for %s", url)
-        return {"url": url, "title": "", "content_markdown": "", "links": [], "error": msg}
+        if status_code:
+            if status_code == 403:
+                msg = "Access blocked (403 Forbidden). This site uses Cloudflare or a firewall."
+            elif status_code == 401:
+                msg = "This page requires login/authentication."
+            elif status_code == 404:
+                msg = "Page not found (404)."
+            elif status_code == 429:
+                msg = "Rate limited (429). The site is blocking too-frequent requests."
+            elif status_code >= 500:
+                msg = f"The website's server returned an error ({status_code})."
+            else:
+                msg = f"HTTP error {status_code} while crawling this page."
+            logger.warning("Scrape failed for %s: %s", url, msg)
+            return {"url": url, "title": "", "content_markdown": "", "links": [], "error": msg}
 
-    except httpx.ConnectError:
-        msg = "Could not connect to the website. Please check the URL is correct and the site is online."
-        logger.warning("Connection error for %s", url)
-        return {"url": url, "title": "", "content_markdown": "", "links": [], "error": msg}
-
-    except httpx.RequestError as exc:
-        msg = f"Network error while reaching the website: {exc}"
+        # If it's a timeout or connection error (curl_cffi raises RequestsError for these too)
+        msg = f"Network or timeout error: {exc}"
         logger.warning("Request error for %s: %s", url, exc)
         return {"url": url, "title": "", "content_markdown": "", "links": [], "error": msg}
 
@@ -302,76 +331,87 @@ def _crawl_site_sync(
     start_url: str,
     max_pages: int = None,
     max_depth: int = None,
-) -> list[dict]:
+) -> tuple[list[dict], int, float]:
     """
     BFS multi-page crawl starting at start_url using ThreadPoolExecutor for concurrent requests.
     Mirrors web-analyzer's crawlSite() function with level-based concurrency.
 
-    Returns a list of page dicts (url, title, content_markdown, error).
+    Returns a tuple of (page_dicts, pages_crawled, crawl_duration_secs).
     If the root page fails, raises immediately so the job is marked FAILED.
     """
-    import concurrent.futures
     max_pages = max_pages or settings.SCRAPE_MAX_PAGES
     max_depth = max_depth or settings.SCRAPE_MAX_DEPTH
 
     visited: set[str] = set()
     results: list[dict] = []
     crawl_start = time.monotonic()
-    
+
+    # Normalize the start URL for consistent visited-set tracking
+    norm_start = _normalize_url(start_url)
+
     # We BFS crawl by depth levels in parallel
     current_depth_urls = [start_url]
 
-    with _build_client() as client, concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-        for depth in range(max_depth + 1):
-            if not current_depth_urls or len(results) >= max_pages:
-                break
-                
-            # Filter out already visited URLs
-            urls_to_crawl = []
-            for url in current_depth_urls:
-                norm = url.rstrip("/") if len(url) > len(urlparse(url).scheme + "://" + urlparse(url).netloc) else url
-                if norm not in visited:
-                    visited.add(norm)
-                    urls_to_crawl.append(url)
-            
-            if not urls_to_crawl:
-                continue
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        try:
+            for depth in range(max_depth + 1):
+                if not current_depth_urls or len(results) >= max_pages:
+                    break
 
-            # Limit to remaining page slots
-            remaining_slots = max_pages - len(results)
-            urls_to_crawl = urls_to_crawl[:remaining_slots]
+                # Filter out already visited URLs
+                urls_to_crawl = []
+                for url in current_depth_urls:
+                    norm = _normalize_url(url)
+                    if norm not in visited:
+                        visited.add(norm)
+                        urls_to_crawl.append(url)
 
-            logger.info("Crawling depth %d in parallel: %d pages...", depth, len(urls_to_crawl))
-            
-            # Map scraping tasks to thread pool
-            futures = {executor.submit(_scrape_page_sync, client, url): url for url in urls_to_crawl}
-            
-            next_depth_links = []
-            for future in concurrent.futures.as_completed(futures):
-                url = futures[future]
-                try:
-                    page = future.result()
-                    if page["error"] and depth == 0:
-                        raise RuntimeError(f"Failed to scrape the starting URL: {page['error']}")
-                    results.append(page)
-                    if not page["error"]:
-                        next_depth_links.extend(page["links"])
-                except Exception as exc:
-                    if depth == 0:
-                        raise RuntimeError(f"Failed to scrape the starting URL: {exc}")
-                    logger.warning("Scrape task failed for %s: %s", url, exc)
-            
-            # Prepare next level URLs (deduplicate links)
-            current_depth_urls = list(dict.fromkeys(next_depth_links))
-            
-            if time.monotonic() - crawl_start > _CRAWL_BUDGET_SECS:
-                logger.warning(
-                    "Crawl budget of %ds exceeded for %s — stopping.",
-                    _CRAWL_BUDGET_SECS, start_url
-                )
-                break
+                if not urls_to_crawl:
+                    continue
 
-    return results
+                # Limit to remaining page slots
+                remaining_slots = max_pages - len(results)
+                urls_to_crawl = urls_to_crawl[:remaining_slots]
+
+                logger.info("Crawling depth %d in parallel: %d pages...", depth, len(urls_to_crawl))
+
+                # Map scraping tasks to thread pool (each worker uses its own client)
+                futures = {executor.submit(_scrape_page_sync, url): url for url in urls_to_crawl}
+
+                next_depth_links = []
+                for future in concurrent.futures.as_completed(futures):
+                    url = futures[future]
+                    try:
+                        page = future.result()
+                        if page["error"] and depth == 0:
+                            raise RuntimeError(f"Failed to scrape the starting URL: {page['error']}")
+                        results.append(page)
+                        if not page["error"]:
+                            next_depth_links.extend(page["links"])
+                    except Exception as exc:
+                        if depth == 0:
+                            raise RuntimeError(f"Failed to scrape the starting URL: {exc}")
+                        logger.warning("Scrape task failed for %s: %s", url, exc)
+
+                # Prepare next level URLs (deduplicate links)
+                current_depth_urls = list(dict.fromkeys(next_depth_links))
+
+                if time.monotonic() - crawl_start > _CRAWL_BUDGET_SECS:
+                    logger.warning(
+                        "Crawl budget of %ds exceeded for %s — stopping.",
+                        _CRAWL_BUDGET_SECS, start_url
+                    )
+                    break
+
+                # Brief pause between depth levels to avoid rate-limiting by target servers
+                time.sleep(0.3)
+        finally:
+            # Clean up per-thread httpx clients created by workers
+            # (the executor is shutting down so workers are done)
+            pass
+
+    crawl_duration = time.monotonic() - crawl_start
+    return results, len(results), crawl_duration
 
 
 def _pages_to_text(pages: list[dict]) -> str:
@@ -422,23 +462,35 @@ class TextExtractor:
         return "\n".join(text)
 
     @staticmethod
-    def extract_url_sync(url: str) -> str:
+    def extract_url_sync(url: str) -> CrawlResult:
         """
         Synchronous multi-page crawl + Markdown extraction.
         Safe to call from APScheduler threads or any sync context.
-        Returns a single consolidated Markdown string for downstream chunking.
-        Raises RuntimeError if the root URL cannot be scraped.
+        Returns a CrawlResult with consolidated Markdown and crawl metadata.
+        Raises RuntimeError if the root URL cannot be scraped or content is too thin.
         """
-        pages = _crawl_site_sync(url)
-        return _pages_to_text(pages)
+        pages, pages_crawled, crawl_duration = _crawl_site_sync(url)
+        text = _pages_to_text(pages)
+
+        if len(text) < 50:
+            raise RuntimeError(
+                "No readable content found. The site may require JavaScript "
+                "rendering or may be blocking automated access."
+            )
+
+        return CrawlResult(
+            text=text,
+            pages_crawled=pages_crawled,
+            total_chars=len(text),
+            crawl_duration_secs=round(crawl_duration, 2),
+        )
 
     @staticmethod
-    async def extract_url(url: str) -> str:
+    async def extract_url(url: str) -> CrawlResult:
         """
         Async wrapper kept for API-level use.
         Delegates to the sync implementation via a thread to avoid blocking the
         event loop during long crawls.
         """
-        import asyncio
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, TextExtractor.extract_url_sync, url)

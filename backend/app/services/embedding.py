@@ -126,8 +126,8 @@ class EmbeddingService:
                         raise
 
             # Proactive inter-batch throttle — avoid hitting the rate limit
-            if batch_start + EMBEDDING_BATCH_SIZE < len(texts):
-                time.sleep(1)
+            if batch_start + EMBEDDING_BATCH_SIZE < len(texts) and settings.EMBEDDING_BATCH_DELAY > 0:
+                time.sleep(settings.EMBEDDING_BATCH_DELAY)
 
         return np.array(all_embeddings, dtype=np.float32)
 

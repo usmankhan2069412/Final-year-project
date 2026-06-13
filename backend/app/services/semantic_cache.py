@@ -11,8 +11,6 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Matches the model used in VectorStoreService — must stay in sync
-_EMBEDDING_MODEL = "gemini-embedding-2"
 
 class SemanticCacheService:
     
@@ -30,13 +28,15 @@ class SemanticCacheService:
         rewritten_query: str, 
         knowledge_base_version: int, 
         persona_version: int,
-        threshold: float = 0.95,
+        threshold: Optional[float] = None,
         db: Optional[Session] = None
     ) -> Tuple[Optional[str], Optional[List[str]], Optional[float]]:
         """
         Checks the semantic cache for a similar rewritten query.
         Returns (response_text, source_chunk_ids, similarity_score) or (None, None, None).
         """
+        if threshold is None:
+            threshold = settings.CACHE_SIMILARITY_THRESHOLD
         close_db = False
         if db is None:
             from app.db.session import SessionLocal
@@ -48,7 +48,6 @@ class SemanticCacheService:
             query_list = query_vector.tolist() if hasattr(query_vector, "tolist") else list(query_vector)
             
             # Using pgvector cosine_distance (0 is identical, 2 is completely opposite)
-            # A similarity of 0.95 means a distance of 0.05
             max_distance = 1.0 - threshold
             
             now = datetime.now(timezone.utc)
@@ -62,7 +61,7 @@ class SemanticCacheService:
                 .filter(SemanticCache.chatbot_id == chatbot_id)
                 .filter(SemanticCache.is_active == True)
                 .filter(SemanticCache.expires_at > now)
-                .filter(SemanticCache.embedding_model == _EMBEDDING_MODEL)
+                .filter(SemanticCache.embedding_model == settings.EMBEDDING_MODEL)
                 .filter(SemanticCache.knowledge_base_version == knowledge_base_version)
                 .filter(SemanticCache.persona_version == persona_version)
                 .filter(distance_col <= max_distance)
@@ -102,7 +101,8 @@ class SemanticCacheService:
         source_chunk_ids: Optional[List[str]] = None,
         source_document_ids: Optional[List[str]] = None,
         ttl_days: int = 7,
-        db: Optional[Session] = None
+        db: Optional[Session] = None,
+        query_vector: Optional[List[float]] = None
     ):
         """Adds a new successful RAG generation to the semantic cache."""
         close_db = False
@@ -114,9 +114,12 @@ class SemanticCacheService:
         try:
             query_hash = cls.generate_query_hash(rewritten_query)
             
-            # Embed the query
-            query_vector = embedding_service.encode([rewritten_query])[0]
-            query_list = query_vector.tolist() if hasattr(query_vector, "tolist") else list(query_vector)
+            # Embed the query if not already provided
+            if query_vector is None:
+                query_vector_res = embedding_service.encode([rewritten_query])[0]
+                query_list = query_vector_res.tolist() if hasattr(query_vector_res, "tolist") else list(query_vector_res)
+            else:
+                query_list = query_vector
             
             now = datetime.now(timezone.utc)
             expires_at = now + timedelta(days=ttl_days)
@@ -127,7 +130,7 @@ class SemanticCacheService:
                 query_text=rewritten_query,
                 query_hash=query_hash,
                 query_embedding=query_list,
-                embedding_model=_EMBEDDING_MODEL,
+                embedding_model=settings.EMBEDDING_MODEL,
                 response_text=response_text,
                 source_chunk_ids=source_chunk_ids,
                 source_document_ids=source_document_ids,

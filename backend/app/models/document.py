@@ -52,6 +52,9 @@ class KnowledgeSource(Base):
     value = Column(Text, nullable=False)
     status = Column(Enum(SourceStatus, name="enum_source_status"), nullable=False, default=SourceStatus.QUEUED)
     error_message = Column(Text, nullable=True)
+    pages_crawled = Column(Integer, nullable=True)
+    total_content_chars = Column(Integer, nullable=True)
+    crawl_duration_secs = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(
         DateTime(timezone=True),
@@ -64,6 +67,10 @@ class KnowledgeSource(Base):
     chunks = relationship("KnowledgeChunk", back_populates="source", cascade="all, delete-orphan")
     document = relationship("Document", uselist=False, back_populates="source", cascade="all, delete-orphan")
     jobs = relationship("KnowledgeJob", back_populates="source", cascade="all, delete-orphan")
+
+    @property
+    def is_searchable(self) -> bool:
+        return self.source_type in {SourceType.FILE, SourceType.TEXT, SourceType.WEBSITE}
 
     __table_args__ = (
         ForeignKeyConstraint(

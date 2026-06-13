@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Index, Text, Boolean, UniqueConstraint
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Index, Text, Boolean, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from pgvector.sqlalchemy import Vector
@@ -40,4 +40,5 @@ class SemanticCache(Base):
     __table_args__ = (
         UniqueConstraint('org_id', 'chatbot_id', 'query_hash', 'knowledge_base_version', 'persona_version', name='uq_semantic_cache_query'),
         Index("idx_semantic_cache_active", "chatbot_id", "is_active", "expires_at"),
+        Index("idx_semantic_cache_embedding", text("(query_embedding::halfvec(3072))"), postgresql_using="hnsw", postgresql_with={"m": 16, "ef_construction": 64}, postgresql_ops={"text": "halfvec_cosine_ops"}),
     )

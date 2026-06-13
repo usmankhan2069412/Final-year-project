@@ -69,3 +69,8 @@ def test_agent_intent_routing():
     state = {"user_message": "what is your pricing?", "api_key": None}
     res = ChatService.route_intent(state)
     assert res["intent"] == "RAG_LOOKUP"
+
+    # 4. History-dependent transform should not become a fresh RAG lookup
+    state = {"user_message": "translate them into roman urdu", "api_key": None}
+    res = ChatService.route_intent(state)
+    assert res["intent"] == "HISTORY_TRANSFORM"

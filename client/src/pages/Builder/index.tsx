@@ -37,6 +37,23 @@ export default function BotBuilder() {
   const [customFallback, setCustomFallback] = useState("");
   const [customDescription, setCustomDescription] = useState("");
 
+  const [savedValues, setSavedValues] = useState({
+    botName: "",
+    customRole: "",
+    customTone: "friendly",
+    customGreeting: "",
+    customFallback: "",
+    customDescription: "",
+  });
+
+  const hasUnsavedChanges =
+    botName !== savedValues.botName ||
+    customRole !== savedValues.customRole ||
+    customTone !== savedValues.customTone ||
+    customGreeting !== savedValues.customGreeting ||
+    customFallback !== savedValues.customFallback ||
+    customDescription !== savedValues.customDescription;
+
   // Knowledge base
   const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>([]);
 
@@ -47,6 +64,10 @@ export default function BotBuilder() {
     value: source.source_type === "text" && source.value.length > 80 ? `${source.value.slice(0, 80)}...` : source.value,
     status: source.status,
     error_message: source.error_message,
+    is_searchable: source.is_searchable,
+    pages_crawled: source.pages_crawled,
+    total_content_chars: source.total_content_chars,
+    crawl_duration_secs: source.crawl_duration_secs,
   });
 
   // Load existing chatbot if ID is provided in query params
@@ -58,17 +79,40 @@ export default function BotBuilder() {
         try {
           const bot = await api.getChatbot(id);
           setChatbotId(bot.id);
-          setBotName(bot.name);
+          const newBotName = bot.name || "";
+          setBotName(newBotName);
           setPersonaId(bot.persona_id);
+
+          let newCustomGreeting = "";
+          let newCustomFallback = "";
+          let newCustomDescription = "";
+          let newCustomRole = "";
+          let newCustomTone = "friendly";
+
           if (bot.persona) {
-            setCustomGreeting(bot.persona.greeting || "");
-            setCustomFallback(bot.persona.fallback || "");
-            setCustomDescription(bot.persona.description || "");
-            setCustomRole(bot.persona.description || "");
-            const tone = bot.persona.traits?.[0]?.trait_name || "friendly";
-            setCustomTone(tone);
+            newCustomGreeting = bot.persona.greeting || "";
+            newCustomFallback = bot.persona.fallback || "";
+            newCustomDescription = bot.persona.description || "";
+            newCustomRole = bot.persona.description || "";
+            newCustomTone = bot.persona.traits?.[0]?.trait_name || "friendly";
+
+            setCustomGreeting(newCustomGreeting);
+            setCustomFallback(newCustomFallback);
+            setCustomDescription(newCustomDescription);
+            setCustomRole(newCustomRole);
+            setCustomTone(newCustomTone);
           }
           setSaveStatus("saved");
+
+          setSavedValues({
+            botName: newBotName,
+            customRole: newCustomRole,
+            customTone: newCustomTone,
+            customGreeting: newCustomGreeting,
+            customFallback: newCustomFallback,
+            customDescription: newCustomDescription,
+          });
+
           // Pre-load knowledge items
           const sources = await api.listKnowledge(bot.id);
           setKnowledgeItems(sources.map(toKnowledgeItem));
@@ -138,6 +182,28 @@ export default function BotBuilder() {
 
       setChatbotId(savedChatbot.id);
       setSaveStatus("saved");
+
+      const finalBotName = botName.trim();
+      const finalRole = customRole.trim();
+      const finalGreeting = customGreeting.trim();
+      const finalFallback = customFallback.trim();
+      const finalDescription = customDescription.trim() || finalRole;
+
+      setBotName(finalBotName);
+      setCustomRole(finalRole);
+      setCustomGreeting(finalGreeting);
+      setCustomFallback(finalFallback);
+      setCustomDescription(finalDescription);
+
+      setSavedValues({
+        botName: finalBotName,
+        customRole: finalRole,
+        customTone: customTone,
+        customGreeting: finalGreeting,
+        customFallback: finalFallback,
+        customDescription: finalDescription,
+      });
+
       return savedChatbot.id;
     } catch (err: any) {
       const message = err?.message || "Failed to save draft";
@@ -184,6 +250,7 @@ export default function BotBuilder() {
       toast.success(type === "text" || type === "website" ? "Knowledge source queued for indexing." : "Knowledge source saved.");
     } catch (err: any) {
       toast.error(err?.message || "Failed to add knowledge source");
+      throw err;
     }
   };
 
@@ -212,8 +279,10 @@ export default function BotBuilder() {
 
   const goNext = async () => {
     if (step === 1) {
-      const savedId = await saveDraft();
-      if (!savedId) return;
+      if (!chatbotId || hasUnsavedChanges) {
+        const savedId = await saveDraft();
+        if (!savedId) return;
+      }
     }
     setStep((s) => Math.min(4, s + 1));
   };

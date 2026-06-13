@@ -111,8 +111,9 @@ def reply_to_conversation(
     # Update chatbot stats
     chatbot = conversation.chatbot
     if chatbot:
-        chatbot.total_messages += 1
-        db.add(chatbot)
+        db.query(Chatbot).filter(Chatbot.id == chatbot.id).update(
+            {Chatbot.total_messages: Chatbot.total_messages + 1}
+        )
         
     db.commit()
     db.refresh(reply_msg)

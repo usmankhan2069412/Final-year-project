@@ -1,7 +1,7 @@
 import uuid
 import logging
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_tenant_db, get_current_org_id
@@ -13,22 +13,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-def run_knowledge_jobs_task():
-    from app.db.session import SessionLocal
-    db = SessionLocal()
-    try:
-        # Process jobs sequentially until there are none left
-        while KnowledgeService.process_next_job(db):
-            pass
-    except Exception as e:
-        logger.exception("Error in run_knowledge_jobs_task background task: %s", e)
-    finally:
-        db.close()
 
 @router.post("/upload", response_model=KnowledgeSourceResponse, status_code=status.HTTP_201_CREATED)
 def upload_file(
     chatbot_id: uuid.UUID,
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     db: Session = Depends(get_tenant_db),
     org_id: uuid.UUID = Depends(get_current_org_id)
@@ -36,7 +24,6 @@ def upload_file(
     """Upload a file as a knowledge source (PDF, DOCX, TXT, CSV) and enqueue indexing."""
     try:
         source = KnowledgeService.upload_file(db=db, org_id=org_id, chatbot_id=chatbot_id, file=file)
-        background_tasks.add_task(run_knowledge_jobs_task)
         return source
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -44,7 +31,6 @@ def upload_file(
 @router.post("", response_model=KnowledgeSourceResponse, status_code=status.HTTP_201_CREATED)
 def create_knowledge_source(
     source_in: KnowledgeSourceCreate,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_tenant_db),
     org_id: uuid.UUID = Depends(get_current_org_id)
 ):
@@ -75,7 +61,6 @@ def create_knowledge_source(
                 text=source_in.value,
                 label=source_in.label
             )
-            background_tasks.add_task(run_knowledge_jobs_task)
             return source
             
         if source_in.source_type == SourceType.WEBSITE:
@@ -85,7 +70,6 @@ def create_knowledge_source(
                 chatbot_id=source_in.chatbot_id,
                 url=source_in.value
             )
-            background_tasks.add_task(run_knowledge_jobs_task)
             return source
 
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported source type")

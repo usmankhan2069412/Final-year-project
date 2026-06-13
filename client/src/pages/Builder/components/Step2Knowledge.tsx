@@ -330,6 +330,11 @@ export default function Step2Knowledge({ items, onAddItem, onUploadFiles, onRemo
                     <div className="flex-1 min-w-0">
                       <p className={`text-[14px] font-bold truncate ${c("text-[#1c1c1e]", "text-white")}`}>{item.value}</p>
                       <p className={`text-[11px] font-medium mt-0.5 ${c("text-[#1c1c1e]/50", "text-[#55635a]")}`}>{item.label}</p>
+                      {item.type === "website" && item.pages_crawled != null && (
+                        <p className={`text-[10px] font-medium mt-0.5 ${c("text-[#1c1c1e]/40", "text-[#55635a]/80")}`}>
+                          {item.pages_crawled} page{item.pages_crawled !== 1 ? "s" : ""} · {((item.total_content_chars || 0) / 1000).toFixed(1)}k chars · {item.crawl_duration_secs}s
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">
                       {item.status === "failed" ? (
@@ -343,6 +348,12 @@ export default function Step2Knowledge({ items, onAddItem, onUploadFiles, onRemo
                           isDark ? "text-yellow-300 bg-yellow-300/10 border-yellow-300/20" : "text-yellow-700 bg-yellow-100 border-yellow-200"
                         }`}>
                           {item.status === "queued" ? "Queued" : "Processing"}
+                        </span>
+                      ) : item.is_searchable === false ? (
+                        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border shadow-sm ${
+                          isDark ? "text-[#ffb4ab] bg-[#ffb4ab]/10 border-[#ffb4ab]/20" : "text-[#7a3b34] bg-[#ffebe8] border-[#ffd4ce]"
+                        }`}>
+                          Handoff
                         </span>
                       ) : (
                         <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border shadow-sm ${

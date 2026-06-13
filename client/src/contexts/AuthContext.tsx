@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, ReactNode, useEffect } from "react";
 import { apiRequest } from "../lib/api";
+import { toast } from "sonner";
 
 export interface UserResponse {
   id: string;
@@ -80,6 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("aina-user-me");
     setIsAuthenticated(false);
     setUserMe(null);
+    toast.success("Successfully logged out");
   }, []);
 
   // Fetch profile when authenticated or when login happens

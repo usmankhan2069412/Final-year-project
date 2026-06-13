@@ -53,6 +53,10 @@ async def lifespan(app: FastAPI):
     import threading
     threading.Thread(target=SemanticRouter._initialize, name="semantic-router-init", daemon=True).start()
 
+    # Start the background worker for processing websites/documents
+    from app.workers.knowledge_worker import main as worker_main
+    threading.Thread(target=worker_main, name="knowledge-worker", daemon=True).start()
+
     from apscheduler.schedulers.background import BackgroundScheduler
     from app.tasks.analytics_aggregation import run_nightly_aggregation
     
