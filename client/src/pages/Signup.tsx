@@ -157,7 +157,7 @@ export default function Signup() {
 
   const ExtraCenter = (
     <div className="mt-16 flex flex-wrap gap-3">
-        {['WhatsApp', 'Messenger', 'Web Widget', 'REST API', 'iOS'].map((platform) => (
+        {['WhatsApp', 'Web Widget'].map((platform) => (
           <div key={platform} className="px-5 py-2.5 rounded-full border border-white/20 text-sm font-semibold flex items-center gap-2 bg-white/5 backdrop-blur-sm shadow-sm text-white hover:scale-105 hover:bg-white/10 hover:border-white/40 cursor-pointer transition-all duration-300">
             <div className="w-2.5 h-2.5 rounded-full bg-white"></div>
             {platform}
@@ -169,7 +169,7 @@ export default function Signup() {
   return (
     <AuthLayout
       title={<>Empower your <br/><span className="italic text-[#EBDCFF]">business</span></>}
-      subtitle="Join 500+ top enterprises that use Aina to deploy flawless, real-time AI automations in seconds."
+      subtitle="Join the plafrom and make chatbot that can talk to your customers 24/7 and assit your customer."
       extraCenter={ExtraCenter}
     >
       <div className={`auth-form-card w-full max-w-[420px] my-auto mt-20 lg:mt-auto animate-in fade-in slide-in-from-bottom-4 duration-700 delay-300 fill-mode-both ${isShaking ? 'animate-[shake_0.4s_ease-in-out]' : ''}`}>

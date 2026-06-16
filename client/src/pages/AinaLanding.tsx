@@ -387,8 +387,10 @@ export default function AinaLanding() {
       <header className="fixed left-0 top-0 z-50 w-full border-b border-black/5 bg-[#F5F5F7]/90 backdrop-blur-xl">
         <nav className="mx-auto flex max-w-[1240px] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8" aria-label="Project navigation">
           <a href="#top" className="flex min-w-0 items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#1c1c1e] text-[#EBDCFF]">
-              <GraduationCap className="h-5 w-5" aria-hidden="true" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#EBDCFF] text-[#1c1c1e]">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2L2 22h20L12 2z"></path>
+            </svg>
             </div>
             <div className="min-w-0">
               <p className="truncate text-base font-black tracking-tight text-[#1c1c1e]" style={headingFont}>
