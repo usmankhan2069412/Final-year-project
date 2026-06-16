@@ -1,5 +1,6 @@
 import re
 import logging
+import uuid
 from typing import Optional
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
@@ -28,37 +29,17 @@ def generate_slug(name: str) -> str:
 class AuthService:
 
     @staticmethod
-    def register_user(db: Session, user_in: UserCreate) -> User:
-        """
-        Register a new user, create a default organization, and assign them as OWNER.
-        """
-        # Check if email is already in use by an active (non-deleted) account
-        existing = db.query(User).filter(
-            User.email == user_in.email,
-            User.deleted_at == None  # noqa: E711
-        ).first()
-        if existing:
-            raise ValueError("Email already registered")
-
-        # Create user
-        db_user = User(
-            email=user_in.email,
-            password_hash=get_password_hash(user_in.password),
-            full_name=user_in.full_name,
-        )
-        db.add(db_user)
-        db.flush()  # Populates db_user.id
+    def _create_user_organization(db: Session, db_user: User, base_name: str) -> None:
+        """Helper to provision default org, subscription, and notifications for a new user."""
+        from app.services.notification import NotificationService
 
         # Generate unique org slug
-        base = generate_slug(user_in.full_name or user_in.email.split("@")[0])
+        base = generate_slug(base_name)
         slug = f"{base}-org"
-        original_slug = slug
-        counter = 1
-        while db.query(Organization).filter(Organization.slug == slug).first():
-            slug = f"{original_slug}-{counter}"
-            counter += 1
+        if db.query(Organization).filter(Organization.slug == slug).first():
+            slug = f"{slug}-{str(uuid.uuid4())[:8]}"
 
-        # Create organization + owner membership in one block
+        # Create organization + owner membership
         db_org = Organization(owner_id=db_user.id, slug=slug)
         db.add(db_org)
         db.flush()
@@ -80,7 +61,6 @@ class AuthService:
             logger.warning("Starter plan not found in database; subscription auto-assignment skipped.")
 
         # Seed welcome notifications in DB
-        from app.services.notification import NotificationService
         NotificationService.create_notification(
             db,
             user_id=db_user.id,
@@ -93,6 +73,32 @@ class AuthService:
             title="Billing Activated",
             details="Free trial plan active with 10,000 complimentary credits."
         )
+
+
+    @staticmethod
+    def register_user(db: Session, user_in: UserCreate) -> User:
+        """
+        Register a new user, create a default organization, and assign them as OWNER.
+        """
+        # Check if email is already in use by an active (non-deleted) account
+        existing = db.query(User).filter(
+            User.email == user_in.email,
+            User.deleted_at == None  # noqa: E711
+        ).first()
+        if existing:
+            raise ValueError("Email already registered")
+
+        # Create user
+        db_user = User(
+            email=user_in.email,
+            password_hash=get_password_hash(user_in.password),
+            full_name=user_in.full_name,
+        )
+        db.add(db_user)
+        db.flush()  # Populates db_user.id
+
+        base_name = user_in.full_name or user_in.email.split("@")[0]
+        AuthService._create_user_organization(db, db_user, base_name)
 
         db.commit()
         db.refresh(db_user)
@@ -215,50 +221,8 @@ class AuthService:
             db.add(db_user)
             db.flush()
 
-            # Generate unique org slug
-            base = generate_slug(full_name or email.split("@")[0])
-            slug = f"{base}-org"
-            original_slug = slug
-            counter = 1
-            while db.query(Organization).filter(Organization.slug == slug).first():
-                slug = f"{original_slug}-{counter}"
-                counter += 1
-
-            # Create organization + owner membership
-            db_org = Organization(owner_id=db_user.id, slug=slug)
-            db.add(db_org)
-            db.flush()
-
-            db.add(OrgMember(org_id=db_org.id, user_id=db_user.id, role=OrgRole.OWNER))
-
-            # Auto-assign Starter plan
-            starter_plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.name == "Starter").first()
-            if starter_plan:
-                subscription = Subscription(
-                    org_id=db_org.id,
-                    plan_id=starter_plan.id,
-                    status="active",
-                    period_start=datetime.now(timezone.utc),
-                    period_end=datetime.now(timezone.utc) + timedelta(days=30),
-                )
-                db.add(subscription)
-            else:
-                logger.warning("Starter plan not found in database; subscription auto-assignment skipped.")
-
-            # Seed welcome notifications in DB
-            from app.services.notification import NotificationService
-            NotificationService.create_notification(
-                db,
-                user_id=db_user.id,
-                title="Welcome to Aina AI",
-                details="Your workspace has been successfully created."
-            )
-            NotificationService.create_notification(
-                db,
-                user_id=db_user.id,
-                title="Billing Activated",
-                details="Free trial plan active with 10,000 complimentary credits."
-            )
+            base_name = full_name or email.split("@")[0]
+            AuthService._create_user_organization(db, db_user, base_name)
 
             db.commit()
             db.refresh(db_user)
@@ -271,4 +235,3 @@ class AuthService:
 
 
 auth_service = AuthService()
-

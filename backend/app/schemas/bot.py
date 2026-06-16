@@ -1,5 +1,6 @@
 import uuid
 from typing import List, Optional
+from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 from app.models.chatbot import ChatbotStatus
 
@@ -65,6 +66,7 @@ class ChatbotResponse(ChatbotBase):
     org_id: uuid.UUID
     total_conversations: int
     total_messages: int
+    last_active_at: Optional[datetime] = None
     persona: Optional[PersonaResponse] = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -81,6 +83,7 @@ class AIProviderResponse(BaseModel):
 # --- Routing Rules ---
 class RoutingRuleBase(BaseModel):
     intent: str
+    model_override: Optional[str] = None
     priority: int = 0
     is_active: bool = True
     fallback_config_id: Optional[uuid.UUID] = None

@@ -522,4 +522,10 @@
   .dark .custom-scrollbar {
     scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
   }
+  
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-8px); }
+    75% { transform: translateX(8px); }
+  }
 }

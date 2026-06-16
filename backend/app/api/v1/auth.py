@@ -12,12 +12,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.post("/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/signup", response_model=Token, status_code=status.HTTP_201_CREATED)
 def signup(*, db: Session = Depends(get_db), user_in: UserCreate):
     """Register a new user and create a default organization."""
     try:
         user = auth_service.register_user(db, user_in=user_in)
-        return user
+        access_token = create_access_token(subject=user.id)
+        return Token(access_token=access_token)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 

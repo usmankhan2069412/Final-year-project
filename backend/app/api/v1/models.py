@@ -13,6 +13,14 @@ from app.schemas.bot import (
 router = APIRouter()
 
 
+# --- Available Models Endpoint ---
+
+@router.get("/available", response_model=List[dict])
+def get_available_models(db: Session = Depends(get_tenant_db)):
+    """Return available models grouped by provider."""
+    return model_config_service.get_available_models(db=db)
+
+
 # --- AI Providers Endpoints ---
 
 @router.get("/providers", response_model=List[AIProviderResponse])

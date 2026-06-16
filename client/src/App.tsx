@@ -12,7 +12,7 @@ import { LayoutProvider } from "./contexts/LayoutContext";
 import DashboardLayout from "./components/DashboardLayout";
 
 // Lazy-loaded pages
-const Home = lazy(() => import("./pages/Home"));
+const Home = lazy(() => import("./pages/AinaLanding"));
 const Login = lazy(() => import("./pages/Login"));
 const Signup = lazy(() => import("./pages/Signup"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));

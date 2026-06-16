@@ -6,7 +6,12 @@ interface ChannelItem {
   count: number;
 }
 
-export default function ChannelPerf() {
+interface ChannelPerfProps {
+  days: number;
+  chatbotId: string;
+}
+
+export default function ChannelPerf({ days, chatbotId }: ChannelPerfProps) {
   const { isDark } = useTheme();
   const c = (light: string, dark: string) => (isDark ? dark : light);
   const [data, setData] = useState<ChannelItem[]>([]);
@@ -14,21 +19,17 @@ export default function ChannelPerf() {
 
   useEffect(() => {
     async function fetchChannels() {
+      setLoading(true);
       try {
         const token = localStorage.getItem("token");
-        const headers: Record<string, string> = {
-          "Content-Type": "application/json",
-        };
-        if (token) {
-          headers["Authorization"] = `Bearer ${token}`;
-        }
-        const response = await fetch("http://localhost:8000/api/v1/analytics/channels", {
-          headers,
-        });
-        if (response.ok) {
-          const json = await response.json();
-          setData(json);
-        }
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+
+        const params = new URLSearchParams({ days: String(days) });
+        if (chatbotId) params.set("chatbot_id", chatbotId);
+
+        const res = await fetch(`http://localhost:8000/api/v1/analytics/channels?${params}`, { headers });
+        if (res.ok) setData(await res.json());
       } catch (err) {
         console.error("Error fetching channels:", err);
       } finally {
@@ -36,9 +37,10 @@ export default function ChannelPerf() {
       }
     }
     fetchChannels();
-  }, []);
+  }, [days, chatbotId]);
 
   const totalCount = data.reduce((sum, item) => sum + item.count, 0);
+  const hasData = totalCount > 0;
 
   const channels = data.map((item) => {
     const isWhatsApp = item.channel.toLowerCase().includes("whatsapp");
@@ -47,9 +49,10 @@ export default function ChannelPerf() {
       name: isWhatsApp ? "WhatsApp" : item.channel,
       icon: isWhatsApp ? "chat" : "language",
       pct,
+      count: item.count,
       color: isWhatsApp
-        ? (isDark ? "#EBDCFF" : "#1c1c1e")
-        : (isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.2)"),
+        ? isDark ? "#EBDCFF" : "#1c1c1e"
+        : isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.2)",
     };
   });
 
@@ -61,25 +64,14 @@ export default function ChannelPerf() {
           : "bg-white border-black/5 shadow-[0_8px_30px_rgb(0,0,0,0.02)]"
       }`}
     >
-      <div className="flex items-center justify-between mb-8">
-        <h3
-          className={`text-[18px] font-serif font-bold ${
-            c("text-[#1c1c1e]", "text-white")
-          }`}
-          style={{ fontFamily: "'Playfair Display', serif" }}
-        >
-          Channel Performance
-        </h3>
-        <span
-          className={`text-[10px] px-3 py-1.5 rounded-full font-bold tracking-widest uppercase border shadow-sm ${
-            isDark
-              ? "bg-white/5 border-white/10 text-[#EBDCFF]"
-              : "bg-[#EBDCFF]/30 border-[#EBDCFF]/50 text-[#1c1c1e]"
-          }`}
-        >
-          Live
-        </span>
-      </div>
+      {/* Header — LIVE badge removed (data is from nightly aggregation, not real-time) */}
+      <h3
+        className={`text-[18px] font-serif font-bold mb-8 ${c("text-[#1c1c1e]", "text-white")}`}
+        style={{ fontFamily: "'Playfair Display', serif" }}
+      >
+        Channel Distribution
+      </h3>
+
       <div className="space-y-6">
         {loading ? (
           <div className="space-y-6 animate-pulse">
@@ -88,7 +80,7 @@ export default function ChannelPerf() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className={`w-[18px] h-[18px] rounded-full ${isDark ? "bg-white/5" : "bg-black/5"}`} />
-                    <div className={`h-4.5 w-20 rounded ${isDark ? "bg-white/5" : "bg-black/5"}`} />
+                    <div className={`h-4 w-20 rounded ${isDark ? "bg-white/5" : "bg-black/5"}`} />
                   </div>
                   <div className={`h-4 w-8 rounded ${isDark ? "bg-white/5" : "bg-black/5"}`} />
                 </div>
@@ -96,9 +88,17 @@ export default function ChannelPerf() {
               </div>
             ))}
           </div>
-        ) : channels.length === 0 ? (
-          <div className={`text-center py-4 text-[14px] ${c("text-[#1c1c1e]/50", "text-white/40")}`}>
-            No channel data available
+        ) : !hasData ? (
+          <div className="flex flex-col items-center justify-center py-8 gap-3">
+            <span
+              className={`material-symbols-outlined text-[40px] ${c("text-[#1c1c1e]/20", "text-white/15")}`}
+              aria-hidden="true"
+            >
+              device_hub
+            </span>
+            <p className={`text-[13px] font-medium ${c("text-[#1c1c1e]/40", "text-white/30")}`}>
+              No channel data for this period
+            </p>
           </div>
         ) : (
           channels.map((ch) => (
@@ -106,38 +106,29 @@ export default function ChannelPerf() {
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-3">
                   <span
-                    className={`material-symbols-outlined text-[18px] ${
-                      c("text-[#1c1c1e]/50", "text-[#85948b]")
-                    }`}
+                    className={`material-symbols-outlined text-[18px] ${c("text-[#1c1c1e]/50", "text-[#85948b]")}`}
                     aria-hidden="true"
                   >
                     {ch.icon}
                   </span>
-                  <span
-                    className={`text-[14px] font-bold ${
-                      c("text-[#1c1c1e]", "text-white")
-                    }`}
-                  >
+                  <span className={`text-[14px] font-bold ${c("text-[#1c1c1e]", "text-white")}`}>
                     {ch.name}
                   </span>
                 </div>
-                <span
-                  className={`text-[13px] font-bold ${
-                    c("text-[#1c1c1e]", "text-white")
-                  }`}
-                >
-                  {ch.pct}%
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className={`text-[12px] font-medium ${c("text-[#1c1c1e]/40", "text-white/30")}`}>
+                    {ch.count.toLocaleString()}
+                  </span>
+                  <span className={`text-[13px] font-bold ${c("text-[#1c1c1e]", "text-white")}`}>
+                    {ch.pct}%
+                  </span>
+                </div>
               </div>
-              <div
-                className={`w-full h-1.5 rounded-full overflow-hidden ${
-                  c("bg-black/5", "bg-[#131317]")
-                }`}
-              >
+              <div className={`w-full h-1.5 rounded-full overflow-hidden ${c("bg-black/5", "bg-[#131317]")}`}>
                 <div
                   className="h-full rounded-full"
                   style={{ width: `${ch.pct}%`, backgroundColor: ch.color }}
-                ></div>
+                />
               </div>
             </div>
           ))

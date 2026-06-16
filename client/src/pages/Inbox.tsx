@@ -31,7 +31,7 @@ const CANNED_RESPONSES = [
 
 export default function Inbox() {
   const { isDark } = useTheme();
-  useLayoutConfig({ title: "Escalated Chats", searchPlaceholder: "Search active live chat sessions…" });
+  useLayoutConfig({ title: "Escalated Chats" });
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filterAssigned, setFilterAssigned] = useState(false);

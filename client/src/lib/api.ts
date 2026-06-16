@@ -89,6 +89,35 @@ export interface ChatResponse {
   sources: Array<{ chunk_id: string; source_id: string; text: string; score: number }>;
 }
 
+export interface RoutingRule {
+  id?: string;
+  config_id?: string;
+  intent: string;
+  model_override?: string | null;
+}
+
+export interface AIProvider {
+  id: string;
+  name: string;
+}
+
+export interface AIModelConfig {
+  id: string;
+  org_id: string;
+  provider_id: string;
+  model_name: string;
+  display_name?: string | null;
+  secret_ref: string | null;
+  provider: AIProvider;
+  routing_rules: RoutingRule[];
+}
+
+export interface AvailableProviderModels {
+  id: string;
+  name: string;
+  models: string[];
+}
+
 class ApiError extends Error {
   status: number;
 
@@ -122,7 +151,26 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return response.json();
 }
 
-export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function apiRequest<T = any>(path: string, init?: RequestInit): Promise<T>;
+export async function apiRequest<T = any>(method: string, path: string, body?: unknown): Promise<T>;
+export async function apiRequest<T = any>(
+  pathOrMethod: string,
+  initOrPath: RequestInit | string = {},
+  body?: unknown
+): Promise<T> {
+  const isLegacySignature = typeof initOrPath === "string";
+  const path = isLegacySignature
+    ? initOrPath.startsWith("/api/")
+      ? initOrPath
+      : `/api/v1${initOrPath}`
+    : pathOrMethod;
+  const init: RequestInit = isLegacySignature
+    ? {
+        method: pathOrMethod,
+        body: body === undefined ? undefined : JSON.stringify(body),
+      }
+    : initOrPath;
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: {
@@ -266,6 +314,49 @@ export const api = {
 
   activateDeployment: (deploymentId: string) =>
     apiRequest<DeploymentResponse>(`/api/v1/deployments/${deploymentId}/activate`, { method: "PATCH" }),
+
+  // --- Model Configuration ---
+  getProviders: () => apiRequest<Array<{ id: string; name: string }>>("/api/v1/models/providers"),
+
+  getConfigs: () =>
+    apiRequest<Array<{
+      id: string;
+      org_id: string;
+      provider_id: string;
+      model_name: string;
+      display_name: string | null;
+      secret_ref: string | null;
+      is_active: boolean;
+      is_default: boolean;
+      provider: { id: string; name: string };
+      routing_rules: Array<{
+        id: string;
+        config_id: string;
+        org_id: string;
+        intent: string;
+        model_override: string | null;
+        priority: number;
+        is_active: boolean;
+        fallback_config_id: string | null;
+        chatbot_id: string | null;
+      }>;
+    }>>("/api/v1/models/configs"),
+
+  createConfig: (payload: {
+    provider_id: string;
+    model_name: string;
+    display_name?: string | null;
+    routing_rules?: Array<{ intent: string; model_override?: string | null }>;
+  }) => apiRequest<any>("/api/v1/models/configs", { method: "POST", body: JSON.stringify(payload) }),
+
+  updateConfig: (id: string, payload: {
+    provider_id?: string;
+    model_name?: string;
+    display_name?: string | null;
+    routing_rules?: Array<{ intent: string; model_override?: string | null }>;
+  }) => apiRequest<any>(`/api/v1/models/configs/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+
+  getAvailableModels: () => apiRequest<Array<{ id: string; name: string; models: string[] }>>("/api/v1/models/available"),
 
   streamConversationEvents: async (
     chatbotId: string,

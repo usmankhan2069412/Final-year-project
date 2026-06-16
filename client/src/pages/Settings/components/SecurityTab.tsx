@@ -4,47 +4,6 @@ import { toast } from "sonner";
 import { useNotifications } from "../../../contexts/NotificationContext";
 import gsap from "gsap";
 
-const getDeviceFromUA = () => {
-  const ua = navigator.userAgent;
-  let os = "Device";
-  let icon = "devices";
-
-  if (/windows/i.test(ua)) {
-    os = "Windows PC";
-    icon = "desktop_windows";
-  } else if (/macintosh|mac os x/i.test(ua)) {
-    os = "MacBook Pro";
-    icon = "laptop_mac";
-  } else if (/linux/i.test(ua)) {
-    os = "Linux PC";
-    icon = "desktop_windows";
-  } else if (/iphone|ipad|ipod/i.test(ua)) {
-    os = "iOS Device";
-    icon = "smartphone";
-  } else if (/android/i.test(ua)) {
-    os = "Android Device";
-    icon = "smartphone";
-  }
-
-  let browser = "";
-  if (/chrome|crios/i.test(ua) && !/edge|edg/i.test(ua) && !/opr/i.test(ua)) {
-    browser = "Chrome";
-  } else if (/firefox|fxios/i.test(ua)) {
-    browser = "Firefox";
-  } else if (/safari/i.test(ua) && !/chrome|crios/i.test(ua)) {
-    browser = "Safari";
-  } else if (/edge|edg/i.test(ua)) {
-    browser = "Edge";
-  } else if (/opr/i.test(ua)) {
-    browser = "Opera";
-  }
-
-  return {
-    name: browser ? `${browser} on ${os}` : os,
-    icon
-  };
-};
-
 export default function SecurityTab() {
   const { isDark } = useTheme();
   const { fetchNotifications } = useNotifications();
@@ -52,13 +11,6 @@ export default function SecurityTab() {
 
   // States
   const [mfaEnabled, setMfaEnabled] = useState(true);
-  const [devices, setDevices] = useState(() => {
-    const current = getDeviceFromUA();
-    return [
-      { id: 1, device: current.name, loc: "Current Session", icon: current.icon, active: true },
-      { id: 2, device: "Mobile App Session", loc: "Karachi, PK", icon: "smartphone", active: false },
-    ];
-  });
 
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -75,11 +27,6 @@ export default function SecurityTab() {
         ? "Two-Factor Authentication enabled successfully."
         : "Two-Factor Authentication disabled."
     );
-  };
-
-  const handleRevokeDevice = (id: number, deviceName: string) => {
-    setDevices((prev) => prev.filter((d) => d.id !== id));
-    toast.success(`Session for ${deviceName} has been successfully revoked.`);
   };
 
   const handleOpenModal = () => {
@@ -165,7 +112,7 @@ export default function SecurityTab() {
           Security Center
         </h2>
         <p className={`text-[15px] font-medium ${c("text-[#1c1c1e]/60", "text-white/50")}`}>
-          Manage authentication, devices and access controls.
+          Manage authentication and access controls.
         </p>
       </div>
 
@@ -222,89 +169,6 @@ export default function SecurityTab() {
           <span className="material-symbols-outlined text-[20px]">lock_reset</span>
           Change Password
         </button>
-      </div>
-
-      <div
-        className={`rounded-[2rem] border p-4 sm:p-8 ${
-          isDark
-            ? "bg-[#1f1f23] border-white/[0.06]"
-            : "bg-white border-black/5 shadow-[0_8px_30px_rgb(0,0,0,0.02)]"
-        }`}
-      >
-        <div>
-          <h3 className={`text-[18px] font-serif font-bold mb-1.5 ${c("text-[#1c1c1e]", "text-white")}`}>
-            Authorized Devices
-          </h3>
-          <p className={`text-[13px] font-medium mb-6 ${c("text-[#1c1c1e]/60", "text-[#85948b]")}`}>
-            These are the devices and browsers that have recently logged into your account. You can revoke any session that you do not recognize.
-          </p>
-        </div>
-        {devices.length === 0 ? (
-          <p className={`text-[14px] font-medium text-center py-6 ${c("text-[#1c1c1e]/40", "text-white/30")}`}>
-            No authorized devices tracked.
-          </p>
-        ) : (
-          <div className="space-y-4">
-            {devices.map((d) => (
-              <div
-                key={d.id}
-                className={`flex items-center justify-between p-4 sm:p-5 rounded-2xl border transition-colors gap-3 ${
-                  isDark ? "bg-[#131317] border-white/[0.04]" : "bg-[#F5F5F7] border-black/5"
-                }`}
-              >
-                <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-                  <div
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                      isDark ? "bg-white/5" : "bg-white shadow-sm"
-                    }`}
-                  >
-                    <span
-                      className={`material-symbols-outlined text-[20px] ${c(
-                        "text-[#1c1c1e]/60",
-                        "text-[#85948b]"
-                      )}`}
-                    >
-                      {d.icon}
-                    </span>
-                  </div>
-                  <div className="min-w-0">
-                    <p className={`text-[14px] font-bold truncate ${c("text-[#1c1c1e]", "text-white")}`}>
-                      {d.device}
-                    </p>
-                    <p
-                      className={`text-[12px] font-medium mt-0.5 truncate ${c(
-                        "text-[#1c1c1e]/50",
-                        "text-[#85948b]"
-                      )}`}
-                    >
-                      {d.loc} •{" "}
-                      <span
-                        className={`font-bold ${
-                          d.active
-                            ? c("text-[#1c1c1e]", "text-[#EBDCFF]")
-                            : c("text-[#1c1c1e]/40", "text-white/30")
-                        }`}
-                      >
-                        {d.active ? "Active Now" : "14h ago"}
-                      </span>
-                    </p>
-                  </div>
-                </div>
-                {!d.active && (
-                  <button
-                    onClick={() => handleRevokeDevice(d.id, d.device)}
-                    className={`text-[12px] font-bold px-3 py-1.5 rounded-lg transition-colors flex-shrink-0 cursor-pointer ${c(
-                      "text-red-600 hover:bg-red-50",
-                      "text-[#ffb4ab] hover:bg-[#ffb4ab]/10"
-                    )}`}
-                  >
-                    Revoke
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* Password Reset Modal */}

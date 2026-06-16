@@ -13,12 +13,15 @@ class KPIResponse(BaseModel):
     avg_response_time: KPIMetric
     satisfaction_score: KPIMetric
     workload_reduction: KPIMetric
+    escalation_rate: KPIMetric  # Added: escalated / total * 100
 
 # --- Charts and Breakdowns ---
 class VolumeSeriesItem(BaseModel):
     date: date
     conversations: int
     messages: int
+    resolved_count: int      # Resolved without human escalation
+    escalated_count: int     # Ever handed off to a human agent
 
 class LanguageMixItem(BaseModel):
     language: str
@@ -35,6 +38,7 @@ class InteractionItem(BaseModel):
     status: str
     total_messages: int
     started_at: datetime
+    duration_seconds: Optional[int] = None  # Added: conversation duration
 
     model_config = ConfigDict(from_attributes=True)
 

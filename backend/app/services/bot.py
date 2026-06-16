@@ -4,11 +4,13 @@ import uuid
 import logging
 from typing import List, Optional
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from cryptography.fernet import Fernet
 
 from app.core.config import settings
 from app.models.persona import Persona, PersonaTrait
 from app.models.chatbot import Chatbot
+from app.models.conversation import Conversation, Message
 from app.models.ai_model import AIProvider, AIModelConfig, RoutingRule
 from app.schemas.bot import (
     PersonaCreate, PersonaUpdate, ChatbotCreate, ChatbotUpdate,
@@ -188,11 +190,29 @@ class BotService:
 
     @staticmethod
     def get_chatbots(db: Session, org_id: uuid.UUID) -> List[Chatbot]:
-        """Retrieve all active chatbots for the organization."""
-        return db.query(Chatbot).filter(
+        """Retrieve all active chatbots for the organization with real last_active_at."""
+        chatbots = db.query(Chatbot).filter(
             Chatbot.org_id == org_id,
             Chatbot.deleted_at == None
         ).all()
+
+        if chatbots:
+            bot_ids = [b.id for b in chatbots]
+            last_active_rows = (
+                db.query(
+                    Conversation.chatbot_id,
+                    func.max(Message.created_at).label("last_active_at")
+                )
+                .join(Message, Message.conversation_id == Conversation.id)
+                .filter(Conversation.chatbot_id.in_(bot_ids))
+                .group_by(Conversation.chatbot_id)
+                .all()
+            )
+            last_active_map = {r.chatbot_id: r.last_active_at for r in last_active_rows}
+            for bot in chatbots:
+                bot.last_active_at = last_active_map.get(bot.id)
+
+        return chatbots
 
     @staticmethod
     def get_chatbot(db: Session, org_id: uuid.UUID, chatbot_id: uuid.UUID) -> Optional[Chatbot]:
@@ -347,6 +367,7 @@ class ModelConfigService:
                         org_id=org_id,
                         chatbot_id=rule_in.chatbot_id,
                         intent=rule_in.intent,
+                        model_override=rule_in.model_override,
                         priority=rule_in.priority,
                         fallback_config_id=rule_in.fallback_config_id,
                         is_active=rule_in.is_active,
@@ -425,6 +446,7 @@ class ModelConfigService:
                         org_id=org_id,
                         chatbot_id=rule_in.chatbot_id,
                         intent=rule_in.intent,
+                        model_override=rule_in.model_override,
                         priority=rule_in.priority,
                         fallback_config_id=rule_in.fallback_config_id,
                         is_active=rule_in.is_active,
@@ -439,6 +461,27 @@ class ModelConfigService:
             logger.error("Database error in update_model_config: %s", str(e), exc_info=True)
             raise e
 
+
+    @staticmethod
+    def get_available_models(db: Session) -> List[dict]:
+        """Return available models per provider from the DB."""
+        providers = ModelConfigService.get_providers(db)
+        OPENROUTER_MODELS = [
+            "openai/gpt-4o",
+            "openai/gpt-4o-mini",
+            "anthropic/claude-3.5-sonnet",
+            "anthropic/claude-3-opus",
+            "google/gemini-1.5-pro",
+            "meta-llama/llama-3-8b-instruct",
+            "mistralai/mixtral-8x7b-instruct",
+        ]
+        res = []
+        for p in providers:
+            if "openrouter" in p.name.lower():
+                res.append({"id": str(p.id), "name": p.name, "models": OPENROUTER_MODELS})
+            else:
+                res.append({"id": str(p.id), "name": p.name, "models": []})
+        return res
 
     @staticmethod
     def delete_model_config(db: Session, org_id: uuid.UUID, config_id: uuid.UUID) -> bool:

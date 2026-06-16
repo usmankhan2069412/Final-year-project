@@ -24,6 +24,7 @@ interface KPIResponseData {
   avg_response_time: KPIData;
   satisfaction_score: KPIData;
   workload_reduction: KPIData;
+  escalation_rate: KPIData;
 }
 
 interface PersonaTrait {
@@ -46,6 +47,7 @@ interface Chatbot {
   org_id: string;
   total_conversations: number;
   total_messages: number;
+  last_active_at?: string | null;
   persona?: Persona | null;
 }
 
@@ -81,33 +83,6 @@ const titleCase = (str: string) => {
   return str.replace(/\b\w/g, (char) => char.toUpperCase());
 };
 
-const getBotEfficiency = (uuid: string, status: string) => {
-  if (status === "draft") return 0;
-  if (status === "training") return 45;
-  
-  let hash = 0;
-  for (let i = 0; i < uuid.length; i++) {
-    hash = uuid.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return 78 + (Math.abs(hash) % 21); // 78% - 98%
-};
-
-const getBotLastActive = (uuid: string, totalConvs: number, status: string) => {
-  if (status === "draft") return "Never";
-  if (status === "training") return "Training now";
-  if (totalConvs === 0) return "No activity yet";
-
-  let hash = 0;
-  for (let i = 0; i < uuid.length; i++) {
-    hash = uuid.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const mins = 2 + (Math.abs(hash) % 58);
-  if (mins < 60) {
-    return `${mins} mins ago`;
-  }
-  return "1 hour ago";
-};
-
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
@@ -116,7 +91,7 @@ export default function Dashboard() {
 
   const { userMe } = useAuth();
 
-  useLayoutConfig({ searchPlaceholder: "Search agents, workflows, knowledge..." });
+  useLayoutConfig({});
 
   // Dynamic States
   const [kpis, setKpis] = useState<KPIResponseData | null>(null);
@@ -214,43 +189,56 @@ export default function Dashboard() {
       label: "Total Conversations",
       value: kpis ? formatConversations(kpis.total_conversations.value) : "0",
       delta: kpis ? `${kpis.total_conversations.change_pct >= 0 ? "+" : ""}${kpis.total_conversations.change_pct.toFixed(1)}%` : "+0.0%",
-      deltaPositive: kpis ? kpis.total_conversations.change_pct >= 0 : true,
+      isNeutral: kpis ? kpis.total_conversations.change_pct === 0 : true,
+      isPositive: kpis ? kpis.total_conversations.change_pct > 0 : false,
       icon: "forum",
-      bar: kpis ? Math.min(100, Math.max(10, Math.round(50 + kpis.total_conversations.change_pct))) : 50,
     },
     {
-      label: "Avg. Response Time",
+      label: "Bot Latency",
       value: kpis ? `${kpis.avg_response_time.value.toFixed(1)}s` : "0.0s",
       delta: kpis ? `${kpis.avg_response_time.change_pct <= 0 ? "" : "+"}${kpis.avg_response_time.change_pct.toFixed(0)}%` : "0%",
-      deltaPositive: kpis ? kpis.avg_response_time.change_pct <= 0 : true,
+      isNeutral: kpis ? kpis.avg_response_time.change_pct === 0 : true,
+      isPositive: kpis ? kpis.avg_response_time.change_pct < 0 : false,
       icon: "bolt",
-      bar: kpis ? Math.max(10, Math.min(100, Math.round(100 - (kpis.avg_response_time.value * 20)))) : 50,
+      tooltip: "Average time between user message and bot reply",
     },
     {
-      label: "Resolution Rate",
+      label: "Deflection Rate",
       value: kpis ? `${kpis.workload_reduction.value.toFixed(1)}%` : "0.0%",
       delta: kpis ? `${kpis.workload_reduction.change_pct >= 0 ? "+" : ""}${kpis.workload_reduction.change_pct.toFixed(1)}%` : "+0.0%",
-      deltaPositive: kpis ? kpis.workload_reduction.change_pct >= 0 : true,
+      isNeutral: kpis ? kpis.workload_reduction.change_pct === 0 : true,
+      isPositive: kpis ? kpis.workload_reduction.change_pct > 0 : false,
       icon: "check_circle",
-      bar: kpis ? Math.round(kpis.workload_reduction.value) : 50,
+      tooltip: "% of resolved/escalated outcomes resolved without human handoff",
+    },
+    {
+      label: "Escalation Rate",
+      value: kpis ? `${kpis.escalation_rate.value.toFixed(1)}%` : "0.0%",
+      delta: kpis ? `${kpis.escalation_rate.change_pct >= 0 ? "+" : ""}${kpis.escalation_rate.change_pct.toFixed(1)}%` : "+0.0%",
+      isNeutral: kpis ? kpis.escalation_rate.change_pct === 0 : true,
+      isPositive: kpis ? kpis.escalation_rate.change_pct < 0 : false,
+      icon: "support_agent",
+      tooltip: "% of resolved/escalated outcomes handed off to a human agent",
     },
     {
       label: "Sentiment Score",
       value: kpis ? `${kpis.satisfaction_score.value.toFixed(1)}/5` : "0.0/5",
       delta: kpis ? `${kpis.satisfaction_score.change_pct >= 0 ? "+" : ""}${kpis.satisfaction_score.change_pct.toFixed(1)}%` : "+0.0%",
-      deltaPositive: kpis ? kpis.satisfaction_score.change_pct >= 0 : true,
+      isNeutral: kpis ? kpis.satisfaction_score.change_pct === 0 : true,
+      isPositive: kpis ? kpis.satisfaction_score.change_pct > 0 : false,
       icon: "sentiment_satisfied",
-      bar: kpis ? Math.round((kpis.satisfaction_score.value / 5) * 100) : 50,
     },
   ];
 
   // Skeleton Loaders
   const KpisSkeleton = () => (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8 md:mb-12">
-      {[1, 2, 3, 4].map((i) => (
+    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-6 mb-8 md:mb-12">
+      {[1, 2, 3, 4, 5].map((i) => (
         <div
           key={i}
-          className={`rounded-2xl md:rounded-3xl border p-4 md:p-6 relative overflow-hidden animate-pulse ${
+          className={`rounded-[20px] md:rounded-3xl border p-5 md:p-6 relative overflow-hidden animate-pulse min-h-[120px] ${
+            i === 1 ? "col-span-2 lg:col-span-1" : "col-span-1"
+          } ${
             isDark ? "bg-[#1f1f23] border-white/[0.06]" : "bg-white border-black/5"
           }`}
         >
@@ -259,8 +247,7 @@ export default function Dashboard() {
             <div className={`w-12 h-6 rounded-full ${isDark ? "bg-white/5" : "bg-black/5"}`} />
           </div>
           <div className={`w-2/3 h-3 rounded-full mb-3 ${isDark ? "bg-white/5" : "bg-black/5"}`} />
-          <div className={`w-1/2 h-8 rounded-lg mb-4 ${isDark ? "bg-white/5" : "bg-black/5"}`} />
-          <div className={`w-full h-1.5 rounded-full ${isDark ? "bg-white/5" : "bg-black/5"}`} />
+          <div className={`w-1/2 h-8 rounded-lg ${isDark ? "bg-white/5" : "bg-black/5"}`} />
         </div>
       ))}
     </div>
@@ -310,6 +297,27 @@ export default function Dashboard() {
 
   const activeBots = chatbots.filter((b) => b.status === "active");
 
+  const greeting = (() => {
+    const h = new Date().getHours();
+    if (h < 12) return "Good morning";
+    if (h < 17) return "Good afternoon";
+    if (h < 21) return "Good evening";
+    return "Good night";
+  })();
+
+  const formatLastActive = (iso: string | null | undefined, totalConvs: number): string => {
+    if (totalConvs === 0 || !iso) return "No activity yet";
+    const now = new Date();
+    const past = new Date(iso);
+    const diffMs = now.getTime() - past.getTime();
+    const diffMins = Math.max(1, Math.floor(diffMs / 60000));
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d ago`;
+  };
+
   return (
     <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-10 z-10">
 
@@ -335,7 +343,7 @@ export default function Dashboard() {
                   }`}
                   style={{ fontFamily: "'Playfair Display', serif" }}
                 >
-                  Good morning, <span className="italic font-normal">{userMe?.user.full_name || "Admin"}</span> 👋
+                  {greeting}, <span className="italic font-normal">{userMe?.user.full_name || "Admin"}</span> 👋
                 </h1>
                 <p
                   className={`text-base sm:text-lg max-w-2xl font-medium ${
@@ -356,68 +364,69 @@ export default function Dashboard() {
           {loading ? (
             <KpisSkeleton />
           ) : (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8 md:mb-12">
-              {dynamicKpis.map((card) => (
-                <div
-                  key={card.label}
-                  className={`rounded-2xl md:rounded-3xl border p-4 md:p-6 transition-all group relative overflow-hidden ${
-                    isDark
-                      ? "bg-[#1f1f23] border-white/[0.06] hover:border-white/10"
-                      : "bg-white border-black/5 shadow-[0_8px_30px_rgb(0,0,0,0.02)] hover:shadow-[0_8px_40px_rgb(0,0,0,0.06)]"
-                  }`}
-                >
-                  {/* Decorative blob */}
-                  <div className="absolute -right-6 -top-6 w-20 h-20 md:w-24 md:h-24 bg-[#EBDCFF] rounded-full opacity-20 group-hover:scale-150 transition-transform duration-500 pointer-events-none" />
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-6 mb-8 md:mb-12">
+              {dynamicKpis.map((card, index) => {
+                const isHero = index === 0;
+                return (
+                  <div
+                    key={card.label}
+                    title={(card as any).tooltip || ""}
+                    className={`rounded-[20px] md:rounded-3xl border p-5 md:p-6 transition-all group relative overflow-hidden min-h-[120px] flex flex-col justify-between ${
+                      isHero ? "col-span-2 lg:col-span-1" : "col-span-1"
+                    } ${
+                      isDark
+                        ? "bg-[#1f1f23] border-white/[0.06] hover:border-white/10"
+                        : "bg-white border-black/5 shadow-[0_8px_30px_rgb(0,0,0,0.02)] hover:shadow-[0_8px_40px_rgb(0,0,0,0.06)]"
+                    }`}
+                  >
+                    {/* Decorative blob - hidden on mobile */}
+                    <div className="hidden md:block absolute -right-6 -top-6 w-20 h-20 md:w-24 md:h-24 bg-[#EBDCFF] rounded-full opacity-20 group-hover:scale-150 transition-transform duration-500 pointer-events-none" />
 
-                  <div className="flex items-start justify-between mb-4 md:mb-6 relative z-10">
-                    <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center bg-[#EBDCFF] text-[#1c1c1e] shadow-inner">
-                      <span className="material-symbols-outlined text-[20px] md:text-[24px]">
-                        {card.icon}
+                    <div className="flex items-start justify-between mb-4 md:mb-6 relative z-10">
+                      <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center bg-[#EBDCFF] text-[#1c1c1e] shadow-inner">
+                        <span className="material-symbols-outlined text-[20px] md:text-[24px]">
+                          {card.icon}
+                        </span>
+                      </div>
+                      <span
+                        className={`text-[11px] font-bold px-2 py-1 md:px-3 md:py-1.5 rounded-full border shadow-sm ${
+                          card.isNeutral
+                            ? isDark
+                              ? "bg-white/5 border-white/10 text-white/60"
+                              : "bg-black/5 border-black/5 text-[#1c1c1e]/60"
+                            : card.isPositive
+                            ? isDark
+                              ? "bg-[#EBDCFF]/10 border-[#EBDCFF]/20 text-[#EBDCFF]"
+                              : "bg-[#EBDCFF]/20 border-[#EBDCFF]/30 text-[#1c1c1e]"
+                            : isDark
+                            ? "bg-rose-500/10 border-rose-500/20 text-rose-400"
+                            : "bg-rose-50 border-rose-200 text-rose-700"
+                        }`}
+                      >
+                        {card.delta}
                       </span>
                     </div>
-                    <span
-                      className={`text-[11px] font-bold px-2 py-1 md:px-3 md:py-1.5 rounded-full border shadow-sm ${
-                        isDark
-                          ? "bg-white/5 border-white/10 text-white"
-                          : "bg-white border-black/5 text-[#1c1c1e]"
-                      }`}
-                    >
-                      {card.delta}
-                    </span>
-                  </div>
 
-                  <div className="relative z-10">
-                    <p
-                      className={`text-[10px] md:text-[11px] font-bold uppercase tracking-[0.15em] mb-1.5 ${
-                        c("text-[#1c1c1e]/50", "text-white/40")
-                      }`}
-                    >
-                      {card.label}
-                    </p>
-                    <h3
-                      className={`text-[1.5rem] md:text-[2rem] font-serif font-bold mb-3 md:mb-4 tracking-tight ${
-                        c("text-[#1c1c1e]", "text-white")
-                      }`}
-                      style={{ fontFamily: "'Playfair Display', serif" }}
-                    >
-                      {card.value}
-                    </h3>
-
-                    <div
-                      className={`w-full h-1.5 rounded-full overflow-hidden ${
-                        c("bg-black/5", "bg-white/10")
-                      }`}
-                    >
-                      <div
-                        className={`h-full rounded-full transition-all duration-700 ${
-                          c("bg-[#1c1c1e]", "bg-[#EBDCFF]")
+                    <div className="relative z-10">
+                      <p
+                        className={`text-[10px] md:text-[11px] font-bold uppercase tracking-[0.15em] mb-1.5 ${
+                          c("text-[#1c1c1e]/60", "text-white/60")
                         }`}
-                        style={{ width: `${card.bar}%` }}
-                      />
+                      >
+                        {card.label}
+                      </p>
+                      <h3
+                        className={`${isHero ? "text-3xl" : "text-2xl"} md:text-[2rem] font-serif font-bold tracking-tight ${
+                          c("text-[#1c1c1e]", "text-white")
+                        }`}
+                        style={{ fontFamily: "'Playfair Display', serif" }}
+                      >
+                        {card.value}
+                      </h3>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -490,8 +499,6 @@ export default function Dashboard() {
                     const name = bot.persona?.name || "Unnamed Bot";
                     const icon = getBotIcon(name);
                     const type = bot.persona?.language ? `${titleCase(bot.persona.language)} Assistant` : "AI Assistant";
-                    const efficiency = getBotEfficiency(bot.id, bot.status);
-                    const lastActive = getBotLastActive(bot.id, bot.total_conversations, bot.status);
                     return (
                       <div
                         key={bot.id}
@@ -519,18 +526,10 @@ export default function Dashboard() {
                           <p className={`text-[12px] font-medium ${c("text-[#1c1c1e]/50", "text-white/40")}`}>
                             {type}
                           </p>
-                          {/* Efficiency bar */}
-                          <div className="mt-2 flex items-center gap-2">
-                            <div className={`flex-1 h-1.5 rounded-full overflow-hidden ${c("bg-black/5", "bg-white/10")}`}>
-                              <div
-                                className={`h-full rounded-full ${c("bg-[#1c1c1e]", "bg-[#EBDCFF]")}`}
-                                style={{ width: `${efficiency}%` }}
-                              />
-                            </div>
-                            <span className={`text-[11px] font-bold flex-shrink-0 ${c("text-[#1c1c1e]", "text-white")}`}>
-                              {efficiency}%
-                            </span>
-                          </div>
+                          {/* Conversations count */}
+                          <p className={`text-[12px] font-medium mt-1.5 ${c("text-[#1c1c1e]/50", "text-white/40")}`}>
+                            {bot.total_conversations} convs · {bot.total_messages} msgs
+                          </p>
                         </div>
 
                         {/* Status + last active */}
@@ -540,7 +539,7 @@ export default function Dashboard() {
                             {bot.status}
                           </span>
                           <span className={`text-[11px] font-medium ${c("text-[#1c1c1e]/40", "text-white/30")}`}>
-                            {lastActive}
+                            {formatLastActive(bot.last_active_at, bot.total_conversations)}
                           </span>
                         </div>
                       </div>
@@ -553,7 +552,7 @@ export default function Dashboard() {
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className={isDark ? "bg-black/20" : "bg-[#F5F5F7]/50"}>
-                        {["Agent Name", "Status", "Efficiency", "Last Active", ""].map((h) => (
+                        {["Agent Name", "Status", "Conversations", "Last Active", ""].map((h) => (
                           <th
                             key={h}
                             className={`px-8 py-4 text-[11px] font-bold uppercase tracking-[0.15em] border-b whitespace-nowrap ${
@@ -574,8 +573,7 @@ export default function Dashboard() {
                         const name = bot.persona?.name || "Unnamed Bot";
                         const icon = getBotIcon(name);
                         const type = bot.persona?.language ? `${titleCase(bot.persona.language)} Assistant` : "AI Assistant";
-                        const efficiency = getBotEfficiency(bot.id, bot.status);
-                        const lastActive = getBotLastActive(bot.id, bot.total_conversations, bot.status);
+                        const convLabel = `${bot.total_conversations} convs · ${bot.total_messages} msgs`;
                         return (
                           <tr
                             key={bot.id}
@@ -621,26 +619,13 @@ export default function Dashboard() {
                               </span>
                             </td>
 
-                            {/* Efficiency */}
-                            <td className="px-8 py-5">
-                              <div className="min-w-[8rem] max-w-[10rem]">
-                                <div className="flex justify-between text-[13px] mb-2 font-medium">
-                                  <span className={c("text-[#1c1c1e]/50", "text-white/40")}>Precision</span>
-                                  <span className={`font-bold ${c("text-[#1c1c1e]", "text-white")}`}>
-                                    {efficiency}%
-                                  </span>
-                                </div>
-                                <div
-                                  className={`w-full h-2 rounded-full overflow-hidden shadow-inner ${
-                                    c("bg-[#F5F5F7] border border-black/5", "bg-white/10")
-                                  }`}
-                                >
-                                  <div
-                                    className={`h-full rounded-full ${c("bg-[#1c1c1e]", "bg-[#EBDCFF]")}`}
-                                    style={{ width: `${efficiency}%` }}
-                                  />
-                                </div>
-                              </div>
+                            {/* Conversations */}
+                            <td
+                              className={`px-8 py-5 text-[13px] font-medium tabular-nums ${
+                                c("text-[#1c1c1e]/70", "text-white/60")
+                              }`}
+                            >
+                              {convLabel}
                             </td>
 
                             {/* Last Active */}
@@ -649,7 +634,7 @@ export default function Dashboard() {
                                 c("text-[#1c1c1e]/50", "text-white/40")
                               }`}
                             >
-                              {lastActive}
+                              {formatLastActive(bot.last_active_at, bot.total_conversations)}
                             </td>
 
                             {/* Actions */}

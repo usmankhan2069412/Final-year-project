@@ -58,11 +58,12 @@ async def lifespan(app: FastAPI):
     threading.Thread(target=worker_main, name="knowledge-worker", daemon=True).start()
 
     from apscheduler.schedulers.background import BackgroundScheduler
-    from app.tasks.analytics_aggregation import run_nightly_aggregation
+    from app.tasks.analytics_aggregation import run_recent_aggregation
+    from datetime import datetime, timezone
     
     scheduler = BackgroundScheduler()
-    # Run daily aggregation at 12:05 AM (00:05) every day
-    scheduler.add_job(run_nightly_aggregation, "cron", hour=0, minute=5)
+    # Refresh analytics every hour. The job aggregates today and yesterday.
+    scheduler.add_job(run_recent_aggregation, "interval", hours=1, next_run_time=datetime.now(timezone.utc))
     
     # Periodically write the heartbeat file
     from app.workers.knowledge_worker import write_heartbeat
@@ -337,4 +338,3 @@ def widget_script():
 })();
 """
     return Response(content=script, media_type="application/javascript")
-

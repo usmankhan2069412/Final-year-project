@@ -71,8 +71,8 @@ def update_api_key_last_used(key_hash: str):
 
 def get_current_user_or_api_key(
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    background_tasks: BackgroundTasks = None,
 ) -> User:
     """
     Authenticate using either JWT (Authorization: Bearer) or API Key (X-API-Key).
@@ -80,6 +80,7 @@ def get_current_user_or_api_key(
     api_key = request.headers.get("X-API-Key")
     if api_key:
         import hashlib
+        from datetime import datetime, timezone
         from app.models.api_key import ApiKey
         
         key_hash = hashlib.sha256(api_key.encode()).hexdigest()
@@ -93,32 +94,31 @@ def get_current_user_or_api_key(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid or revoked API key"
             )
+
+        if api_key_record.expires_at is not None:
+            expires_at = api_key_record.expires_at
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            if expires_at <= datetime.now(timezone.utc):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Expired API key"
+                )
             
-        if background_tasks:
-            background_tasks.add_task(update_api_key_last_used, key_hash)
-        else:
-            update_api_key_last_used(key_hash)
+        background_tasks.add_task(update_api_key_last_used, key_hash)
+        request.state.api_key_org_id = api_key_record.org_id
+        request.state.authenticated_with_api_key = True
             
         db.execute(
             text("SELECT set_config('app.current_org_id', :org_id, true)"),
             {"org_id": str(api_key_record.org_id)}
         )
         
-        owner_membership = db.query(OrgMember).filter(
-            OrgMember.org_id == api_key_record.org_id,
-            OrgMember.role == "owner"
-        ).first()
-        if not owner_membership:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Organization owner not found"
-            )
-            
-        owner = db.query(User).filter(User.id == owner_membership.user_id).first()
+        owner = db.query(User).filter(User.id == api_key_record.created_by_user_id).first()
         if not owner:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Organization owner not found"
+                detail="User associated with API key not found"
             )
         return owner
 
@@ -165,11 +165,24 @@ def get_current_user_or_api_key(
 def resolve_tenant_org_member(
     db: Session,
     current_user: User,
-    x_org_id: Optional[str] = None
+    x_org_id: Optional[str] = None,
+    api_key_org_id: Optional[uuid.UUID] = None,
 ) -> OrgMember:
     """
     Resolve the active organization membership for the user.
     """
+    if api_key_org_id:
+        membership = db.query(OrgMember).filter(
+            OrgMember.user_id == current_user.id,
+            OrgMember.org_id == api_key_org_id,
+        ).first()
+        if not membership:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="API key organization is not accessible to this user",
+            )
+        return membership
+
     if x_org_id:
         try:
             org_uuid = uuid.UUID(x_org_id)
@@ -220,12 +233,14 @@ def get_org_id(db: Session) -> uuid.UUID:
 
 
 def get_tenant_member(
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_or_api_key),
     x_org_id: Optional[str] = Header(None, alias="X-Org-ID"),
 ) -> OrgMember:
     """Dependency that resolves the active organization membership."""
-    return resolve_tenant_org_member(db, current_user, x_org_id)
+    api_key_org_id = getattr(request.state, "api_key_org_id", None)
+    return resolve_tenant_org_member(db, current_user, x_org_id, api_key_org_id)
 
 
 def get_current_org_id(
@@ -289,4 +304,3 @@ def require_role(*allowed_roles: str):
 
 
 # API Key and JWT Authentication utilities moved to the top of the file.
-

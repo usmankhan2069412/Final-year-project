@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useLayoutConfig } from "../../contexts/LayoutContext";
+import GlobalFilters from "./components/GlobalFilters";
 import KPIs from "./components/KPIs";
 import VolumeChart from "./components/VolumeChart";
 import LanguageMix from "./components/LanguageMix";
@@ -11,9 +12,13 @@ export default function Analytics() {
   const { isDark } = useTheme();
   const c = (light: string, dark: string) => (isDark ? dark : light);
 
+  // Global filter state — shared across all child components
+  const [days, setDays] = useState(30);
+  const [chatbotId, setChatbotId] = useState("");
+
   useLayoutConfig({
     title: "Intelligence Analytics",
-    searchPlaceholder: "Search analytics data…",
+
     actions: (
       <button
         className={`px-4 py-2 rounded-xl border transition-[color,background-color,border-color,box-shadow] duration-200 text-[13px] font-bold flex items-center gap-1.5 shadow-sm focus-visible:ring-2 outline-none ${
@@ -25,53 +30,58 @@ export default function Analytics() {
         <span className="material-symbols-outlined text-[18px]" aria-hidden="true">download</span>
         <span className="hidden sm:inline">Export</span>
       </button>
-    )
+    ),
   });
 
   return (
     <main className="flex-1 overflow-y-auto p-4 sm:p-8 lg:p-12 z-10">
-          <div className="mb-12">
-            <span
-              className={`text-[11px] font-bold tracking-[0.2em] uppercase mb-3 block ${
-                c("text-[#1c1c1e]/40", "text-white/30")
-              }`}
-            >
-              Intelligence
-            </span>
-            <h1
-              className={`text-[2.5rem] lg:text-[3.5rem] font-bold tracking-tight leading-none mb-3 ${
-                c("text-[#1c1c1e]", "text-white")
-              }`}
-              style={{ fontFamily: "'Playfair Display', serif" }}
-            >
-              Performance Analytics
-            </h1>
-            <p
-              className={`text-lg max-w-2xl font-medium ${
-                c("text-[#1c1c1e]/60", "text-white/50")
-              }`}
-            >
-              Real-time insights across all active agents and conversation clusters.
-            </p>
-          </div>
+      <div className="mb-10">
+        <span
+          className={`text-[11px] font-bold tracking-[0.2em] uppercase mb-3 block ${
+            c("text-[#1c1c1e]/40", "text-white/30")
+          }`}
+        >
+          Intelligence
+        </span>
+        <h1
+          className={`text-[2.5rem] lg:text-[3.5rem] font-bold tracking-tight leading-none mb-3 ${
+            c("text-[#1c1c1e]", "text-white")
+          }`}
+          style={{ fontFamily: "'Playfair Display', serif" }}
+        >
+          Performance Analytics
+        </h1>
+        <p
+          className={`text-lg max-w-2xl font-medium ${
+            c("text-[#1c1c1e]/60", "text-white/50")
+          }`}
+        >
+          Real-time insights across all active agents and conversation clusters.
+        </p>
+      </div>
 
-          {/* KPI Row */}
-          <KPIs />
+      {/* Global Filters */}
+      <GlobalFilters
+        days={days}
+        chatbotId={chatbotId}
+        onDaysChange={setDays}
+        onChatbotChange={setChatbotId}
+      />
 
-          {/* Chart Area */}
-          <VolumeChart />
+      {/* KPI Row */}
+      <KPIs days={days} chatbotId={chatbotId} />
 
-          {/* Bottom Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            {/* Language Mix */}
-            <LanguageMix />
+      {/* Volume / Resolution Trend Chart */}
+      <VolumeChart days={days} chatbotId={chatbotId} />
 
-            {/* Channel Performance */}
-            <ChannelPerf />
-          </div>
+      {/* Bottom Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <LanguageMix days={days} chatbotId={chatbotId} />
+        <ChannelPerf days={days} chatbotId={chatbotId} />
+      </div>
 
-          {/* Recent Interactions Table */}
-          <InteractionsTable />
+      {/* Interactions Table */}
+      <InteractionsTable days={days} chatbotId={chatbotId} />
     </main>
   );
 }

@@ -167,12 +167,14 @@ class WhatsAppService:
                 logger.info("Event %s already processed. Skipping.", message.message_id)
                 return
                 
-            # Find active deployment
+            # Find active deployment, ignoring any deployments linked to deleted chatbots
             deployment = (
                 db.query(Deployment)
+                .join(Chatbot, Deployment.chatbot_id == Chatbot.id)
                 .filter(
                     Deployment.whatsapp_phone_number_id == phone_number_id,
-                    Deployment.is_active == True
+                    Deployment.is_active == True,
+                    Chatbot.deleted_at == None
                 )
                 .first()
             )

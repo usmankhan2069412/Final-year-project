@@ -46,6 +46,13 @@ def detect_message_language(text: str) -> str:
     return "English"
 
 
+def conversation_was_escalated(conversation: Conversation) -> bool:
+    return (
+        conversation.status == ConversationStatus.ESCALATED
+        or conversation.assigned_agent_id is not None
+    )
+
+
 def aggregate_daily_metrics(db: Session, target_date: date):
     """
     Run daily aggregation for the target_date across all chatbots.
@@ -85,8 +92,13 @@ def aggregate_daily_metrics(db: Session, target_date: date):
                 continue
 
             total_conversations = len(conversations)
-            escalated_count = sum(1 for c in conversations if c.status == ConversationStatus.ESCALATED)
-            resolved_count = sum(1 for c in conversations if c.status == ConversationStatus.RESOLVED)
+            escalated_count = sum(1 for c in conversations if conversation_was_escalated(c))
+            resolved_count = sum(
+                1
+                for c in conversations
+                if c.status == ConversationStatus.RESOLVED
+                and not conversation_was_escalated(c)
+            )
             
             total_messages = 0
             response_times = []
@@ -119,12 +131,12 @@ def aggregate_daily_metrics(db: Session, target_date: date):
                 for msg in messages:
                     if msg.role == MessageRole.USER:
                         sentiment_scores.append(classify_message_sentiment(msg.content))
-                        if last_user_time is None:
-                            last_user_time = msg.created_at
+                        last_user_time = msg.created_at
                     elif msg.role == MessageRole.BOT:
                         if last_user_time is not None:
                             diff = (msg.created_at - last_user_time).total_seconds()
-                            response_times.append(diff)
+                            if diff >= 0:
+                                response_times.append(diff)
                             last_user_time = None
 
             avg_resp_time = (sum(response_times) / len(response_times)) if response_times else None
@@ -167,20 +179,35 @@ def aggregate_daily_metrics(db: Session, target_date: date):
                 ))
 
             db.commit()
-            logger.info(f"Aggregated metrics for chatbot {chatbot.id} on {target_date}: convs={total_conversations}, msgs={total_messages}")
+            logger.info(
+                "Aggregated metrics for chatbot %s on %s: convs=%s, msgs=%s, resolved_without_escalation=%s, escalated=%s",
+                chatbot.id,
+                target_date,
+                total_conversations,
+                total_messages,
+                resolved_count,
+                escalated_count,
+            )
         except Exception as e:
             logger.error(f"Failed to aggregate metrics for chatbot {chatbot.id} on {target_date}: {e}", exc_info=True)
             db.rollback()
 
 
-def run_nightly_aggregation():
+def run_recent_aggregation(days: int = 2):
     """
     Main job function executed by APScheduler.
-    Aggregates metrics for 'yesterday'.
+    Aggregates recent dates so dashboards can refresh during the day and
+    still catch late status changes from yesterday.
     """
     db = SessionLocal()
     try:
-        yesterday = date.today() - timedelta(days=1)
-        aggregate_daily_metrics(db, yesterday)
+        today = date.today()
+        for offset in range(days):
+            aggregate_daily_metrics(db, today - timedelta(days=offset))
     finally:
         db.close()
+
+
+def run_nightly_aggregation():
+    """Backward-compatible alias for older imports/jobs."""
+    run_recent_aggregation()
