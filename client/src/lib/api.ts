@@ -219,6 +219,10 @@ export const api = {
   createKnowledge: (payload: { chatbot_id: string; source_type: Exclude<SourceType, "file">; label: string; value: string }) =>
     apiRequest<KnowledgeSourceResponse>("/api/v1/knowledge", { method: "POST", body: JSON.stringify(payload) }),
 
+  validateWebsiteUrl: (payload: { url: string }) =>
+    apiRequest<{ status: string; links_found: number }>("/api/v1/knowledge/validate-url", { method: "POST", body: JSON.stringify(payload) }),
+
+
   uploadKnowledgeFile: (chatbotId: string, file: File) => {
     const data = new FormData();
     data.append("file", file);

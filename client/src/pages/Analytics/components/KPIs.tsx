@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTheme } from "../../../contexts/ThemeContext";
+import { api } from "../../../lib/api";
 
 interface KPIData {
   value: number;
@@ -80,8 +81,8 @@ export default function KPIs({ days, chatbotId }: KPIsProps) {
         if (chatbotId) params.set("chatbot_id", chatbotId);
 
         const [kpiRes, volRes] = await Promise.all([
-          fetch(`http://localhost:8000/api/v1/analytics/kpi?${params}`, { headers }),
-          fetch(`http://localhost:8000/api/v1/analytics/volume?${params}`, { headers }),
+          fetch(`${api.baseUrl}/api/v1/analytics/kpi?${params}`, { headers }),
+          fetch(`${api.baseUrl}/api/v1/analytics/volume?${params}`, { headers }),
         ]);
 
         if (kpiRes.ok) setData(await kpiRes.json());

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTheme } from "../../../contexts/ThemeContext";
+import { api } from "../../../lib/api";
 
 interface Interaction {
   id: string;
@@ -14,6 +15,8 @@ interface Interaction {
 interface InteractionsTableProps {
   days: number;
   chatbotId: string;
+  statusFilter: string;
+  onStatusFilterChange: (value: string) => void;
 }
 
 const STATUS_OPTIONS = [
@@ -45,12 +48,16 @@ function formatRelativeTime(dateString: string): string {
   return `${diffDays}d ago`;
 }
 
-export default function InteractionsTable({ days, chatbotId }: InteractionsTableProps) {
+export default function InteractionsTable({
+  days,
+  chatbotId,
+  statusFilter,
+  onStatusFilterChange,
+}: InteractionsTableProps) {
   const { isDark } = useTheme();
   const c = (light: string, dark: string) => (isDark ? dark : light);
   const [data, setData] = useState<Interaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState("");
 
   useEffect(() => {
     async function fetchInteractions() {
@@ -64,7 +71,7 @@ export default function InteractionsTable({ days, chatbotId }: InteractionsTable
         if (statusFilter) params.set("status", statusFilter);
         if (chatbotId) params.set("chatbot_id", chatbotId);
 
-        const res = await fetch(`http://localhost:8000/api/v1/analytics/interactions?${params}`, { headers });
+        const res = await fetch(`${api.baseUrl}/api/v1/analytics/interactions?${params}`, { headers });
         if (res.ok) setData(await res.json());
       } catch (err) {
         console.error("Error fetching interactions:", err);
@@ -133,7 +140,7 @@ export default function InteractionsTable({ days, chatbotId }: InteractionsTable
           <select
             id="status-filter"
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => onStatusFilterChange(e.target.value)}
             className={selectClass}
           >
             {STATUS_OPTIONS.map((opt) => (

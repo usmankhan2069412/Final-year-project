@@ -486,6 +486,25 @@ class TextExtractor:
         )
 
     @staticmethod
+    def validate_url_sync(url: str) -> dict:
+        """
+        Quickly check if a single URL is crawlable without traversing links.
+        Raises ValueError if it's not crawlable.
+        Returns metadata about the page.
+        """
+        page = _scrape_page_sync(url)
+        if page["error"]:
+            raise ValueError(page["error"])
+        if len(page["content_markdown"]) < 50:
+            raise ValueError(
+                "No readable content found. The site may require JavaScript "
+                "rendering or may be blocking automated access."
+            )
+        return {
+            "links_found": len(page["links"])
+        }
+
+    @staticmethod
     async def extract_url(url: str) -> CrawlResult:
         """
         Async wrapper kept for API-level use.

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTheme } from "../../../contexts/ThemeContext";
+import { api } from "../../../lib/api";
 
 interface LanguageItem {
   language: string;
@@ -28,7 +29,7 @@ export default function LanguageMix({ days, chatbotId }: LanguageMixProps) {
         const params = new URLSearchParams({ days: String(days) });
         if (chatbotId) params.set("chatbot_id", chatbotId);
 
-        const res = await fetch(`http://localhost:8000/api/v1/analytics/languages?${params}`, { headers });
+        const res = await fetch(`${api.baseUrl}/api/v1/analytics/languages?${params}`, { headers });
         if (res.ok) setData(await res.json());
       } catch (err) {
         console.error("Error fetching languages:", err);

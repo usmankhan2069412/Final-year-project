@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useLocation } from "wouter";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
@@ -13,6 +13,7 @@ import {
   GraduationCap,
   Languages,
   LayoutDashboard,
+  Menu,
   MessageCircle,
   Network,
   PlayCircle,
@@ -23,6 +24,7 @@ import {
   UploadCloud,
   Users,
   Workflow,
+  X,
   Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -329,6 +331,7 @@ export default function AinaLanding() {
   const [, setLocation] = useLocation();
   const { isAuthenticated } = useAuth();
   const container = useRef<HTMLDivElement>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const openBuilder = () => setLocation(isAuthenticated ? "/builder" : "/signup");
   const openDashboard = () => setLocation(isAuthenticated ? "/dashboard" : "/login");
@@ -386,9 +389,9 @@ export default function AinaLanding() {
     >
       <header className="fixed left-0 top-0 z-50 w-full border-b border-black/5 bg-[#F5F5F7]/90 backdrop-blur-xl">
         <nav className="mx-auto flex max-w-[1240px] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8" aria-label="Project navigation">
-          <a href="#top" className="flex min-w-0 items-center gap-3">
+          <a href="#top" aria-label="Aina AI Home" className="flex min-w-0 items-center gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5c3ea3] rounded-lg">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#EBDCFF] text-[#1c1c1e]">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M12 2L2 22h20L12 2z"></path>
             </svg>
             </div>
@@ -405,7 +408,7 @@ export default function AinaLanding() {
               <a
                 key={item.href}
                 href={item.href}
-                className="rounded-full px-4 py-2 text-[#1c1c1e]/60 transition-colors hover:bg-[#EBDCFF] hover:text-[#1c1c1e]"
+                className="rounded-full px-4 py-2 text-[#1c1c1e]/60 transition-colors hover:bg-[#EBDCFF] hover:text-[#1c1c1e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5c3ea3]"
               >
                 {item.label}
               </a>
@@ -415,20 +418,60 @@ export default function AinaLanding() {
           <div className="flex shrink-0 items-center gap-2">
             <button
               onClick={openDashboard}
-              className="hidden items-center gap-2 rounded-lg border border-black/10 bg-white px-4 py-2.5 text-sm font-bold text-[#1c1c1e] transition-colors hover:bg-black/5 sm:flex"
+              className="hidden items-center gap-2 rounded-lg border border-black/10 bg-white px-4 py-2.5 text-sm font-bold text-[#1c1c1e] transition-colors hover:bg-black/5 sm:flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5c3ea3] focus-visible:ring-offset-2"
             >
               <LayoutDashboard className="h-4 w-4" aria-hidden="true" />
               {isAuthenticated ? "Dashboard" : "Sign In"}
             </button>
             <button
               onClick={openBuilder}
-              className="flex items-center gap-2 rounded-lg border border-[#1c1c1e]/10 bg-[#EBDCFF] px-4 py-2.5 text-sm font-black text-[#1c1c1e] shadow-sm transition-colors hover:bg-[#d8bfff]"
+              className="flex items-center gap-2 rounded-lg border border-[#1c1c1e]/10 bg-[#EBDCFF] px-4 py-2.5 text-sm font-black text-[#1c1c1e] shadow-sm transition-colors hover:bg-[#d8bfff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5c3ea3] focus-visible:ring-offset-2"
             >
               Open Builder
               <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </button>
+            <button
+              aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="flex h-10 w-10 items-center justify-center rounded-lg border border-black/10 bg-white text-[#1c1c1e] lg:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5c3ea3]"
+            >
+              {isMobileMenuOpen ? (
+                <X className="h-5 w-5" aria-hidden="true" />
+              ) : (
+                <Menu className="h-5 w-5" aria-hidden="true" />
+              )}
+            </button>
           </div>
         </nav>
+
+        {isMobileMenuOpen && (
+          <div className="absolute left-0 top-full w-full border-b border-black/5 bg-[#F5F5F7] p-4 shadow-lg lg:hidden">
+            <nav className="flex flex-col gap-2" aria-label="Mobile navigation">
+              {navItems.map((item) => (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="rounded-lg px-4 py-3 text-sm font-bold text-[#1c1c1e]/80 transition-colors hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5c3ea3]"
+                >
+                  {item.label}
+                </a>
+              ))}
+              <div className="mt-2 flex flex-col gap-2 pt-2 border-t border-black/5 sm:hidden">
+                <button
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    openDashboard();
+                  }}
+                  className="flex items-center justify-center gap-2 rounded-lg border border-black/10 bg-white px-4 py-3 text-sm font-bold text-[#1c1c1e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5c3ea3]"
+                >
+                  <LayoutDashboard className="h-4 w-4" aria-hidden="true" />
+                  {isAuthenticated ? "Dashboard" : "Sign In"}
+                </button>
+              </div>
+            </nav>
+          </div>
+        )}
       </header>
 
       <main id="top" className="pt-24">
@@ -437,7 +480,7 @@ export default function AinaLanding() {
             <div className="home-reveal mx-auto max-w-5xl text-center">
               
               <h1
-                className="text-[3.4rem] font-semibold leading-[0.92] tracking-tight text-[#1c1c1e] sm:text-[5rem] lg:text-[6.9rem]"
+                className="text-4xl font-semibold leading-[0.92] tracking-tight text-[#1c1c1e] sm:text-[5rem] lg:text-[6.9rem] text-balance"
                 style={displayFont}
               >
                 Aina AI: turn business knowledge into a{" "}
@@ -449,7 +492,7 @@ export default function AinaLanding() {
               <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
                 <button
                   onClick={openBuilder}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#1c1c1e] px-6 py-4 text-sm font-black text-[#F5F5F7] shadow-[0_16px_42px_rgba(28,28,30,0.22)] transition-transform hover:-translate-y-0.5 sm:w-auto"
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#1c1c1e] px-6 py-4 text-sm font-black text-[#F5F5F7] shadow-[0_16px_42px_rgba(28,28,30,0.22)] transition-transform hover:-translate-y-0.5 sm:w-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5c3ea3] focus-visible:ring-offset-2"
                 >
                   Open Builder
                   <Rocket className="h-4 w-4" aria-hidden="true" />
@@ -457,7 +500,7 @@ export default function AinaLanding() {
                
                 <a
                   href="#architecture"
-                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#5c3ea3]/20 bg-[#EBDCFF] px-6 py-4 text-sm font-black text-[#1c1c1e] transition-colors hover:bg-[#d8bfff] sm:w-auto"
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#5c3ea3]/20 bg-[#EBDCFF] px-6 py-4 text-sm font-black text-[#1c1c1e] transition-colors hover:bg-[#d8bfff] sm:w-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5c3ea3] focus-visible:ring-offset-2"
                 >
                   See Architecture
                   <Network className="h-4 w-4" aria-hidden="true" />
@@ -493,7 +536,7 @@ export default function AinaLanding() {
                         <Icon className="h-5 w-5" aria-hidden="true" />
                       </div>
                     </div>
-                    <h3 className="text-xl font-black leading-snug text-[#1c1c1e]" style={headingFont}>
+                    <h3 className="text-xl font-black leading-snug text-[#1c1c1e] text-balance" style={headingFont}>
                       {item.title}
                     </h3>
                     <p className="mt-4 text-sm font-medium leading-7 text-[#1c1c1e]/60">{item.body}</p>
@@ -509,13 +552,13 @@ export default function AinaLanding() {
             <div className="home-reveal flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
               <div className="max-w-3xl">
                 <SectionKicker>How It Works</SectionKicker>
-                <h2 className="text-4xl font-black tracking-tight text-[#1c1c1e] sm:text-5xl" style={headingFont}>
+                <h2 className="text-4xl font-black tracking-tight text-[#1c1c1e] sm:text-5xl text-balance" style={headingFont}>
                   A real four-step builder, shown as the center of the product.
                 </h2>
               </div>
               <button
                 onClick={openBuilder}
-                className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#EBDCFF] px-5 py-3 text-sm font-black text-[#1c1c1e] transition-colors hover:bg-[#d8bfff] sm:w-fit"
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#EBDCFF] px-5 py-3 text-sm font-black text-[#1c1c1e] transition-colors hover:bg-[#d8bfff] sm:w-fit focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5c3ea3] focus-visible:ring-offset-2"
               >
                 Open the actual builder
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
@@ -534,7 +577,7 @@ export default function AinaLanding() {
           <div className="mx-auto grid max-w-[1240px] gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
             <div className="home-reveal">
               <SectionKicker tone="dark">Local Context</SectionKicker>
-              <h2 className="text-4xl font-black tracking-tight sm:text-5xl" style={headingFont}>
+              <h2 className="text-4xl font-black tracking-tight sm:text-5xl text-balance" style={headingFont}>
                 Built for the way local customers actually message businesses.
               </h2>
               <p className="mt-5 text-lg font-medium leading-8 text-white/60">
@@ -581,7 +624,7 @@ export default function AinaLanding() {
             <div className="home-reveal grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
               <div>
                 <SectionKicker>Demo</SectionKicker>
-                <h2 className="text-4xl font-black tracking-tight text-[#1c1c1e] sm:text-5xl" style={headingFont}>
+                <h2 className="text-4xl font-black tracking-tight text-[#1c1c1e] sm:text-5xl text-balance" style={headingFont}>
                   A product-style demo that shows testing, sources, analytics, and handoff.
                 </h2>
                 <p className="mt-5 text-lg font-medium leading-8 text-[#1c1c1e]/60">
@@ -591,14 +634,14 @@ export default function AinaLanding() {
                 <div className="mt-7 flex flex-col gap-3 sm:flex-row">
                   <button
                     onClick={openBuilder}
-                    className="flex items-center justify-center gap-2 rounded-lg bg-[#1c1c1e] px-5 py-3 text-sm font-black text-[#F5F5F7]"
+                    className="flex items-center justify-center gap-2 rounded-lg bg-[#1c1c1e] px-5 py-3 text-sm font-black text-[#F5F5F7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5c3ea3] focus-visible:ring-offset-2"
                   >
                     Try in Builder
                     <MessageCircle className="h-4 w-4" aria-hidden="true" />
                   </button>
                   <button
                     onClick={openDashboard}
-                    className="flex items-center justify-center gap-2 rounded-lg border border-black/10 bg-[#F5F5F7] px-5 py-3 text-sm font-black text-[#1c1c1e]"
+                    className="flex items-center justify-center gap-2 rounded-lg border border-black/10 bg-[#F5F5F7] px-5 py-3 text-sm font-black text-[#1c1c1e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5c3ea3] focus-visible:ring-offset-2"
                   >
                     View Dashboard
                     <LayoutDashboard className="h-4 w-4" aria-hidden="true" />
@@ -668,7 +711,7 @@ export default function AinaLanding() {
           <div className="mx-auto max-w-[1240px]">
             <div className="home-reveal max-w-3xl">
               <SectionKicker>Architecture</SectionKicker>
-              <h2 className="text-4xl font-black tracking-tight text-[#1c1c1e] sm:text-5xl" style={headingFont}>
+              <h2 className="text-4xl font-black tracking-tight text-[#1c1c1e] sm:text-5xl text-balance" style={headingFont}>
                 The technical pipeline is visible without turning the page into documentation.
               </h2>
               <p className="mt-5 text-lg font-medium leading-8 text-[#1c1c1e]/60">
@@ -729,13 +772,13 @@ export default function AinaLanding() {
               ))}
             </div>
             <div className="flex flex-wrap gap-3 lg:justify-end">
-              <button onClick={openBuilder} className="rounded-lg bg-[#EBDCFF] px-4 py-2.5 text-sm font-black text-[#1c1c1e]">
+              <button onClick={openBuilder} className="rounded-lg bg-[#EBDCFF] px-4 py-2.5 text-sm font-black text-[#1c1c1e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5c3ea3] focus-visible:ring-offset-2">
                 Builder
               </button>
-              <button onClick={openDashboard} className="rounded-lg border border-white/10 px-4 py-2.5 text-sm font-black text-white/80">
+              <button onClick={openDashboard} className="rounded-lg border border-white/10 px-4 py-2.5 text-sm font-black text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5c3ea3] focus-visible:ring-offset-2 focus-visible:ring-offset-[#1c1c1e]">
                 Dashboard
               </button>
-              <a href="#architecture" className="rounded-lg border border-white/10 px-4 py-2.5 text-sm font-black text-white/80">
+              <a href="#architecture" className="rounded-lg border border-white/10 px-4 py-2.5 text-sm font-black text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5c3ea3] focus-visible:ring-offset-2 focus-visible:ring-offset-[#1c1c1e]">
                 Architecture
               </a>
             </div>

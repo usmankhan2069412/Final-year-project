@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTheme } from "../../../contexts/ThemeContext";
+import { api } from "../../../lib/api";
 
 interface Bot {
   id: string;
@@ -50,7 +51,7 @@ export default function GlobalFilters({
         const token = localStorage.getItem("token");
         const headers: Record<string, string> = { "Content-Type": "application/json" };
         if (token) headers["Authorization"] = `Bearer ${token}`;
-        const res = await fetch("http://localhost:8000/api/v1/bots/chatbots", { headers });
+        const res = await fetch(`${api.baseUrl}/api/v1/bots/chatbots`, { headers });
         if (res.ok) setBots(await res.json());
       } catch {
         // silently fail

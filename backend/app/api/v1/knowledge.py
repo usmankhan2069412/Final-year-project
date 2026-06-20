@@ -4,14 +4,20 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 
+from pydantic import BaseModel
 from app.api.deps import get_tenant_db, get_current_org_id
 from app.services.document import KnowledgeService
 from app.schemas.document import KnowledgeSourceCreate, KnowledgeSourceResponse, KnowledgeSourceDetailResponse, KnowledgeJobResponse
 from app.models.document import KnowledgeSource, KnowledgeJob, SourceType
+from app.services.text_extractor import TextExtractor
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+class UrlValidationRequest(BaseModel):
+    url: str
+
 
 
 @router.post("/upload", response_model=KnowledgeSourceResponse, status_code=status.HTTP_201_CREATED)
@@ -27,6 +33,24 @@ def upload_file(
         return source
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.post("/validate-url")
+def validate_url(
+    payload: UrlValidationRequest,
+    db: Session = Depends(get_tenant_db),
+    org_id: uuid.UUID = Depends(get_current_org_id)
+):
+    """Pre-flight check to see if a URL can be crawled."""
+    try:
+        url = KnowledgeService._validate_public_url(payload.url)
+        meta = TextExtractor.validate_url_sync(url)
+        return {"status": "ok", "links_found": meta["links_found"]}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error("Error validating url: %s", str(e), exc_info=True)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot crawl this website.")
+
 
 @router.post("", response_model=KnowledgeSourceResponse, status_code=status.HTTP_201_CREATED)
 def create_knowledge_source(

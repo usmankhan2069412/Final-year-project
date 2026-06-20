@@ -258,12 +258,17 @@ export default function BotBuilder() {
     const id = await ensureDraft();
     if (!id) return;
     const selected = Array.from(files);
+    let successCount = 0;
     for (const file of selected) {
       try {
         await api.uploadKnowledgeFile(id, file);
+        successCount++;
       } catch (err: any) {
         toast.error(`${file.name}: ${err?.message || "Upload failed"}`);
       }
+    }
+    if (successCount > 0) {
+      toast.success(`${successCount} file(s) uploaded successfully.`);
     }
     await refreshKnowledge(id);
   };
@@ -272,6 +277,7 @@ export default function BotBuilder() {
     try {
       await api.deleteKnowledge(sourceId);
       setKnowledgeItems((prev) => prev.filter((item) => item.id !== sourceId));
+      toast.success("Knowledge source removed successfully.");
     } catch (err: any) {
       toast.error(err?.message || "Failed to remove source");
     }

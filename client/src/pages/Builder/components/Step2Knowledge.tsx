@@ -1,7 +1,8 @@
 import { useState, useRef } from "react";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { KnowledgeItem } from "../types";
-import { SourceType } from "../../../lib/api";
+import { SourceType, api } from "../../../lib/api";
+import { toast } from "sonner";
 
 const KNOWLEDGE_TYPES = [
   { type: "file", icon: "upload_file", label: "Documents", hint: "PDF, DOCX, TXT, CSV", color: "#b0c6ff" },
@@ -9,7 +10,6 @@ const KNOWLEDGE_TYPES = [
   { type: "website", icon: "language", label: "Website URL", hint: "We'll crawl your site", color: "#59eeb4" },
   { type: "email", icon: "mail", label: "Contact Email", hint: "For escalation handover", color: "#ffb4ab" },
   { type: "phone", icon: "phone", label: "Phone Number", hint: "For WhatsApp escalation", color: "#EBDCFF" },
-  { type: "app", icon: "apps", label: "App / API", hint: "Connect a data source", color: "#b0c6ff" },
 ] as const;
 
 interface Step2KnowledgeProps {
@@ -31,7 +31,31 @@ export default function Step2Knowledge({ items, onAddItem, onUploadFiles, onRemo
     if (!inputValue.trim() && activeType !== "file") return;
     const typeInfo = KNOWLEDGE_TYPES.find((k) => k.type === activeType);
     if (activeType === "file") return;
-    setIsSubmitting(true);
+    
+    if (activeType === "website") {
+      const url = inputValue.trim();
+      if (/\.(pdf|zip|rar|tar|gz|mp4|mp3|avi|mov|wmv|doc|docx|xls|xlsx|ppt|pptx|csv)$/i.test(url)) {
+        toast.error("Media and archive files are not supported. Please upload them directly as files.");
+        return;
+      }
+      
+      setIsSubmitting(true);
+      try {
+        const res = await api.validateWebsiteUrl({ url });
+        if (res.links_found === 0) {
+          toast.warning("Warning: No internal links found. Only this single page will be crawled (Site may use JavaScript/Cloudflare).", { duration: 6000 });
+        } else {
+          toast.success(`Website accessible. Found ${res.links_found} internal link(s). Deep crawling started.`);
+        }
+      } catch (err: any) {
+        toast.error(err.message || "Cannot crawl this website.");
+        setIsSubmitting(false);
+        return;
+      }
+    } else {
+      setIsSubmitting(true);
+    }
+
     try {
       await onAddItem(activeType as Exclude<SourceType, "file">, inputValue.trim(), typeInfo?.label ?? activeType);
       setInputValue("");
@@ -62,7 +86,7 @@ export default function Step2Knowledge({ items, onAddItem, onUploadFiles, onRemo
           </p>
 
           {/* Source type tabs */}
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5 mb-8">
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5 mb-8">
             {KNOWLEDGE_TYPES.map((kt) => (
               <button
                 key={kt.type}
@@ -331,8 +355,8 @@ export default function Step2Knowledge({ items, onAddItem, onUploadFiles, onRemo
                       <p className={`text-[14px] font-bold truncate ${c("text-[#1c1c1e]", "text-white")}`}>{item.value}</p>
                       <p className={`text-[11px] font-medium mt-0.5 ${c("text-[#1c1c1e]/50", "text-[#55635a]")}`}>{item.label}</p>
                       {item.type === "website" && item.pages_crawled != null && (
-                        <p className={`text-[10px] font-medium mt-0.5 ${c("text-[#1c1c1e]/40", "text-[#55635a]/80")}`}>
-                          {item.pages_crawled} page{item.pages_crawled !== 1 ? "s" : ""} · {((item.total_content_chars || 0) / 1000).toFixed(1)}k chars · {item.crawl_duration_secs}s
+                        <p className={`text-[12px] font-bold mt-1 ${c("text-blue-600", "text-blue-400")}`}>
+                          {item.pages_crawled} page{item.pages_crawled !== 1 ? "s" : ""} crawled · {((item.total_content_chars || 0) / 1000).toFixed(1)}k chars · {item.crawl_duration_secs}s
                         </p>
                       )}
                     </div>
