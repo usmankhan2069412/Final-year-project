@@ -4,6 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: aina_frontend
+    image: aina_frontend_img
     ports:
       - "5173:5173"
     volumes:
