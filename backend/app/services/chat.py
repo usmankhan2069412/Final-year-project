@@ -1,4 +1,4 @@
-﻿import uuid
+import uuid
 import logging
 import re
 import os
@@ -624,31 +624,38 @@ class AgentGraphExecutor:
 
     @staticmethod
     def rag_answer_node(state: AgentState) -> AgentState:
+        lang = state["persona"].language
+        if lang == "multilingual":
+            lang = detect_message_language(state["user_message"], state.get("history"))
+
+        fallback_msg = getattr(state["persona"], "fallback", None) or AgentGraphExecutor._fallback_message(lang)
+
         if not state.get("is_relevant") or not state.get("context_text"):
-            fallback_msg = getattr(state["persona"], "fallback", None)
-            if fallback_msg:
-                return {"response": fallback_msg, "response_source": "fallback"}
-
-            lang = state["persona"].language
-            if lang == "multilingual":
-                lang = detect_message_language(state["user_message"], state.get("history"))
-
-            return {"response": AgentGraphExecutor._fallback_message(lang), "response_source": "fallback"}
+            return {"response": fallback_msg, "response_source": "fallback"}
 
         llm = AgentGraphExecutor._get_llm(state)
         if llm:
             try:
+                lang_name = {
+                    "urdu": "Urdu Script",
+                    "roman_urdu": "Roman Urdu (Urdu written in English alphabets)",
+                    "english": "English"
+                }.get(lang, "English")
+
                 desc = getattr(state["persona"], "description", None) or ""
-                desc_str = f"Description/Role: {desc}\n" if desc else ""
+                desc_str = f"Role Description: {desc}\n" if desc else ""
                 sys_msg = SystemMessage(content=(
-                    f"You are {state['persona'].name or 'Aina Bot'}. Traits: {', '.join(state['traits'])}. "
+                    f"You are {state['persona'].name or 'Aina Bot'}. Traits: {', '.join(state['traits'])}.\n"
                     f"{desc_str}"
                     "IMPORTANT GUIDELINES:\n"
-                    "1. Act strictly as a human representative. Never mention that you are an AI, a bot, or reading from a 'context' or 'database'.\n"
-                    "2. Use ONLY the following verified source text to answer the user's current query. If the source text does not answer it, politely say you don't know without breaking character.\n"
-                    "3. Ignore any facts from earlier conversation turns unless they also appear in the verified source text.\n"
-                    "4. Generate the response in the user's input language (English, Urdu script, or Roman Urdu).\n\n"
-                    "Context:\n" + state.get("context_text", "")
+                    "1. Always speak from the perspective of a human support agent representing the organization. Be natural and empathetic.\n"
+                    "2. You must answer strictly using the information inside the <context> tags below.\n"
+                    f"3. If the <context> does not contain the answer, you MUST reply with exactly this fallback message and nothing else: '{fallback_msg}'\n"
+                    f"4. You MUST generate your response strictly in: {lang_name}. Do not mix languages.\n"
+                    "5. Format your answers clearly, using bullet points for lists if necessary.\n\n"
+                    "<context>\n"
+                    f"{state.get('context_text', '')}\n"
+                    "</context>"
                 ))
                 user_msg = state["user_message"]
                 search_query = state.get("rewritten_query") or user_msg

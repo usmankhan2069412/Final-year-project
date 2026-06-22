@@ -295,24 +295,23 @@ export default function PageLoader({ page = "dashboard", contentOnly = false }: 
             <div className={`h-6 w-1/2 rounded-xl animate-pulse ${c("bg-black/5", "bg-white/5")}`} />
           </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-            {[1, 2, 3, 4].map((i) => (
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-6 mb-8 md:mb-12">
+            {[1, 2, 3, 4, 5].map((i) => (
               <div
                 key={i}
-                className={`rounded-3xl border p-6 space-y-6 animate-pulse ${c(
+                className={`rounded-[20px] md:rounded-3xl border p-5 md:p-6 relative overflow-hidden animate-pulse min-h-[120px] ${
+                  i === 1 ? "col-span-2 lg:col-span-1" : "col-span-1"
+                } ${c(
                   "bg-white border-black/5 shadow-[0_8px_30px_rgb(0,0,0,0.02)]",
                   "bg-[#1f1f23] border-white/[0.06]"
                 )}`}
               >
-                <div className="flex justify-between items-start">
-                  <div className={`w-12 h-12 rounded-xl ${c("bg-black/5", "bg-white/5")}`} />
+                <div className="flex justify-between items-start mb-6">
+                  <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl ${c("bg-black/5", "bg-white/5")}`} />
                   <div className={`w-12 h-6 rounded-full ${c("bg-black/5", "bg-white/5")}`} />
                 </div>
-                <div className="space-y-3">
-                  <div className={`h-3 w-16 rounded ${c("bg-black/5", "bg-white/5")}`} />
-                  <div className={`h-8 w-24 rounded-lg ${c("bg-black/5", "bg-white/5")}`} />
-                </div>
-                <div className={`h-1.5 w-full rounded-full ${c("bg-black/5", "bg-white/5")}`} />
+                <div className={`w-2/3 h-3 rounded-full mb-3 ${c("bg-black/5", "bg-white/5")}`} />
+                <div className={`w-1/2 h-8 rounded-lg ${c("bg-black/5", "bg-white/5")}`} />
               </div>
             ))}
           </div>
@@ -503,54 +502,93 @@ export default function PageLoader({ page = "dashboard", contentOnly = false }: 
 
       {/* D. BOT BUILDER STEPPER LAYOUT */}
       {page === "builder" && (
-        <div
-          className={`rounded-[1.5rem] border p-6 space-y-6 animate-pulse ${c(
-            "bg-white border-black/5 shadow-[0_8px_30px_rgb(0,0,0,0.02)]",
-            "bg-[#1f1f23] border-white/[0.06]"
-          )}`}
-        >
-          {/* Stepper bar header */}
-          <div className={`flex items-center justify-between flex-wrap gap-4 pb-4 border-b ${c("border-black/5", "border-white/5")}`}>
-            <div className="flex items-center gap-2">
+        <div className="max-w-6xl mx-auto animate-pulse">
+          {/* Step header */}
+          <div className="mb-6">
+            <div className="flex items-center gap-2.5 mb-3 flex-wrap">
               <div className={`h-6 w-24 rounded-full ${c("bg-black/5", "bg-white/5")}`} />
-              <div className={`h-4.5 w-16 rounded ${c("bg-black/5", "bg-white/5")}`} />
+              <div className={`h-4 w-20 rounded ${c("bg-black/5", "bg-white/5")}`} />
             </div>
-            <div className={`h-8 w-24 rounded-xl ${c("bg-black/5", "bg-white/5")}`} />
+            <div className={`h-10 md:h-12 w-3/4 md:w-1/2 rounded-2xl mb-3 ${c("bg-black/5", "bg-white/5")}`} />
+            <div className="space-y-2">
+               <div className={`h-4 w-full max-w-2xl rounded-lg ${c("bg-black/5", "bg-white/5")}`} />
+               <div className={`h-4 w-2/3 max-w-lg rounded-lg ${c("bg-black/5", "bg-white/5")}`} />
+            </div>
           </div>
 
-          {/* Step info header */}
-          <div className="space-y-3">
-            <div className={`h-10 w-1/2 rounded-2xl ${c("bg-black/5", "bg-white/5")}`} />
-            <div className={`h-5 w-3/4 rounded-xl ${c("bg-black/5", "bg-white/5")}`} />
-          </div>
+          {/* Step 1 Persona Layout */}
+          <div className="max-w-2xl mx-auto space-y-6">
+            {/* Card 1: Bot Basic Identity */}
+            <div
+              className={`rounded-[2rem] border p-5 sm:p-8 ${c(
+                "bg-white border-black/5 shadow-[0_8px_30px_rgb(0,0,0,0.02)]",
+                "bg-[#1f1f23] border-white/[0.06]"
+              )}`}
+            >
+              <div className="flex items-center gap-2.5 mb-6">
+                <div className={`w-6 h-6 rounded-md ${c("bg-black/5", "bg-white/5")}`} />
+                <div className={`h-5 w-32 rounded-lg ${c("bg-black/5", "bg-white/5")}`} />
+              </div>
+              
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <div className={`h-3 w-20 rounded ${c("bg-black/5", "bg-white/5")}`} />
+                  <div className={`h-12 w-full rounded-xl ${c("bg-black/5", "bg-white/5")}`} />
+                </div>
+                {/* Info Alert Skeleton */}
+                <div className={`rounded-2xl border p-4 flex gap-3.5 ${c("bg-[#F5F5F7] border-black/5", "bg-[#131317] border-white/[0.04]")}`}>
+                   <div className={`w-6 h-6 rounded-md flex-shrink-0 ${c("bg-black/5", "bg-white/5")}`} />
+                   <div className="space-y-2 flex-1">
+                     <div className={`h-4 w-40 rounded ${c("bg-black/5", "bg-white/5")}`} />
+                     <div className={`h-3 w-full rounded ${c("bg-black/5", "bg-white/5")}`} />
+                     <div className={`h-3 w-4/5 rounded ${c("bg-black/5", "bg-white/5")}`} />
+                   </div>
+                </div>
+              </div>
+            </div>
 
-          {/* Step panel layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-4">
-            {/* Form fields pane (2/3 width) */}
-            <div className="lg:col-span-2 space-y-6">
-              {[1, 2, 3].map((i) => (
+            {/* Card 2: Persona Details */}
+            <div
+              className={`rounded-[2rem] border p-5 sm:p-8 space-y-6 ${c(
+                "bg-white border-black/5 shadow-[0_8px_30px_rgb(0,0,0,0.02)]",
+                "bg-[#1f1f23] border-white/[0.06]"
+              )}`}
+            >
+              <div className="flex items-center gap-2.5 mb-2">
+                <div className={`w-6 h-6 rounded-md ${c("bg-black/5", "bg-white/5")}`} />
+                <div className={`h-5 w-36 rounded-lg ${c("bg-black/5", "bg-white/5")}`} />
+              </div>
+
+              {[1, 2, 3, 4, 5].map((i) => (
                 <div key={i} className="space-y-2">
-                  <div className={`h-4.5 w-32 rounded ${c("bg-black/5", "bg-white/5")}`} />
-                  <div className={`h-12 w-full rounded-2xl ${c("bg-black/5", "bg-white/5")}`} />
+                  <div className={`h-3 w-32 rounded ${c("bg-black/5", "bg-white/5")}`} />
+                  <div className={`${i === 3 || i === 4 ? "h-24" : i === 5 ? "h-16" : "h-12"} w-full rounded-xl ${c("bg-black/5", "bg-white/5")}`} />
                 </div>
               ))}
-            </div>
 
-            {/* Assistant preview / chat simulator pane (1/3 width) */}
-            <div className={`rounded-[2rem] border p-6 h-80 flex flex-col justify-between ${c("bg-[#F5F5F7] border-black/5", "bg-[#131317] border-white/[0.06]")}`}>
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className={`w-12 h-12 rounded-xl ${c("bg-black/5", "bg-white/5")}`} />
-                  <div className="space-y-2">
-                    <div className={`h-4.5 w-24 rounded ${c("bg-black/5", "bg-white/5")}`} />
-                    <div className={`h-3 w-16 rounded ${c("bg-black/5", "bg-white/5")}`} />
-                  </div>
+              {/* Human-feel tips */}
+              <div className={`rounded-2xl p-5 border space-y-4 ${c("bg-[#F5F5F7] border-black/5", "bg-[#131317] border-white/[0.06]")}`}>
+                <div className="flex items-center gap-2">
+                  <div className={`w-5 h-5 rounded-md ${c("bg-black/5", "bg-white/5")}`} />
+                  <div className={`h-4 w-32 rounded ${c("bg-black/5", "bg-white/5")}`} />
                 </div>
-                <div className={`h-2.5 w-full rounded ${c("bg-black/5", "bg-white/5")}`} />
-                <div className={`h-2.5 w-5/6 rounded ${c("bg-black/5", "bg-white/5")}`} />
+                <div className="space-y-2.5">
+                  {[1, 2, 3, 4].map((j) => (
+                    <div key={j} className="flex gap-3">
+                      <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${c("bg-black/10", "bg-white/10")}`} />
+                      <div className={`h-3 w-full rounded ${c("bg-black/5", "bg-white/5")}`} />
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className={`h-10 w-full rounded-xl ${c("bg-black/10", "bg-white/10")}`} />
             </div>
+          </div>
+
+          {/* Navigation buttons */}
+          <div className={`flex items-center justify-between mt-8 pt-6 border-t ${c("border-black/5", "border-white/[0.06]")}`}>
+             <div className={`h-12 w-28 rounded-xl ${c("bg-black/5", "bg-white/5")}`} />
+             <div className={`h-3 w-32 rounded-full ${c("bg-black/5", "bg-white/5")}`} />
+             <div className={`h-12 w-36 rounded-xl ${c("bg-black/5", "bg-white/5")}`} />
           </div>
         </div>
       )}

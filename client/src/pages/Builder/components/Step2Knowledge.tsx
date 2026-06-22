@@ -406,12 +406,12 @@ export default function Step2Knowledge({ items, onAddItem, onUploadFiles, onRemo
             <div className={`pt-6 mt-auto border-t ${c("border-black/5", "border-white/[0.04]")}`}>
               <div className="flex justify-between text-[13px] font-bold mb-3">
                 <span className={c("text-[#1c1c1e]/60", "text-[#85948b]")}>Knowledge Coverage</span>
-                <span className={c("text-[#1c1c1e]", "text-[#EBDCFF]")}>{Math.min(items.length * 20, 95)}%</span>
+                <span className={c("text-[#1c1c1e]", "text-[#EBDCFF]")}>{Math.min(items.length * 20, 100)}%</span>
               </div>
               <div className={`w-full h-2 rounded-full overflow-hidden shadow-inner ${c("bg-black/5", "bg-[#131317]")}`}>
                 <div
                   className={`h-full rounded-full transition-all duration-500 ${c("bg-[#1c1c1e]", "bg-[#EBDCFF]")}`}
-                  style={{ width: `${Math.min(items.length * 20, 95)}%` }}
+                  style={{ width: `${Math.min(items.length * 20, 100)}%` }}
                 ></div>
               </div>
               <p className={`text-[11px] font-medium mt-3 text-center ${c("text-[#1c1c1e]/50", "text-[#55635a]")}`}>

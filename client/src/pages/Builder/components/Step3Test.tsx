@@ -242,48 +242,28 @@ export default function Step3Test({ persona, botName, chatbotId, onRequireDraft 
           </div>
         </div>
 
-        <div
-          className={`rounded-[2rem] border p-4 sm:p-8 shadow-sm ${
-            isDark ? "bg-[#1f1f23] border-white/[0.06]" : "bg-white border-black/5"
-          }`}
-        >
-          <h4 className={`text-[13px] font-bold uppercase tracking-widest mb-5 ${c("text-[#1c1c1e]/60", "text-[#85948b]")}`}>
-            Quick Test Prompts
-          </h4>
-          <div className="flex flex-wrap gap-2.5">
-            {["Hi!", "What's your pricing?", "Help me with WhatsApp", "Contact info?", "Tell me about plans"].map(
-              (prompt) => (
-                <button
-                  key={prompt}
-                  onClick={() => setInput(prompt)}
-                  disabled={isSending}
-                  className={`text-[13px] font-bold border px-4 py-2.5 rounded-full transition-all shadow-sm ${
-                    isDark
-                      ? "text-[#85948b] border-white/[0.06] hover:border-[#EBDCFF]/40 hover:text-[#EBDCFF] hover:bg-[#EBDCFF]/5 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-[#85948b] disabled:cursor-not-allowed"
-                      : "text-[#1c1c1e]/70 border-black/10 hover:border-black/30 hover:text-[#1c1c1e] hover:bg-black/5 bg-[#F5F5F7] disabled:opacity-40 disabled:hover:bg-[#F5F5F7] disabled:hover:text-[#1c1c1e]/70 disabled:cursor-not-allowed"
-                  }`}
-                >
-                  {prompt}
-                </button>
-              )
+        {(testError || lastSources.length > 0) && (
+          <div
+            className={`rounded-[2rem] border p-4 sm:p-8 shadow-sm ${
+              isDark ? "bg-[#1f1f23] border-white/[0.06]" : "bg-white border-black/5"
+            }`}
+          >
+            {testError && <p className="text-[12px] font-semibold text-red-500">{testError}</p>}
+
+            {lastSources.length > 0 && (
+              <div className={`${testError ? "mt-5 border-t pt-4 " : ""}space-y-2 ${c("border-black/5", "border-white/[0.06]")}`}>
+                <h5 className={`text-[11px] font-bold uppercase tracking-widest ${c("text-[#1c1c1e]/50", "text-[#85948b]")}`}>
+                  Returned Sources
+                </h5>
+                {lastSources.slice(0, 3).map((source) => (
+                  <p key={source.chunk_id} className={`text-[11px] leading-relaxed line-clamp-2 ${c("text-[#1c1c1e]/60", "text-[#85948b]")}`}>
+                    {source.text || "Source text unavailable"}
+                  </p>
+                ))}
+              </div>
             )}
           </div>
-
-          {testError && <p className="text-[12px] font-semibold text-red-500 mt-4">{testError}</p>}
-
-          {lastSources.length > 0 && (
-            <div className={`mt-5 border-t pt-4 space-y-2 ${c("border-black/5", "border-white/[0.06]")}`}>
-              <h5 className={`text-[11px] font-bold uppercase tracking-widest ${c("text-[#1c1c1e]/50", "text-[#85948b]")}`}>
-                Returned Sources
-              </h5>
-              {lastSources.slice(0, 3).map((source) => (
-                <p key={source.chunk_id} className={`text-[11px] leading-relaxed line-clamp-2 ${c("text-[#1c1c1e]/60", "text-[#85948b]")}`}>
-                  {source.text || "Source text unavailable"}
-                </p>
-              ))}
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
       <div className="lg:col-span-7 h-[660px]">
