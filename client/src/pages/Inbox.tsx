@@ -717,8 +717,10 @@ export default function Inbox() {
                 >
                   <form onSubmit={handleSendReply} className="flex items-center gap-3">
                     <div
-                      className={`flex-1 flex items-center gap-3 border px-4 py-3 rounded-2xl transition-all shadow-inner focus-within:ring-2 focus-within:ring-purple-500/40 focus-within:border-purple-500 ${
-                        isDark ? "bg-[#131317] border-white/[0.06]" : "bg-[#F5F5F7] border-black/10"
+                      className={`flex-1 flex items-center gap-3 border px-4 py-3 rounded-2xl transition-all shadow-inner focus-within:ring-2 ${
+                        isDark 
+                          ? "bg-[#131317] border-white/[0.06] focus-within:ring-white/20 focus-within:border-white/50" 
+                          : "bg-[#F5F5F7] border-black/10 focus-within:ring-black/10 focus-within:border-black/50"
                       }`}
                     >
                       <input
