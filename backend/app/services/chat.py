@@ -915,6 +915,8 @@ class ChatService:
             if not conversation:
                 raise ValueError("Conversation session not found")
 
+            logger.info(f"[ESCALATION DEBUG] Found conversation {conversation_id}, status={conversation.status}")
+
             # If resolved, auto-resume bot
             if conversation.status == ConversationStatus.RESOLVED:
                 conversation.status = ConversationStatus.ONGOING
@@ -922,6 +924,7 @@ class ChatService:
                 db.add(conversation)
                 db.flush()
         else:
+            logger.info("[ESCALATION DEBUG] No conversation_id provided, creating new conversation")
             conversation = Conversation(chatbot_id=chatbot_id, status=ConversationStatus.ONGOING, deployment_id=deployment_id)
             db.add(conversation)
             db.flush()
@@ -929,6 +932,7 @@ class ChatService:
 
         # If already escalated, bypass RAG execution
         if conversation.status == ConversationStatus.ESCALATED:
+            logger.info(f"[ESCALATION DEBUG] Conversation {conversation.id} is ESCALATED → calling handle_escalated_message")
             from app.services.escalation_router import EscalationRouter
             return EscalationRouter.handle_escalated_message(
                 db=db,
@@ -940,6 +944,8 @@ class ChatService:
                 active_config_id=active_config.id if active_config else None,
                 background_tasks=background_tasks
             )
+        else:
+            logger.info(f"[ESCALATION DEBUG] Conversation {conversation.id} status={conversation.status} → proceeding with RAG")
 
         start_date = conversation.started_at
         end_date = datetime.now(timezone.utc)
@@ -1152,6 +1158,9 @@ class ChatService:
             elif result_container:
                 res = result_container[0]
                 res["conversation_id"] = str(res["conversation_id"])
+                # Serialize enum status to string for JSON
+                if "status" in res and hasattr(res["status"], "value"):
+                    res["status"] = res["status"].value
                 # stringify chunk uuids if needed
                 for src in res.get("sources", []):
                     if "chunk_id" in src: src["chunk_id"] = str(src["chunk_id"])

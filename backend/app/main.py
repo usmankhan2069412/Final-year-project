@@ -57,6 +57,10 @@ async def lifespan(app: FastAPI):
     from app.workers.knowledge_worker import main as worker_main
     threading.Thread(target=worker_main, name="knowledge-worker", daemon=True).start()
 
+    # Start the background worker for outbound message delivery
+    from app.workers.message_worker import main as msg_worker_main
+    threading.Thread(target=msg_worker_main, name="message-worker", daemon=True).start()
+
     from apscheduler.schedulers.background import BackgroundScheduler
     from app.tasks.analytics_aggregation import run_recent_aggregation
     from datetime import datetime, timezone
@@ -65,13 +69,40 @@ async def lifespan(app: FastAPI):
     # Refresh analytics every hour. The job aggregates today and yesterday.
     scheduler.add_job(run_recent_aggregation, "interval", hours=1, next_run_time=datetime.now(timezone.utc))
     
-    # Periodically write the heartbeat file
-    from app.workers.knowledge_worker import write_heartbeat
+    # Periodically write heartbeat files
+    from app.workers.knowledge_worker import write_heartbeat as kw_heartbeat
+    from app.workers.message_worker import write_heartbeat as mw_heartbeat
     try:
-        write_heartbeat()
+        kw_heartbeat()
+        mw_heartbeat()
     except Exception:
         pass
-    scheduler.add_job(write_heartbeat, "interval", seconds=30)
+    scheduler.add_job(kw_heartbeat, "interval", seconds=30)
+    scheduler.add_job(mw_heartbeat, "interval", seconds=30)
+
+    # Daily cleanup of completed message jobs older than 7 days
+    def cleanup_old_message_jobs():
+        try:
+            from app.db.session import SessionLocal
+            from app.models.message_job import MessageJob, MessageJobStatus
+            from datetime import timedelta
+            db = SessionLocal()
+            try:
+                cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+                deleted = db.query(MessageJob).filter(
+                    MessageJob.status == MessageJobStatus.COMPLETED,
+                    MessageJob.updated_at < cutoff,
+                ).delete(synchronize_session=False)
+                db.commit()
+                if deleted:
+                    logger.info("Cleaned up %d old completed message jobs", deleted)
+            except Exception:
+                db.rollback()
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error("message_jobs cleanup failed: %s", e)
+    scheduler.add_job(cleanup_old_message_jobs, "interval", days=1)
 
     scheduler.start()
     logger.info("APScheduler initialized and started background tasks.")
@@ -200,6 +231,20 @@ def health_check():
     else:
         checks["knowledge_worker"] = "missing"
 
+    # 6. Message worker liveness check
+    msg_heartbeat_path = Path(tempfile.gettempdir()) / "aina_message_worker_heartbeat"
+    if msg_heartbeat_path.exists():
+        try:
+            mtime = msg_heartbeat_path.read_text(encoding="utf-8")
+            if time.time() - float(mtime) < 120.0:
+                checks["message_worker"] = "ok"
+            else:
+                checks["message_worker"] = "stale"
+        except Exception:
+            checks["message_worker"] = "unreadable"
+    else:
+        checks["message_worker"] = "missing"
+
     is_healthy = all(v == "ok" for v in checks.values())
     return JSONResponse(
         status_code=200 if is_healthy else 503,
@@ -276,6 +321,7 @@ def widget_script():
 
   var conversationId = null;
   var eventSource = null;
+  var seenMsgIds = {};
 
   function connectSSE(convId) {
     if (eventSource) return;
@@ -286,7 +332,10 @@ def widget_script():
       try {
         var payload = JSON.parse(e.data);
         if (payload.message && payload.message.content) {
-            addMessage(payload.message.role, payload.message.content);
+          var mid = payload.message.id;
+          if (mid && seenMsgIds[mid]) return;
+          if (mid) seenMsgIds[mid] = true;
+          addMessage(payload.message.role, payload.message.content);
         }
       } catch (err) {}
     });
@@ -322,7 +371,10 @@ def widget_script():
         conversationId = data.conversation_id;
         connectSSE(conversationId);
       }
-      addMessage("bot", data.response || "I could not generate a response.");
+      // During live agent chat (escalated), response is null — skip bot bubble
+      if (data.response) {
+        addMessage("bot", data.response);
+      }
     }).catch(function () {
       addMessage("bot", "Sorry, the chatbot is unavailable right now.");
     });

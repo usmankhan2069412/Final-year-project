@@ -232,25 +232,71 @@ class EscalationRouter:
         active_config_id: Optional[uuid.UUID] = None,
         background_tasks: Optional[BackgroundTasks] = None
     ) -> Dict[str, Any]:
-        """Handles messages sent to an already escalated conversation by bypassing standard RAG."""
-        response_text = cls.get_escalation_message(language, user_message=user_message)
-        
-        cls._record_and_broadcast(
-            db=db,
-            conversation=conversation,
-            chatbot=chatbot,
-            org_id=org_id,
-            user_message=user_message,
-            response_text=response_text,
-            active_config_id=active_config_id,
-            write_user_message=True,
-            is_new_conv=False,
-            is_escalation_event=False,
-            background_tasks=background_tasks
+        """
+        Handles messages sent to an already escalated conversation.
+        Saves only the user message (no bot reply) and broadcasts it to the
+        inbox via SSE. The agent will reply manually from the inbox.
+        """
+        import asyncio
+        from app.services.sse_manager import sse_manager
+
+        # Save only the user message — no bot reply during live agent chat
+        user_msg = DBMessage(
+            id=uuid.uuid4(),
+            conversation_id=conversation.id,
+            role=MessageRole.USER,
+            content=user_message,
+            config_id=active_config_id,
+            created_at=datetime.now(timezone.utc),
         )
-            
+        db.add(user_msg)
+
+        db.query(Chatbot).filter(Chatbot.id == chatbot.id).update(
+            {Chatbot.total_messages: Chatbot.total_messages + 1}
+        )
+        db.commit()
+
+        # Broadcast user message to both channels:
+        # - organization:{org_id}     → inbox receives it
+        # - conversation:{conv_id}    → widget gets delivery confirmation
+        user_msg_data = {
+            "conversation_id": str(conversation.id),
+            "message": {
+                "id": str(user_msg.id),
+                "role": "user",
+                "content": user_message,
+                "created_at": user_msg.created_at.isoformat()
+            }
+        }
+
+        org_channel = f"organization:{org_id}"
+        conv_channel = f"conversation:{conversation.id}"
+
+        if background_tasks:
+            background_tasks.add_task(sse_manager.broadcast, org_channel, "message", user_msg_data)
+            background_tasks.add_task(sse_manager.broadcast, conv_channel, "message", user_msg_data)
+        else:
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(sse_manager.broadcast(org_channel, "message", user_msg_data))
+                loop.create_task(sse_manager.broadcast(conv_channel, "message", user_msg_data))
+            except RuntimeError:
+                def _run_sse():
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        loop.run_until_complete(sse_manager.broadcast(org_channel, "message", user_msg_data))
+                        loop.run_until_complete(sse_manager.broadcast(conv_channel, "message", user_msg_data))
+                    except Exception as e:
+                        logger.error(f"SSE broadcast failed in thread: {e}")
+                    finally:
+                        loop.close()
+                import threading
+                threading.Thread(target=_run_sse, daemon=True).start()
+
+        # Return no bot response — agent will reply from inbox
         return {
-            "response": response_text,
+            "response": None,
             "conversation_id": conversation.id,
             "sources": [],
             "status": ConversationStatus.ESCALATED

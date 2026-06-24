@@ -13,5 +13,4 @@ from app.models.api_key import ApiKey  # noqa
 from app.models.notification import Notification  # noqa
 from app.models.analytics import AnalyticsDaily, AnalyticsByChannel, AnalyticsByLang  # noqa
 from app.models.semantic_cache import SemanticCache # noqa
-
-
+from app.models.message_job import MessageJob  # noqa

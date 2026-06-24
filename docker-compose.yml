@@ -68,5 +68,19 @@ services:
     depends_on:
       - db
 
+  message-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: aina_message_worker
+    image: aina_message_worker_img
+    command: sh -c "python -m app.workers.message_worker"
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - db
+
 volumes:
   postgres_data:

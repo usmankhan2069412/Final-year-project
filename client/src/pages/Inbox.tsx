@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { useTheme } from "../contexts/ThemeContext";
 import { useLayoutConfig } from "../contexts/LayoutContext";
 import { api } from "../lib/api";
@@ -225,6 +226,31 @@ export default function Inbox() {
     if (e) e.preventDefault();
     if (!replyText.trim() || !selectedId || sending) return;
 
+    const messageText = replyText.trim();
+    const currentSelectedId = selectedId;
+    const tempId = `temp-${Date.now()}`;
+    const tempMsg: Message = {
+      id: tempId,
+      role: "bot",
+      content: messageText,
+      created_at: new Date().toISOString(),
+    };
+
+    // Optimistically update conversation state AND clear input box instantly
+    setReplyText("");
+    setConversations((prev) =>
+      prev.map((conv) => {
+        if (conv.id === currentSelectedId) {
+          return {
+            ...conv,
+            messages: [...conv.messages, tempMsg],
+            last_message: messageText,
+          };
+        }
+        return conv;
+      })
+    );
+
     setSending(true);
     try {
       const token = localStorage.getItem("token");
@@ -236,11 +262,11 @@ export default function Inbox() {
       }
 
       const response = await fetch(
-        `${api.baseUrl}/api/v1/agents/conversations/${selectedId}/reply`,
+        `${api.baseUrl}/api/v1/agents/conversations/${currentSelectedId}/reply`,
         {
           method: "POST",
           headers,
-          body: JSON.stringify({ message: replyText.trim() }),
+          body: JSON.stringify({ message: messageText }),
         }
       );
 
@@ -248,30 +274,56 @@ export default function Inbox() {
         const res = await response.json();
         const newMsg = res.message;
 
-        // Optimistically update conversation state
+        // Replace temporary message with actual message from server
         setConversations((prev) =>
           prev.map((conv) => {
-            if (conv.id === selectedId) {
-              const alreadyExists = conv.messages.some((m) => m.id === newMsg.id);
-              const updatedMessages = alreadyExists
-                ? conv.messages
-                : [...conv.messages, newMsg];
+            if (conv.id === currentSelectedId) {
+              const updatedMessages = conv.messages.map((m) =>
+                m.id === tempId ? newMsg : m
+              );
+              // Avoid duplicates if SSE already brought it in
+              const uniqueMessages = updatedMessages.filter(
+                (msg, index, self) => index === self.findIndex((t) => t.id === msg.id)
+              );
               return {
                 ...conv,
-                messages: updatedMessages,
+                messages: uniqueMessages,
                 last_message: newMsg.content,
               };
             }
             return conv;
           })
         );
-        setReplyText("");
       } else {
         const errorData = await response.json();
         console.error("Failed to send message:", errorData.detail || response.statusText);
+        // Rollback optimistic update on failure
+        setConversations((prev) =>
+          prev.map((conv) => {
+            if (conv.id === currentSelectedId) {
+              return {
+                ...conv,
+                messages: conv.messages.filter((m) => m.id !== tempId),
+              };
+            }
+            return conv;
+          })
+        );
       }
     } catch (err) {
       console.error("Error sending reply:", err);
+      // Rollback optimistic update on failure
+      setConversations((prev) =>
+        prev.map((conv) => {
+          if (conv.id === currentSelectedId) {
+            return {
+              ...conv,
+              messages: conv.messages.filter((m) => m.id !== tempId),
+            };
+          }
+          return conv;
+        })
+      );
     } finally {
       setSending(false);
     }
@@ -281,6 +333,12 @@ export default function Inbox() {
   async function handleResolveChat() {
     if (!selectedId) return;
 
+    const currentSelectedId = selectedId;
+    
+    // Optimistically update the UI immediately
+    setConversations((prev) => prev.filter((conv) => conv.id !== currentSelectedId));
+    setSelectedId(null);
+
     try {
       const token = localStorage.getItem("token");
       const headers: Record<string, string> = {};
@@ -289,7 +347,7 @@ export default function Inbox() {
       }
 
       const response = await fetch(
-        `${api.baseUrl}/api/v1/agents/conversations/${selectedId}/resolve`,
+        `${api.baseUrl}/api/v1/agents/conversations/${currentSelectedId}/resolve`,
         {
           method: "POST",
           headers,
@@ -297,14 +355,18 @@ export default function Inbox() {
       );
 
       if (response.ok) {
-        // Remove resolved chat from local state
-        setConversations((prev) => prev.filter((conv) => conv.id !== selectedId));
-        setSelectedId(null);
+        toast.success("Conversation resolved and closed.");
       } else {
         console.error("Failed to resolve chat");
+        toast.error("Failed to resolve chat.");
+        // We could theoretically rollback here, but re-fetching is usually safer
+        fetchConversations();
       }
     } catch (err) {
       console.error("Error resolving conversation:", err);
+      toast.error("An error occurred. Please try again.");
+      // Rollback on failure
+      fetchConversations();
     }
   }
 
@@ -667,7 +729,7 @@ export default function Inbox() {
                         onChange={(e) => setReplyText(e.target.value)}
                         placeholder="Write a message response…"
                         aria-label="Write a message response"
-                        disabled={sending}
+                        disabled={false}
                         className={`flex-1 bg-transparent text-[13.5px] font-medium outline-none ${
                           isDark ? "text-white placeholder:text-white/20" : "text-[#1c1c1e] placeholder:text-black/30"
                         }`}

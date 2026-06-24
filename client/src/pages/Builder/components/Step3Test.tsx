@@ -140,9 +140,22 @@ export default function Step3Test({ persona, botName, chatbotId, onRequireDraft 
       // Final payload is the source of truth. Fallback responses do not stream
       // tokens, so they need to be rendered from result.response.
       if (rafId) cancelAnimationFrame(rafId);
-      const finalResponse = result.response?.trim() || currentResponse || "I couldn't generate a response. Please try again.";
+      console.log("[ESCALATION DEBUG] result received:", JSON.stringify(result));
+      const finalResponse = result.response?.trim() || currentResponse || "";
       currentResponse = finalResponse;
       setIsTyping(false);
+
+      // During live agent chat (escalated), response is null — don't add a bot bubble.
+      // The agent will reply via SSE from the inbox.
+      if (!finalResponse) {
+        // Remove the bot placeholder if streaming added one with no content
+        if (botMessageAdded) {
+          setMessages((prev) => prev.filter((m) => m.id !== botMessageId));
+        }
+        setConversationId(result.conversation_id);
+        setLastSources(result.sources || []);
+        return;
+      }
 
       setMessages((prev) => {
         if (!botMessageAdded && finalResponse) {
@@ -157,6 +170,7 @@ export default function Step3Test({ persona, botName, chatbotId, onRequireDraft 
       setConversationId(result.conversation_id);
       setLastSources(result.sources || []);
     } catch (err: any) {
+      console.error("[ESCALATION DEBUG] sendMessage error:", err);
       if (!isMountedRef.current || err?.name === "AbortError") return;
       const message = err?.message || "Failed to test chatbot";
       setTestError(message);

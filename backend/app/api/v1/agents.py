@@ -11,9 +11,10 @@ from app.api.deps import get_tenant_db, get_current_org_id, get_current_user_or_
 from app.models.user import User
 from app.models.chatbot import Chatbot
 from app.models.persona import Persona
-from app.models.conversation import Conversation, Message, ConversationStatus, MessageRole
+from app.models.conversation import Conversation, Message, ConversationStatus, MessageRole, Channel
 from app.schemas.analytics import AgentReplyRequest
 from app.services.sse_manager import sse_manager
+from app.services.outbox import OutboxService
 
 router = APIRouter()
 
@@ -107,30 +108,29 @@ def reply_to_conversation(
         config_id=None
     )
     db.add(reply_msg)
-    
+
     # Update chatbot stats
     chatbot = conversation.chatbot
     if chatbot:
         db.query(Chatbot).filter(Chatbot.id == chatbot.id).update(
             {Chatbot.total_messages: Chatbot.total_messages + 1}
         )
-        
+
+    # If WhatsApp, enqueue outbound message job in the same transaction
+    if conversation.deployment and conversation.deployment.channel == Channel.WHATSAPP and conversation.sender_phone:
+        OutboxService.enqueue(
+            db=db,
+            conversation_id=conversation.id,
+            channel="whatsapp",
+            payload={
+                "phone_number": conversation.sender_phone,
+                "text": payload.message,
+                "phone_number_id": conversation.deployment.whatsapp_phone_number_id,
+            },
+        )
+
     db.commit()
     db.refresh(reply_msg)
-
-    # If WhatsApp, execute channel client
-    if conversation.deployment and conversation.deployment.channel.value == "whatsapp" and conversation.sender_phone:
-        from app.services.whatsapp import WhatsAppService
-        try:
-            WhatsAppService.send_whatsapp_message(
-                phone_number=conversation.sender_phone,
-                text=payload.message,
-                phone_number_id=conversation.deployment.whatsapp_phone_number_id
-            )
-        except Exception as e:
-            # Log error but don't fail the HTTP reply
-            import logging
-            logging.getLogger(__name__).warning("Failed to send outbound WhatsApp reply: %s", e)
 
     # Broadcast agent reply message via SSE
     agent_msg_data = {

@@ -11,6 +11,7 @@ from app.models.conversation import Conversation, ConversationStatus, Deployment
 from app.models.chatbot import Chatbot
 from app.services.chat import ChatService
 from app.schemas.whatsapp import WhatsAppMessage
+from app.services.outbox import OutboxService
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +99,7 @@ class WhatsAppService:
             .filter(
                 Conversation.deployment_id == deployment.id,
                 Conversation.sender_phone == sender_phone,
-                Conversation.status == ConversationStatus.ONGOING,
+                Conversation.status.in_([ConversationStatus.ONGOING, ConversationStatus.ESCALATED]),
                 Conversation.deleted_at == None
             )
             .order_by(Conversation.started_at.desc())
@@ -204,12 +205,18 @@ class WhatsAppService:
             
             ai_response = result.get("response")
             
-            # Outbound send to Meta API
-            cls.send_whatsapp_message(
-                phone_number=message.sender_phone,
-                text=ai_response,
-                phone_number_id=phone_number_id
-            )
+            # Enqueue outbound message job (same transaction)
+            if ai_response:
+                OutboxService.enqueue(
+                    db=db,
+                    conversation_id=conversation.id,
+                    channel="whatsapp",
+                    payload={
+                        "phone_number": message.sender_phone,
+                        "text": ai_response,
+                        "phone_number_id": phone_number_id,
+                    },
+                )
             
             # Log event as processed
             event = ProcessedEvent(
