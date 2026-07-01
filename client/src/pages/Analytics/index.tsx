@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { ChevronDown, Download, FileText, Loader2, Table2 } from "lucide-react";
 import {
   DropdownMenu,
@@ -39,7 +39,7 @@ export default function Analytics() {
     window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
   };
 
-  const handleExport = async (reportType: "analytics" | "conversations", format: "csv" | "pdf") => {
+  const handleExport = useCallback(async (reportType: "analytics" | "conversations", format: "csv" | "pdf") => {
     if (exporting) return;
 
     setExporting(true);
@@ -79,9 +79,9 @@ export default function Analytics() {
     } finally {
       setExporting(false);
     }
-  };
+  }, [exporting, days, chatbotId, statusFilter]);
 
-  const exportActions = (
+  const exportActions = useMemo(() => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
@@ -120,7 +120,7 @@ export default function Analytics() {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  );
+  ), [isDark, exporting, handleExport]);
 
   useLayoutConfig({
     title: "Intelligence Analytics",

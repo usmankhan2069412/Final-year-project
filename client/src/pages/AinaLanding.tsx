@@ -748,17 +748,16 @@ export default function AinaLanding() {
         <div className="mx-auto grid max-w-[1240px] gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
           <div>
             <div className="mb-5 flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-[#EBDCFF] text-[#1c1c1e]">
-                <GraduationCap className="h-5 w-5" aria-hidden="true" />
-              </div>
-              <div>
-                <p className="text-xl font-black" style={headingFont}>
-                  Aina AI
-                </p>
-              </div>
+              
+            <div className="min-w-0">
+              <p className="truncate text-3xl font-black tracking-tight text-white" style={headingFont}>
+                Aina AI
+              </p>
+              
+            </div>
             </div>
             <p className="max-w-2xl text-sm font-medium leading-7 text-white/60">
-              A two-member student project focused on no-code AI chatbot creation, knowledge-grounded responses,
+              A Project which only focused on no-code AI chatbot creation, knowledge-grounded responses,
               WhatsApp deployment, analytics, and practical support workflows for local organizations.
             </p>
           </div>

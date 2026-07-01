@@ -83,13 +83,13 @@ class AgentGraphExecutor:
             cls._graph = cls.build_graph()
         return cls._graph
     @staticmethod
-    def _get_llm(state: AgentState, temperature: float = 0.3) -> Optional[ChatOpenAI]:
+    def _get_llm(state: AgentState, temperature: float = 0.3, stream: bool = True) -> Optional[ChatOpenAI]:
         api_key = state.get("api_key")
         if not api_key:
             return None
 
         model = state.get("model_name", "openai/gpt-4o-mini")
-        callbacks = state.get("callbacks")
+        callbacks = state.get("callbacks") if stream else None
 
         effective_key, base_url = resolve_openrouter_key(api_key)
         if not effective_key:
@@ -389,7 +389,7 @@ class AgentGraphExecutor:
 
     @staticmethod
     def rewrite_node(state: AgentState) -> AgentState:
-        llm = AgentGraphExecutor._get_llm(state)
+        llm = AgentGraphExecutor._get_llm(state, stream=False)
         user_msg = state["user_message"]
 
         if not state["history"] or not llm:

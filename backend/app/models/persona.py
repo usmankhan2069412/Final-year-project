@@ -30,7 +30,7 @@ class PersonaTrait(Base):
     __tablename__ = "persona_traits"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    persona_id = Column(UUID(as_uuid=True), ForeignKey("personas.id", ondelete="CASCADE"), nullable=False)
+    persona_id = Column(UUID(as_uuid=True), ForeignKey("personas.id", ondelete="CASCADE"), nullable=False, index=True)
     trait_name = Column(String(80), nullable=False)
 
     # Relationships

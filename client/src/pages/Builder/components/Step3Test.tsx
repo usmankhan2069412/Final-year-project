@@ -18,12 +18,7 @@ export default function Step3Test({ persona, botName, chatbotId, onRequireDraft 
   const { isDark } = useTheme();
   const c = (light: string, dark: string) => (isDark ? dark : light);
 
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      role: "bot",
-      text: persona?.greeting ?? `Hi! I'm ${botName || "your AI Bot"}. How can I help you today?`,
-    },
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [isSending, setIsSending] = useState(false);

@@ -3,7 +3,7 @@ import hashlib
 import uuid
 import logging
 from typing import List, Optional
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import func
 from cryptography.fernet import Fernet
 
@@ -64,7 +64,7 @@ class BotService:
     @staticmethod
     def get_personas(db: Session, org_id: uuid.UUID) -> List[Persona]:
         """Retrieve custom personas for the organization and system personas (org_id is NULL)."""
-        return db.query(Persona).filter(
+        return db.query(Persona).options(selectinload(Persona.traits)).filter(
             (Persona.org_id == org_id) | (Persona.org_id == None),
             Persona.deleted_at == None
         ).all()
@@ -72,7 +72,7 @@ class BotService:
     @staticmethod
     def get_persona(db: Session, org_id: uuid.UUID, persona_id: uuid.UUID) -> Optional[Persona]:
         """Retrieve a specific persona by ID scoped by organization access."""
-        return db.query(Persona).filter(
+        return db.query(Persona).options(selectinload(Persona.traits)).filter(
             Persona.id == persona_id,
             (Persona.org_id == org_id) | (Persona.org_id == None),
             Persona.deleted_at == None
@@ -111,17 +111,24 @@ class BotService:
                 db_persona.description = persona_in.description
 
             if persona_in.traits is not None:
-                existing_traits = [
-                    t.trait_name
-                    for t in db.query(PersonaTrait).filter(PersonaTrait.persona_id == persona_id).all()
-                ]
-                changed = changed or existing_traits != persona_in.traits
-                # Remove old traits
-                db.query(PersonaTrait).filter(PersonaTrait.persona_id == persona_id).delete()
-                # Add new traits
-                for trait_name in persona_in.traits:
-                    trait = PersonaTrait(persona_id=persona_id, trait_name=trait_name)
-                    db.add(trait)
+                existing_trait_objs = db.query(PersonaTrait).filter(PersonaTrait.persona_id == persona_id).all()
+                existing_traits_set = {t.trait_name for t in existing_trait_objs}
+                new_traits_set = set(persona_in.traits)
+                
+                traits_to_delete = existing_traits_set - new_traits_set
+                traits_to_add = new_traits_set - existing_traits_set
+
+                if traits_to_delete or traits_to_add:
+                    changed = True
+                    
+                    if traits_to_delete:
+                        db.query(PersonaTrait).filter(
+                            PersonaTrait.persona_id == persona_id,
+                            PersonaTrait.trait_name.in_(traits_to_delete)
+                        ).delete(synchronize_session=False)
+                    
+                    if traits_to_add:
+                        db.add_all([PersonaTrait(persona_id=persona_id, trait_name=t) for t in traits_to_add])
 
             if changed:
                 db_persona.persona_version = (db_persona.persona_version or 1) + 1
