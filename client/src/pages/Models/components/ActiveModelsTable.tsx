@@ -7,15 +7,18 @@ interface RuleDisplay {
   model: string;
   provider: string;
   icon: string;
+  configId?: string;
+  intent: string;
 }
 
 interface ActiveModelsTableProps {
   loading: boolean;
   activeRules: RuleDisplay[];
   onEdit: () => void;
+  onDelete: (configId: string, intent: string) => void;
 }
 
-export const ActiveModelsTable = memo(function ActiveModelsTable({ loading, activeRules, onEdit }: ActiveModelsTableProps) {
+export const ActiveModelsTable = memo(function ActiveModelsTable({ loading, activeRules, onEdit, onDelete }: ActiveModelsTableProps) {
   const { isDark } = useTheme();
 
   return (
@@ -33,7 +36,7 @@ export const ActiveModelsTable = memo(function ActiveModelsTable({ loading, acti
           onClick={onEdit}
           className={cn("px-4 py-2 rounded-xl text-[12px] font-bold border transition-colors cursor-pointer", isDark ? "bg-white/5 border-white/10 hover:bg-white/10 text-white" : "bg-black/5 border-transparent hover:bg-black/10 text-[#1c1c1e]")}
         >
-          Edit Configuration
+          Add Configuration
         </button>
       </div>
 
@@ -44,10 +47,10 @@ export const ActiveModelsTable = memo(function ActiveModelsTable({ loading, acti
           <table className="w-full text-left">
             <thead>
               <tr className={isDark ? "bg-black/20" : "bg-[#F5F5F7]/50"}>
-                {["Model", "Assigned Intents", "Status"].map((h) => (
+                {["Model", "Assigned Intents", "Status", "Actions"].map((h) => (
                   <th
                     key={h}
-                    className={cn("px-4 sm:px-8 py-3.5 sm:py-4 text-[11px] font-bold uppercase tracking-[0.15em] border-b whitespace-nowrap", isDark ? "text-white/30 border-white/[0.06]" : "text-[#1c1c1e]/40 border-black/5")}
+                    className={cn("px-4 sm:px-8 py-3.5 sm:py-4 text-[11px] font-bold uppercase tracking-[0.15em] border-b whitespace-nowrap", isDark ? "text-white/30 border-white/[0.06]" : "text-[#1c1c1e]/40 border-black/5", h === "Actions" && "text-right")}
                   >
                     {h}
                   </th>
@@ -74,10 +77,12 @@ export const ActiveModelsTable = memo(function ActiveModelsTable({ loading, acti
                       Active
                     </span>
                   </td>
+                  <td className="px-4 sm:px-8 py-4 sm:py-6 text-right">
+                  </td>
                 </tr>
               ) : (
                 activeRules.map((rule, i) => (
-                  <tr key={i} className={cn("transition-colors", isDark ? "hover:bg-white/[0.02]" : "hover:bg-black/[0.02]")}>
+                  <tr key={i} className={cn("transition-colors group", isDark ? "hover:bg-white/[0.02]" : "hover:bg-black/[0.02]")}>
                     <td className="px-4 sm:px-8 py-4 sm:py-6">
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-sm text-[#fff]" style={{ backgroundColor: "#8a5cf5" }}>
@@ -94,6 +99,28 @@ export const ActiveModelsTable = memo(function ActiveModelsTable({ loading, acti
                         <span className={cn("w-1.5 h-1.5 rounded-full animate-pulse", isDark ? "bg-[#EBDCFF]" : "bg-[#F5F5F7]")} />
                         Active
                       </span>
+                    </td>
+                    <td className="px-4 sm:px-8 py-4 sm:py-6 text-right">
+                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={onEdit}
+                          className={cn("p-2 rounded-lg transition-colors cursor-pointer", isDark ? "hover:bg-white/10 text-white/60 hover:text-white" : "hover:bg-black/5 text-black/60 hover:text-black")}
+                          title="Edit Configuration"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">edit</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (rule.configId && rule.intent) {
+                              onDelete(rule.configId, rule.intent);
+                            }
+                          }}
+                          className={cn("p-2 rounded-lg transition-colors cursor-pointer", isDark ? "hover:bg-red-500/20 text-red-400 hover:text-red-300" : "hover:bg-red-50 text-red-500 hover:text-red-600")}
+                          title="Delete Configuration"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">delete</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))

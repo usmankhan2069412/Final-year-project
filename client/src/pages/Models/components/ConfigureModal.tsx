@@ -21,19 +21,26 @@ interface ConfigureModalProps {
 
 const OPENROUTER_MODELS = [
   "openai/gpt-4o",
+  "deepseek/deepseek-v4-flash",
   "openai/gpt-4o-mini",
-  "anthropic/claude-3.5-sonnet",
-  "anthropic/claude-3-opus",
-  "google/gemini-1.5-pro",
-  "meta-llama/llama-3-8b-instruct",
-  "mistralai/mixtral-8x7b-instruct",
+  "google/gemini-2.5-flash",
+  "meta-llama/llama-3.3-70b-instruct",
+  "qwen/qwen3-coder:free",
+  "moonshotai/kimi-k2.5",
+  "minimax/minimax-m3",
+  "openai/gpt-4o",
+  "deepseek/deepseek-v4-flash",
+  "openai/gpt-4o-mini",
+  "google/gemini-2.5-flash",
+  "meta-llama/llama-3.3-70b-instruct",
+  "qwen/qwen3-coder:free",
+  "moonshotai/kimi-k2.5",
+  "minimax/minimax-m3",
 ];
 
 const POPULAR_INTENTS = [
   "General Inquiries",
   "Complex Problems",
-  "Image Analysis",
-  "Code Assistance",
 ];
 
 interface RuleRowProps {

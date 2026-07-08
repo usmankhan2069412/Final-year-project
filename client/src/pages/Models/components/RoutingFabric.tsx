@@ -7,6 +7,7 @@ interface RouteDest {
   model: string;
   provider: string;
   icon: string;
+  configId?: string;
 }
 
 interface RoutingFabricProps {

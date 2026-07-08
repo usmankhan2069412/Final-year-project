@@ -21,6 +21,7 @@ export default function Step3Test({ persona, botName, chatbotId, onRequireDraft 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [typingStage, setTypingStage] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [lastSources, setLastSources] = useState<ChatResponse["sources"]>([]);
@@ -37,6 +38,23 @@ export default function Step3Test({ persona, botName, chatbotId, onRequireDraft 
     };
   }, []);
 
+  useEffect(() => {
+    if (!isTyping) {
+      setTypingStage("");
+      return;
+    }
+
+    const t1 = setTimeout(() => setTypingStage("🔍 Understanding your question"), 1500);
+    const t2 = setTimeout(() => setTypingStage("📚 Searching knowledge base"), 5000);
+    const t3 = setTimeout(() => setTypingStage("✨ Generating your answer"), 8000);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
+  }, [isTyping]);
+
   // Listen for out-of-band messages (e.g. human agent replies) via SSE
   useEffect(() => {
     if (!conversationId || !chatbotId) return;
@@ -49,6 +67,9 @@ export default function Step3Test({ persona, botName, chatbotId, onRequireDraft 
       (msg: any) => {
         setMessages((prev) => {
           if (msg.id && prev.some((item) => item.id === msg.id)) return prev;
+          // Ignore echo of user messages since we add them optimistically
+          if (msg.role === "user") return prev;
+          
           return [
             ...prev,
             { id: msg.id || createMessageId("event"), role: msg.role === "user" ? "user" : "bot", text: msg.content }
@@ -283,6 +304,7 @@ export default function Step3Test({ persona, botName, chatbotId, onRequireDraft 
           tone={persona?.traits?.[0] || "friendly"}
           messages={messages}
           isTyping={isTyping}
+          typingStage={typingStage}
           input={input}
           onInputChange={setInput}
           onSend={sendMessage}

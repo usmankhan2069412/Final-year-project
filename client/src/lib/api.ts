@@ -360,6 +360,9 @@ export const api = {
     routing_rules?: Array<{ intent: string; model_override?: string | null }>;
   }) => apiRequest<any>(`/api/v1/models/configs/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
 
+  deleteConfig: (id: string) =>
+    apiRequest<void>(`/api/v1/models/configs/${id}`, { method: "DELETE" }),
+
   getAvailableModels: () => apiRequest<Array<{ id: string; name: string; models: string[] }>>("/api/v1/models/available"),
 
   streamConversationEvents: async (

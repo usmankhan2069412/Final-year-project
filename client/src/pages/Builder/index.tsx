@@ -92,8 +92,22 @@ export default function BotBuilder() {
           if (bot.persona) {
             newCustomGreeting = bot.persona.greeting || "";
             newCustomFallback = bot.persona.fallback || "";
-            newCustomDescription = bot.persona.description || "";
-            newCustomRole = bot.persona.description || "";
+            
+            const fullDesc = bot.persona.description || "";
+            if (fullDesc.startsWith("Role: ")) {
+              const nlIndex = fullDesc.indexOf("\n\n");
+              if (nlIndex !== -1) {
+                newCustomRole = fullDesc.substring(6, nlIndex);
+                newCustomDescription = fullDesc.substring(nlIndex + 2);
+              } else {
+                newCustomRole = fullDesc.substring(6);
+                newCustomDescription = "";
+              }
+            } else {
+              newCustomRole = "";
+              newCustomDescription = fullDesc;
+            }
+
             newCustomTone = bot.persona.traits?.[0]?.trait_name || "friendly";
 
             setCustomGreeting(newCustomGreeting);
@@ -154,12 +168,21 @@ export default function BotBuilder() {
     setSaveStatus("saving");
     setSaveError("");
     try {
+      let combinedDescription = null;
+      if (customRole.trim() && customDescription.trim()) {
+        combinedDescription = `Role: ${customRole.trim()}\n\n${customDescription.trim()}`;
+      } else if (customDescription.trim()) {
+        combinedDescription = customDescription.trim();
+      } else if (customRole.trim()) {
+        combinedDescription = `Role: ${customRole.trim()}`;
+      }
+
       const personaPayload = {
         name: botName.trim(),
         language: "multilingual",
         greeting: customGreeting.trim() || null,
         fallback: customFallback.trim() || null,
-        description: customDescription.trim() || customRole.trim() || null,
+        description: combinedDescription,
         traits: [customTone],
       };
 
@@ -172,7 +195,7 @@ export default function BotBuilder() {
       const chatbotPayload = {
         persona_id: savedPersona.id,
         name: botName.trim(),
-        description: customDescription.trim() || customRole.trim() || null,
+        description: combinedDescription,
         status: "draft" as const,
       };
 
@@ -187,7 +210,7 @@ export default function BotBuilder() {
       const finalRole = customRole.trim();
       const finalGreeting = customGreeting.trim();
       const finalFallback = customFallback.trim();
-      const finalDescription = customDescription.trim() || finalRole;
+      const finalDescription = customDescription.trim();
 
       setBotName(finalBotName);
       setCustomRole(finalRole);

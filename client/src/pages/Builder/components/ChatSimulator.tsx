@@ -21,6 +21,7 @@ interface ChatSimulatorProps {
   onSend?: () => void;
   isSending?: boolean;
   isInteractive?: boolean;
+  typingStage?: string;
 }
 
 export default function ChatSimulator({
@@ -36,6 +37,7 @@ export default function ChatSimulator({
   onSend,
   isSending = false,
   isInteractive = false,
+  typingStage = "",
 }: ChatSimulatorProps) {
   const { isDark } = useTheme();
   const c = (light: string, dark: string) => (isDark ? dark : light);
@@ -165,23 +167,30 @@ export default function ChatSimulator({
               {emoji || "🤖"}
             </div>
             <div
-              className={`px-4 py-3.5 rounded-2xl rounded-tl-md flex items-center gap-1 shadow-sm border ${c(
+              className={`px-4 py-3.5 rounded-2xl rounded-tl-md flex items-center gap-3 shadow-sm border ${c(
                 "bg-white border-black/5",
                 "bg-[#1f1f23] border-white/[0.04]"
               )}`}
             >
-              <div
-                className={`w-1.5 h-1.5 rounded-full animate-bounce bg-primary/40`}
-                style={{ animationDelay: "0ms" }}
-              ></div>
-              <div
-                className={`w-1.5 h-1.5 rounded-full animate-bounce bg-primary/40`}
-                style={{ animationDelay: "150ms" }}
-              ></div>
-              <div
-                className={`w-1.5 h-1.5 rounded-full animate-bounce bg-primary/40`}
-                style={{ animationDelay: "300ms" }}
-              ></div>
+              {typingStage && (
+                <div className={`text-[12px] italic font-medium transition-opacity duration-500 ${c("text-[#1c1c1e]/60", "text-[#e4e1e7]/60")}`}>
+                  {typingStage}
+                </div>
+              )}
+              <div className="flex items-center gap-1">
+                <div
+                  className={`w-1.5 h-1.5 rounded-full animate-bounce bg-primary/40`}
+                  style={{ animationDelay: "0ms" }}
+                ></div>
+                <div
+                  className={`w-1.5 h-1.5 rounded-full animate-bounce bg-primary/40`}
+                  style={{ animationDelay: "150ms" }}
+                ></div>
+                <div
+                  className={`w-1.5 h-1.5 rounded-full animate-bounce bg-primary/40`}
+                  style={{ animationDelay: "300ms" }}
+                ></div>
+              </div>
             </div>
           </div>
         )}

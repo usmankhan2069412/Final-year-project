@@ -75,7 +75,24 @@ class AgentGraphExecutor:
     Pure graph executor operating on state dictionary variables.
     Decoupled entirely from database models/transactions.
     """
-    _graph = None  # Compiled graph singleton â€” safe to share (stateless)
+    _graph = None  # Compiled graph singleton — safe to share (stateless)
+    _http_client: Optional[httpx.Client] = None  # Persistent connection pool for rerank API
+
+    @classmethod
+    def get_http_client(cls) -> httpx.Client:
+        # TODO: Migrate to httpx.AsyncClient when graph execution becomes asynchronous
+        if cls._http_client is None:
+            cls._http_client = httpx.Client(
+                timeout=15.0,
+                limits=httpx.Limits(max_keepalive_connections=10, max_connections=50),
+            )
+        return cls._http_client
+
+    @classmethod
+    def close_http_client(cls):
+        if cls._http_client is not None:
+            cls._http_client.close()
+            cls._http_client = None
 
     @classmethod
     def _get_graph(cls):
@@ -145,6 +162,20 @@ class AgentGraphExecutor:
             for source in sources
             if cls._has_lexical_relevance(query, source.get("text", ""))
         ]
+
+    @classmethod
+    def _filter_hybrid_relevant_sources(cls, query: str, sources: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Semantic-first fallback: use dense_distance when available, else lexical overlap."""
+        filtered = []
+        for src in sources:
+            dist = src.get("dense_distance")
+            # Semantic check — handles stemming, tense, and multilingual variation
+            if dist is not None and dist <= settings.RERANK_FALLBACK_SIMILARITY_THRESHOLD:
+                filtered.append(src)
+            # Lexical fallback — for cache hits or sparse-only results lacking dense distance
+            elif cls._has_lexical_relevance(query, src.get("text", "")):
+                filtered.append(src)
+        return filtered
 
     @staticmethod
     def _context_from_sources(sources: List[Dict[str, Any]]) -> str:
@@ -510,8 +541,8 @@ class AgentGraphExecutor:
         )
         return {"sources": sources, "context_text": context_text}
 
-    @staticmethod
-    def validate_node(state: AgentState) -> AgentState:
+    @classmethod
+    def validate_node(cls, state: AgentState) -> AgentState:
         sources = state.get("sources", [])
         if not sources:
             logger.info("validation_result", is_relevant=False, chunks_before=0, chunks_after=0)
@@ -523,9 +554,9 @@ class AgentGraphExecutor:
         rerank_api_key = getattr(settings, "OPENROUTER_API_KEY", None) or os.getenv("OPENROUTER_API_KEY")
 
         if not rerank_api_key:
-            filtered_sources = AgentGraphExecutor._filter_lexically_relevant_sources(query, sources)
+            filtered_sources = cls._filter_hybrid_relevant_sources(query, sources)
             is_rel = bool(filtered_sources)
-            context_text = AgentGraphExecutor._context_from_sources(filtered_sources)
+            context_text = cls._context_from_sources(filtered_sources)
             logger.info("validation_result", is_relevant=is_rel, chunks_before=len(sources), chunks_after=len(filtered_sources), no_api_key=True)
             return {
                 "is_relevant": is_rel,
@@ -547,15 +578,14 @@ class AgentGraphExecutor:
                 "Content-Type": "application/json"
             }
 
-            with httpx.Client() as client:
-                response = client.post(
-                    "https://openrouter.ai/api/v1/rerank",
-                    json=payload,
-                    headers=headers,
-                    timeout=15.0
-                )
-                response.raise_for_status()
-                result = response.json()
+            client = cls.get_http_client()
+            response = client.post(
+                "https://openrouter.ai/api/v1/rerank",
+                json=payload,
+                headers=headers,
+            )
+            response.raise_for_status()
+            result = response.json()
 
             filtered_sources = []
 
@@ -565,7 +595,7 @@ class AgentGraphExecutor:
                     score = item.get("relevance_score", 0)
                     idx = item.get("index")
 
-                    if score >= 0.3 and idx is not None and 0 <= idx < len(sources):
+                    if score >= settings.RERANK_THRESHOLD and idx is not None and 0 <= idx < len(sources):
                         source = dict(sources[idx])
                         source["rerank_score"] = float(score)
                         filtered_sources.append(source)
@@ -574,7 +604,7 @@ class AgentGraphExecutor:
                 logger.info("validation_result", is_relevant=False, chunks_before=len(sources), chunks_after=0)
                 return {"is_relevant": False, "sources": [], "context_text": ""}
 
-            new_context_text = AgentGraphExecutor._context_from_sources(filtered_sources)
+            new_context_text = cls._context_from_sources(filtered_sources)
 
             logger.info("validation_result", is_relevant=True, chunks_before=len(sources), chunks_after=len(filtered_sources))
             return {
@@ -585,11 +615,11 @@ class AgentGraphExecutor:
             }
         except Exception as e:
             logger.warning("validate_node_rerank_api_failed", error=str(e))
-            # Fall back to lexical relevance check with the original sources
-            filtered_sources = AgentGraphExecutor._filter_lexically_relevant_sources(query, sources)
+            # Fall back to hybrid (semantic + lexical) relevance check
+            filtered_sources = cls._filter_hybrid_relevant_sources(query, sources)
             is_rel = bool(filtered_sources)
-            context_text = AgentGraphExecutor._context_from_sources(filtered_sources)
-            logger.info("validation_result", is_relevant=is_rel, chunks_before=len(sources), chunks_after=len(filtered_sources), fallback_lexical=True)
+            context_text = cls._context_from_sources(filtered_sources)
+            logger.info("validation_result", is_relevant=is_rel, chunks_before=len(sources), chunks_after=len(filtered_sources), fallback_hybrid=True)
             return {
                 "is_relevant": is_rel,
                 "sources": filtered_sources,
@@ -649,10 +679,11 @@ class AgentGraphExecutor:
                     f"{desc_str}"
                     "IMPORTANT GUIDELINES:\n"
                     "1. Always speak from the perspective of a human support agent representing the organization. Be natural and empathetic.\n"
-                    "2. You must answer strictly using the information inside the <context> tags below.\n"
-                    f"3. If the <context> does not contain the answer, you MUST reply with exactly this fallback message and nothing else: '{fallback_msg}'\n"
-                    f"4. You MUST generate your response strictly in: {lang_name}. Do not mix languages.\n"
-                    "5. Format your answers clearly, using bullet points for lists if necessary.\n\n"
+                    "2. Answer using the information inside the <context> tags below. Do not invent facts, but you may rephrase, summarize, or combine information from the context to best answer the question.\n"
+                    "3. The user may ask in Roman Urdu, Urdu, or informal language. Match their intent to the context even if the exact wording differs — look for synonyms, abbreviations (e.g. ADP = Associate Degree Program), and related terms.\n"
+                    f"4. Only if the <context> is completely unrelated to the user's question and you genuinely cannot extract any relevant information, reply with: '{fallback_msg}'\n"
+                    f"5. You MUST generate your response strictly in: {lang_name}. Do not mix languages.\n"
+                    "6. Format your answers clearly, using bullet points for lists if necessary.\n\n"
                     "<context>\n"
                     f"{state.get('context_text', '')}\n"
                     "</context>"

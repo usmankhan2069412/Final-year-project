@@ -81,9 +81,11 @@ export default function Models() {
   const activeRules = useMemo(() =>
     configs.flatMap((config) =>
       config.routing_rules.map((rule) => ({
+        intent: rule.intent,
         label: rule.intent,
         model: rule.model_override || config.model_name,
         provider: config.provider.name,
+        configId: config.id,
         icon: rule.intent.toLowerCase().includes("image")
           ? "image_search"
           : rule.intent.toLowerCase().includes("complex") || rule.intent.toLowerCase().includes("reason")
@@ -98,6 +100,27 @@ export default function Models() {
 
   const handleCloseModal = useCallback(() => setIsModalOpen(false), []);
   const handleSaved = useCallback(() => { fetchData(); }, [fetchData]);
+
+  const handleDeleteRule = async (configId: string, intent: string) => {
+    if (!window.confirm(`Are you sure you want to remove the model assigned to "${intent}"?`)) return;
+    try {
+      const config = configs.find(c => c.id === configId);
+      if (!config) return;
+
+      const updatedRules = config.routing_rules
+        .filter(r => r.intent !== intent)
+        .map(r => ({
+          intent: r.intent,
+          model_override: r.model_override
+        }));
+
+      await api.updateConfig(configId, { routing_rules: updatedRules });
+      toast.success("Routing rule removed successfully");
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to remove routing rule");
+    }
+  };
 
   useLayoutConfig({
     title: "Chatbot Models",
@@ -129,7 +152,7 @@ export default function Models() {
 
         <RoutingFabric loading={loading} activeRules={activeRules} />
 
-        <ActiveModelsTable loading={loading} activeRules={activeRules} onEdit={handleOpenConfigureModal} />
+        <ActiveModelsTable loading={loading} activeRules={activeRules} onEdit={handleOpenConfigureModal} onDelete={handleDeleteRule} />
       </main>
 
       <ConfigureModal

@@ -45,6 +45,8 @@ class Settings(BaseSettings):
     RETRIEVAL_TOP_K_SINGLE: int = 4
     RETRIEVAL_TOP_K_MULTI: int = 3
     EMBEDDING_BATCH_DELAY: float = 0.0
+    RERANK_THRESHOLD: float = 0.3            # Min Cohere rerank score to keep a chunk
+    RERANK_FALLBACK_SIMILARITY_THRESHOLD: float = 0.55  # Max cosine distance for semantic fallback
 
     # CORS Settings
     # Production: set to ["https://app.yourdomain.com"] in .env
