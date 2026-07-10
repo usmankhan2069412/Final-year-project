@@ -1,7 +1,9 @@
 fastapi # Main Web Framework - API banane ke liye
 uvicorn[standard] # ASGI Server - App ko run karne ke liye
-sqlalchemy # ORM - Python code se DB tables manage karne ke liye
-psycopg2-binary # Postgres Driver - Python aur Postgres ko jorne ke liye
+sqlalchemy[asyncio] # ORM - Python code se DB tables manage karne ke liye (with async support)
+asyncpg # Async Postgres Driver - non-blocking DB operations
+greenlet # Required by SQLAlchemy async for coroutine support
+psycopg2-binary # Postgres Driver - sync fallback for background workers/alembic
 alembic # DB Migrations - Database ka version control (Git jaisa)
 pydantic-settings # Config Manager - .env files ko safely handle karne ke liye
 python-dotenv # .env Loader - Environment variables load karne ke liye

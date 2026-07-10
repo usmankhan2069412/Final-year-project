@@ -1,4 +1,4 @@
-﻿import time
+import time
 import os
 import json
 import hashlib
@@ -215,7 +215,7 @@ class SemanticRouter:
                 cls._initialized = True
 
     @classmethod
-    def classify(
+    async def classify(
         cls,
         message: str,
         persona: Any = None,
@@ -264,7 +264,7 @@ class SemanticRouter:
 
         # --- Tier 2: Embedding Fast-Path (First LLM Avoidance) ---
         # Prioritize embedding search for high-confidence intents to save LLM costs.
-        emb_intent, emb_score = cls._classify_with_embeddings(message, 0.0) # get best regardless of threshold
+        emb_intent, emb_score = await cls._classify_with_embeddings(message, 0.0) # get best regardless of threshold
         if emb_score >= 0.85 and emb_intent:
             latency = time.monotonic() - t0
             intent_classification_latency.observe(latency)
@@ -273,7 +273,7 @@ class SemanticRouter:
 
         # --- Tier 3: LLM-based classification (persona + context aware) ---
         if persona and api_key:
-            llm_result = cls._classify_with_llm(
+            llm_result = await cls._classify_with_llm(
                 message=message,
                 persona=persona,
                 traits=traits or [],
@@ -297,7 +297,7 @@ class SemanticRouter:
         return None
 
     @classmethod
-    def _classify_with_llm(
+    async def _classify_with_llm(
         cls,
         message: str,
         persona: Any,
@@ -360,10 +360,11 @@ class SemanticRouter:
                 "Reply with ONLY the intent label. No explanation."
             )
 
-            result = llm.invoke([
+            result_msg = await llm.ainvoke([
                 SystemMessage(content=sys_prompt),
                 HumanMessage(content="User message: " + message + "\n\nIntent:")
-            ]).content.strip().upper()
+            ])
+            result = result_msg.content.strip().upper()
 
             # Validate the LLM returned a known intent
             valid_intents = {"CONVERSATIONAL", "RAG_LOOKUP", "HISTORY_TRANSFORM", "AGENT_HANDOFF", "FRUSTRATION"}
@@ -423,7 +424,7 @@ class SemanticRouter:
         return "Recent messages:\n" + "\n".join(lines)
 
     @classmethod
-    def _classify_with_embeddings(cls, message: str, threshold: float = 0.82) -> Tuple[Optional[str], float]:
+    async def _classify_with_embeddings(cls, message: str, threshold: float = 0.82) -> Tuple[Optional[str], float]:
         """Original embedding-based classification â€” used as fallback when LLM is unavailable."""
         if not cls._initialized:
             cls._initialize()
@@ -433,7 +434,10 @@ class SemanticRouter:
 
         try:
             # Encode user message
-            query_vector = embedding_service.encode([message])[0]
+            query_vectors = await embedding_service.aencode([message])
+            if query_vectors.size == 0:
+                return None, 0.0
+            query_vector = query_vectors[0]
             query_norm = np.linalg.norm(query_vector)
             if query_norm == 0:
                 return None, 0.0

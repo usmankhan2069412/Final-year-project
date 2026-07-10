@@ -3,18 +3,24 @@ import hashlib
 from datetime import datetime, timezone
 import uuid
 from typing import List, Optional
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
 
 from app.models.api_key import ApiKey
 from app.schemas.api_key import ApiKeyResponse, ApiKeyCreateResponse
 
+
 class ApiKeyService:
     @staticmethod
-    def list_keys(db: Session, org_id: uuid.UUID) -> List[ApiKeyResponse]:
-        """List all API keys (masked) for the organization."""
-        keys = db.query(ApiKey).filter(ApiKey.org_id == org_id).order_by(ApiKey.created_at.desc()).all()
-        
+    async def list_keys(db: AsyncSession, org_id: uuid.UUID) -> List[ApiKeyResponse]:
+        result = await db.execute(
+            select(ApiKey)
+            .where(ApiKey.org_id == org_id)
+            .order_by(ApiKey.created_at.desc())
+        )
+        keys = list(result.scalars().all())
+
         now = datetime.now(timezone.utc)
         response = []
         for k in keys:
@@ -38,25 +44,20 @@ class ApiKeyService:
         return response
 
     @staticmethod
-    def create_key(
-        db: Session,
+    async def create_key(
+        db: AsyncSession,
         org_id: uuid.UUID,
         name: str,
         expires_at: Optional[datetime] = None,
         created_by_user_id: Optional[uuid.UUID] = None,
     ) -> ApiKeyCreateResponse:
-        """Generate a new secure API key, store its hash, and return it once."""
-        # 1. Generate secure random key
         token = secrets.token_urlsafe(32)
         raw_key = f"ak_prod_{token}"
-        
-        # 2. Mask it for the user prefix (e.g., ak_prod_abcd...)
+
         prefix = f"ak_prod_{token[:6]}..."
-        
-        # 3. Hash the key for secure DB storage
+
         key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
-        
-        # 4. Save to DB
+
         db_key = ApiKey(
             org_id=org_id,
             created_by_user_id=created_by_user_id,
@@ -66,9 +67,9 @@ class ApiKeyService:
             expires_at=expires_at,
         )
         db.add(db_key)
-        db.commit()
-        db.refresh(db_key)
-        
+        await db.commit()
+        await db.refresh(db_key)
+
         return ApiKeyCreateResponse(
             id=db_key.id,
             name=db_key.name,
@@ -79,22 +80,23 @@ class ApiKeyService:
         )
 
     @staticmethod
-    def revoke_key(db: Session, org_id: uuid.UUID, key_id: uuid.UUID) -> bool:
-        """Revoke an API key by setting its revoked_at timestamp."""
-        db_key = db.query(ApiKey).filter(
-            ApiKey.id == key_id,
-            ApiKey.org_id == org_id
-        ).first()
-        
+    async def revoke_key(db: AsyncSession, org_id: uuid.UUID, key_id: uuid.UUID) -> bool:
+        result = await db.execute(
+            select(ApiKey).where(
+                ApiKey.id == key_id,
+                ApiKey.org_id == org_id
+            )
+        )
+        db_key = result.scalar_one_or_none()
+
         if not db_key:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="API Key not found or access denied"
             )
-            
+
         if db_key.revoked_at is None:
             db_key.revoked_at = datetime.now(timezone.utc)
-            db.commit()
-            
-        return True
+            await db.commit()
 
+        return True

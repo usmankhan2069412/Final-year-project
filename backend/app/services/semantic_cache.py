@@ -4,6 +4,7 @@ from typing import Optional, Tuple, List
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.semantic_cache import SemanticCache
 from app.services.embedding import embedding_service
@@ -155,3 +156,125 @@ class SemanticCacheService:
         finally:
             if close_db:
                 db.close()
+
+    @classmethod
+    async def acheck_cache(
+        cls, 
+        org_id: str, 
+        chatbot_id: str, 
+        rewritten_query: str, 
+        knowledge_base_version: int, 
+        persona_version: int,
+        db: AsyncSession,
+        threshold: Optional[float] = None
+    ) -> Tuple[Optional[str], Optional[List[str]], Optional[float]]:
+        if threshold is None:
+            threshold = settings.CACHE_SIMILARITY_THRESHOLD
+            
+        try:
+            from sqlalchemy import select
+            query_vectors = await embedding_service.aencode([rewritten_query])
+            query_vector = query_vectors[0]
+            query_list = query_vector.tolist() if hasattr(query_vector, "tolist") else list(query_vector)
+            
+            max_distance = 1.0 - threshold
+            now = datetime.now(timezone.utc)
+
+            distance_col = SemanticCache.query_embedding.cosine_distance(query_list).label("distance")
+            stmt = (
+                select(SemanticCache, distance_col)
+                .filter(SemanticCache.org_id == org_id)
+                .filter(SemanticCache.chatbot_id == chatbot_id)
+                .filter(SemanticCache.is_active == True)
+                .filter(SemanticCache.expires_at > now)
+                .filter(SemanticCache.embedding_model == settings.EMBEDDING_MODEL)
+                .filter(SemanticCache.knowledge_base_version == knowledge_base_version)
+                .filter(SemanticCache.persona_version == persona_version)
+                .filter(distance_col <= max_distance)
+                .order_by(distance_col)
+                .limit(1)
+            )
+            
+            result = await db.execute(stmt)
+            row = result.first()
+            
+            if row:
+                match, distance = row
+                similarity_score = 1.0 - float(distance)
+                
+                match.hit_count += 1
+                match.last_accessed_at = now
+                await db.commit()
+                
+                logger.info(f"Semantic Cache Hit for chatbot {chatbot_id} (score: {similarity_score:.4f})")
+                return match.response_text, match.source_chunk_ids, similarity_score
+                
+            return None, None, None
+            
+        except Exception as e:
+            logger.error(f"Failed to check semantic cache (async): {e}", exc_info=True)
+            return None, None, None
+
+    @classmethod
+    async def aadd_to_cache(
+        cls, 
+        org_id: str, 
+        chatbot_id: str, 
+        rewritten_query: str, 
+        response_text: str, 
+        knowledge_base_version: int, 
+        persona_version: int,
+        db: Optional[AsyncSession] = None,
+        source_chunk_ids: Optional[List[str]] = None,
+        source_document_ids: Optional[List[str]] = None,
+        ttl_days: int = 7,
+        query_vector: Optional[List[float]] = None
+    ):
+        close_db = False
+        if db is None:
+            from app.db.session import AsyncSessionLocal
+            db = AsyncSessionLocal()
+            close_db = True
+        try:
+            query_hash = cls.generate_query_hash(rewritten_query)
+            
+            if query_vector is None:
+                query_vectors = await embedding_service.aencode([rewritten_query])
+                query_vector_res = query_vectors[0]
+                query_list = query_vector_res.tolist() if hasattr(query_vector_res, "tolist") else list(query_vector_res)
+            else:
+                query_list = query_vector
+            
+            now = datetime.now(timezone.utc)
+            expires_at = now + timedelta(days=ttl_days)
+            
+            cache_entry = SemanticCache(
+                org_id=org_id,
+                chatbot_id=chatbot_id,
+                query_text=rewritten_query,
+                query_hash=query_hash,
+                query_embedding=query_list,
+                embedding_model=settings.EMBEDDING_MODEL,
+                response_text=response_text,
+                source_chunk_ids=source_chunk_ids,
+                source_document_ids=source_document_ids,
+                knowledge_base_version=knowledge_base_version,
+                persona_version=persona_version,
+                created_at=now,
+                expires_at=expires_at
+            )
+            
+            db.add(cache_entry)
+            await db.commit()
+            logger.info(f"Added new entry to semantic cache for chatbot {chatbot_id}")
+            
+        except IntegrityError:
+            await db.rollback()
+            logger.debug(f"Semantic cache entry already exists (duplicate query hash) for chatbot {chatbot_id}")
+            
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"Failed to add to semantic cache (async): {e}", exc_info=True)
+        finally:
+            if close_db:
+                await db.close()

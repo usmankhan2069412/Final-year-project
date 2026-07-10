@@ -6,8 +6,8 @@ import socket
 from pathlib import Path
 from urllib.parse import urlparse
 from datetime import datetime, timezone, timedelta
-from sqlalchemy.orm import Session
-from sqlalchemy import or_, func
+from sqlalchemy import select, func, or_
+from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import UploadFile
 
 from app.core.config import settings
@@ -30,16 +30,20 @@ from app.services.vector_store import VectorStoreService
 
 logger = logging.getLogger(__name__)
 
+
 class KnowledgeService:
     ALLOWED_EXTENSIONS = {"pdf", "docx", "txt", "csv"}
 
     @staticmethod
-    def ensure_chatbot_access(db: Session, org_id: uuid.UUID, chatbot_id: uuid.UUID) -> Chatbot:
-        chatbot = db.query(Chatbot).filter(
-            Chatbot.id == chatbot_id,
-            Chatbot.org_id == org_id,
-            Chatbot.deleted_at == None,
-        ).first()
+    async def ensure_chatbot_access(db: AsyncSession, org_id: uuid.UUID, chatbot_id: uuid.UUID) -> Chatbot:
+        result = await db.execute(
+            select(Chatbot).where(
+                Chatbot.id == chatbot_id,
+                Chatbot.org_id == org_id,
+                Chatbot.deleted_at == None,
+            )
+        )
+        chatbot = result.scalar_one_or_none()
         if not chatbot:
             raise ValueError("Chatbot not found or inaccessible")
         return chatbot
@@ -50,7 +54,7 @@ class KnowledgeService:
         return cleaned[:120] or fallback
 
     @classmethod
-    def _enqueue_job(cls, db: Session, source: KnowledgeSource) -> KnowledgeJob:
+    async def _enqueue_job(cls, db: AsyncSession, source: KnowledgeSource) -> KnowledgeJob:
         job = KnowledgeJob(
             source_id=source.id,
             chatbot_id=source.chatbot_id,
@@ -62,8 +66,9 @@ class KnowledgeService:
         return job
 
     @staticmethod
-    def _bump_knowledge_base_version(db: Session, chatbot_id: uuid.UUID) -> None:
-        chatbot = db.query(Chatbot).filter(Chatbot.id == chatbot_id).first()
+    async def _bump_knowledge_base_version(db: AsyncSession, chatbot_id: uuid.UUID) -> None:
+        result = await db.execute(select(Chatbot).where(Chatbot.id == chatbot_id))
+        chatbot = result.scalar_one_or_none()
         if chatbot:
             chatbot.knowledge_base_version = (chatbot.knowledge_base_version or 1) + 1
             db.add(chatbot)
@@ -96,8 +101,8 @@ class KnowledgeService:
         return url
 
     @staticmethod
-    def create_metadata_source(db: Session, org_id: uuid.UUID, chatbot_id: uuid.UUID, source_type: SourceType, value: str, label: str) -> KnowledgeSource:
-        KnowledgeService.ensure_chatbot_access(db, org_id, chatbot_id)
+    async def create_metadata_source(db: AsyncSession, org_id: uuid.UUID, chatbot_id: uuid.UUID, source_type: SourceType, value: str, label: str) -> KnowledgeSource:
+        await KnowledgeService.ensure_chatbot_access(db, org_id, chatbot_id)
         cleaned_value = value.strip()
         if not cleaned_value:
             raise ValueError("Knowledge source value cannot be empty")
@@ -111,18 +116,17 @@ class KnowledgeService:
                 status=SourceStatus.INDEXED
             )
             db.add(source)
-            db.commit()
-            db.refresh(source)
+            await db.commit()
+            await db.refresh(source)
             return source
         except Exception as e:
-            db.rollback()
+            await db.rollback()
             logger.error("Database error in create_metadata_source: %s", str(e), exc_info=True)
             raise e
 
-
     @classmethod
-    def upload_file(cls, db: Session, org_id: uuid.UUID, chatbot_id: uuid.UUID, file: UploadFile) -> KnowledgeSource:
-        cls.ensure_chatbot_access(db, org_id, chatbot_id)
+    async def upload_file(cls, db: AsyncSession, org_id: uuid.UUID, chatbot_id: uuid.UUID, file: UploadFile) -> KnowledgeSource:
+        await cls.ensure_chatbot_access(db, org_id, chatbot_id)
         filename = Path(file.filename or "").name
         if not filename or "." not in filename:
             raise ValueError("Uploaded file must have a supported extension")
@@ -138,7 +142,7 @@ class KnowledgeService:
             "application/octet-stream",
         }:
             raise ValueError("Unsupported file content type")
-            
+
         os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
         file_id = uuid.uuid4()
         storage_filename = f"{file_id}.{ext}"
@@ -146,7 +150,7 @@ class KnowledgeService:
         storage_path = os.path.abspath(os.path.join(upload_root, storage_filename))
         if not storage_path.startswith(upload_root):
             raise ValueError("Invalid upload path")
-        
+
         size = 0
         content = file.file.read(settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024 + 1)
         size = len(content)
@@ -167,7 +171,7 @@ class KnowledgeService:
                 status=SourceStatus.QUEUED
             )
             db.add(source)
-            db.flush()
+            await db.flush()
 
             doc = Document(
                 source_id=source.id,
@@ -180,12 +184,12 @@ class KnowledgeService:
                 uploaded_at=datetime.now(timezone.utc)
             )
             db.add(doc)
-            cls._enqueue_job(db, source)
-            db.commit()
-            db.refresh(source)
+            await cls._enqueue_job(db, source)
+            await db.commit()
+            await db.refresh(source)
             return source
         except Exception as e:
-            db.rollback()
+            await db.rollback()
             try:
                 StorageService.delete_file(storage_path)
             except Exception:
@@ -193,10 +197,9 @@ class KnowledgeService:
             logger.error("Database error in upload_file: %s", str(e), exc_info=True)
             raise e
 
-
     @classmethod
-    def create_text_source(cls, db: Session, org_id: uuid.UUID, chatbot_id: uuid.UUID, text: str, label: str) -> KnowledgeSource:
-        cls.ensure_chatbot_access(db, org_id, chatbot_id)
+    async def create_text_source(cls, db: AsyncSession, org_id: uuid.UUID, chatbot_id: uuid.UUID, text: str, label: str) -> KnowledgeSource:
+        await cls.ensure_chatbot_access(db, org_id, chatbot_id)
         cleaned_text = text.strip()
         if not cleaned_text:
             raise ValueError("Text knowledge source cannot be empty")
@@ -210,20 +213,19 @@ class KnowledgeService:
                 status=SourceStatus.QUEUED
             )
             db.add(source)
-            db.flush()
-            cls._enqueue_job(db, source)
-            db.commit()
-            db.refresh(source)
+            await db.flush()
+            await cls._enqueue_job(db, source)
+            await db.commit()
+            await db.refresh(source)
             return source
         except Exception as e:
-            db.rollback()
+            await db.rollback()
             logger.error("Database error in create_text_source: %s", str(e), exc_info=True)
             raise e
 
-
     @classmethod
-    def create_website_source(cls, db: Session, org_id: uuid.UUID, chatbot_id: uuid.UUID, url: str) -> KnowledgeSource:
-        cls.ensure_chatbot_access(db, org_id, chatbot_id)
+    async def create_website_source(cls, db: AsyncSession, org_id: uuid.UUID, chatbot_id: uuid.UUID, url: str) -> KnowledgeSource:
+        await cls.ensure_chatbot_access(db, org_id, chatbot_id)
         url = cls._validate_public_url(url)
         try:
             source = KnowledgeSource(
@@ -235,19 +237,19 @@ class KnowledgeService:
                 status=SourceStatus.QUEUED
             )
             db.add(source)
-            db.flush()
-            cls._enqueue_job(db, source)
-            db.commit()
-            db.refresh(source)
+            await db.flush()
+            await cls._enqueue_job(db, source)
+            await db.commit()
+            await db.refresh(source)
             return source
         except Exception as e:
-            db.rollback()
+            await db.rollback()
             logger.error("Database error in create_website_source: %s", str(e), exc_info=True)
             raise e
 
-
     @classmethod
     def process_source_background(cls, source_id: uuid.UUID, org_id: uuid.UUID):
+        """Sync version for background workers."""
         from app.db.session import SessionLocal
         from sqlalchemy import text
         db = SessionLocal()
@@ -265,7 +267,8 @@ class KnowledgeService:
             db.close()
 
     @classmethod
-    def process_source(cls, db: Session, source: KnowledgeSource) -> None:
+    def process_source(cls, db, source: KnowledgeSource) -> None:
+        """Sync version for background workers. Accepts sync or async session."""
         source.status = SourceStatus.PROCESSING
         source.error_message = None
         db.flush()
@@ -289,12 +292,10 @@ class KnowledgeService:
             result = TextExtractor.extract_url_sync(source.value)
             text = result.text
 
-            # Populate crawl metadata
             source.pages_crawled = result.pages_crawled
             source.total_content_chars = result.total_chars
             source.crawl_duration_secs = int(result.crawl_duration_secs)
 
-            # Store crawled markdown to disk
             from app.services.storage import StorageService
             os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
             storage_filename = f"{source.id}_crawl.md"
@@ -304,8 +305,6 @@ class KnowledgeService:
             content_bytes = text.encode("utf-8")
             StorageService.save_file(storage_path, content_bytes)
 
-            # Create a document record to track the stored markdown file
-            # If it already exists (e.g. retry), update it
             doc = source.document
             if not doc:
                 doc = Document(
@@ -358,44 +357,44 @@ class KnowledgeService:
         cls._bump_knowledge_base_version(db, source.chatbot_id)
 
     @classmethod
-    def _notify_job_update(cls, db: Session, job: KnowledgeJob):
+    def _notify_job_update(cls, db, job: KnowledgeJob):
+        """Sync version for background workers."""
         from app.models.organization import OrgMember
         from app.services.websocket import manager
         import asyncio
 
         try:
-            # Optimize: exit early if there are no active websocket connections in this process (e.g. inside worker process)
             if not manager.active_connections:
                 return
 
             members = db.query(OrgMember).filter(OrgMember.org_id == job.org_id).all()
             if not members:
                 return
-            
+
             payload = {
                 "type": "knowledge_update",
                 "chatbot_id": str(job.chatbot_id)
             }
-            
+
             async def send_updates():
                 for member in members:
                     await manager.send_personal_message(payload, member.user_id)
-            
+
             try:
                 loop = asyncio.get_running_loop()
                 loop.create_task(send_updates())
             except RuntimeError:
-                # If there's no running loop in the current thread, try to run on the captured main loop
                 if manager.loop and manager.loop.is_running():
                     asyncio.run_coroutine_threadsafe(send_updates(), manager.loop)
                 else:
                     logger.warning("ws_notify_skipped: no event loop in worker process")
-                
+
         except Exception as e:
             logger.error(f"Failed to notify users of knowledge update: {e}")
 
     @classmethod
-    def process_next_job(cls, db: Session) -> bool:
+    def process_next_job(cls, db) -> bool:
+        """Sync version for background workers."""
         now = datetime.now(timezone.utc)
         job = db.query(KnowledgeJob).filter(
             KnowledgeJob.status == KnowledgeJobStatus.QUEUED,
@@ -431,7 +430,6 @@ class KnowledgeService:
                     job.status = KnowledgeJobStatus.FAILED
                 else:
                     job.status = KnowledgeJobStatus.QUEUED
-                    # Apply exponential backoff: 30s, 60s, 120s...
                     backoff_seconds = 30 * (2 ** (job.attempts - 1))
                     job.retry_after = datetime.now(timezone.utc) + timedelta(seconds=min(backoff_seconds, 3600))
             if source:
@@ -444,11 +442,14 @@ class KnowledgeService:
             return True
 
     @classmethod
-    def delete_source(cls, db: Session, org_id: uuid.UUID, source_id: uuid.UUID) -> bool:
-        source = db.query(KnowledgeSource).filter(
-            KnowledgeSource.id == source_id,
-            KnowledgeSource.org_id == org_id
-        ).first()
+    async def delete_source(cls, db: AsyncSession, org_id: uuid.UUID, source_id: uuid.UUID) -> bool:
+        result = await db.execute(
+            select(KnowledgeSource).where(
+                KnowledgeSource.id == source_id,
+                KnowledgeSource.org_id == org_id
+            )
+        )
+        source = result.scalar_one_or_none()
         if not source:
             return False
 
@@ -458,12 +459,12 @@ class KnowledgeService:
                 StorageService.delete_file(source.document.storage_path)
 
             if source.source_type in [SourceType.FILE, SourceType.TEXT, SourceType.WEBSITE]:
-                cls._bump_knowledge_base_version(db, source.chatbot_id)
+                await cls._bump_knowledge_base_version(db, source.chatbot_id)
 
-            db.delete(source)
-            db.commit()
+            await db.delete(source)
+            await db.commit()
             return True
         except Exception as e:
-            db.rollback()
+            await db.rollback()
             logger.error("Database error in delete_source: %s", str(e), exc_info=True)
             raise e

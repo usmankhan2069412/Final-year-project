@@ -62,6 +62,9 @@ class Settings(BaseSettings):
     REDIS_URL: str = ""
     PUB_SUB_BACKEND: str = "in_memory"
 
+    # Async executor configuration for RAG pipeline
+    EXECUTOR_MAX_WORKERS: int = 200       # Max threads for blocking LLM/embedding calls
+
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
 
 settings = Settings()

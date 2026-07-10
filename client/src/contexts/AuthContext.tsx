@@ -25,7 +25,7 @@ interface AuthContextValue {
   userMe: UserMeResponse | null;
   isLoadingProfile: boolean;
   login: (token: string) => void;
-  logout: () => void;
+  logout: (options?: { isExpired?: boolean }) => void;
   fetchProfile: () => Promise<void>;
 }
 
@@ -76,12 +76,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoadingProfile(true);
   }, []);
 
-  const logout = useCallback(() => {
+  const logout = useCallback((options?: { isExpired?: boolean }) => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
     localStorage.removeItem("token");
     localStorage.removeItem("aina-user-me");
     setIsAuthenticated(false);
     setUserMe(null);
-    toast.success("Successfully logged out");
+    
+    if (options?.isExpired) {
+      toast.error("Session expired. Please log in again.");
+    } else {
+      toast.success("Successfully logged out");
+    }
   }, []);
 
   // Fetch profile when authenticated or when login happens
@@ -106,7 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Listen to unauthorized events to automatically log out the user
   useEffect(() => {
     const handleUnauthorized = () => {
-      logout();
+      logout({ isExpired: true });
     };
 
     window.addEventListener("unauthorized", handleUnauthorized);

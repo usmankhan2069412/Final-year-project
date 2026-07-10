@@ -1,7 +1,7 @@
 import uuid
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_tenant_db, get_current_org_id
 from app.services.bot import model_config_service
@@ -13,54 +13,43 @@ from app.schemas.bot import (
 router = APIRouter()
 
 
-# --- Available Models Endpoint ---
-
 @router.get("/available", response_model=List[dict])
-def get_available_models(db: Session = Depends(get_tenant_db)):
-    """Return available models grouped by provider."""
-    return model_config_service.get_available_models(db=db)
+async def get_available_models(db: AsyncSession = Depends(get_tenant_db)):
+    return await model_config_service.get_available_models(db=db)
 
-
-# --- AI Providers Endpoints ---
 
 @router.get("/providers", response_model=List[AIProviderResponse])
-def get_providers(db: Session = Depends(get_tenant_db)):
-    """Retrieve available AI Providers (e.g. OpenAI, Anthropic, Gemini)."""
-    return model_config_service.get_providers(db=db)
+async def get_providers(db: AsyncSession = Depends(get_tenant_db)):
+    return await model_config_service.get_providers(db=db)
 
-
-# --- AI Model Configuration Endpoints ---
 
 @router.post("/configs", response_model=AIModelConfigResponse, status_code=status.HTTP_201_CREATED)
-def create_model_config(
+async def create_model_config(
     config_in: AIModelConfigCreate,
-    db: Session = Depends(get_tenant_db),
+    db: AsyncSession = Depends(get_tenant_db),
     org_id: uuid.UUID = Depends(get_current_org_id)
 ):
-    """Create a new AI provider configuration with optional routing rules."""
     try:
-        return model_config_service.create_model_config(db=db, org_id=org_id, config_in=config_in)
+        return await model_config_service.create_model_config(db=db, org_id=org_id, config_in=config_in)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/configs", response_model=List[AIModelConfigResponse])
-def get_model_configs(
-    db: Session = Depends(get_tenant_db),
+async def get_model_configs(
+    db: AsyncSession = Depends(get_tenant_db),
     org_id: uuid.UUID = Depends(get_current_org_id)
 ):
-    """Retrieve all configured AI providers for the active organization."""
-    return model_config_service.get_model_configs(db=db, org_id=org_id)
+    return await model_config_service.get_model_configs(db=db, org_id=org_id)
 
 
 @router.get("/configs/{config_id}", response_model=AIModelConfigResponse)
-def get_model_config(
+async def get_model_config(
     config_id: uuid.UUID,
-    db: Session = Depends(get_tenant_db),
+    db: AsyncSession = Depends(get_tenant_db),
     org_id: uuid.UUID = Depends(get_current_org_id)
 ):
-    """Retrieve details of a specific AI configuration."""
-    config = model_config_service.get_model_config(db=db, org_id=org_id, config_id=config_id)
+    config = await model_config_service.get_model_config(db=db, org_id=org_id, config_id=config_id)
     if not config:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -70,15 +59,14 @@ def get_model_config(
 
 
 @router.patch("/configs/{config_id}", response_model=AIModelConfigResponse)
-def update_model_config(
+async def update_model_config(
     config_id: uuid.UUID,
     config_in: AIModelConfigUpdate,
-    db: Session = Depends(get_tenant_db),
+    db: AsyncSession = Depends(get_tenant_db),
     org_id: uuid.UUID = Depends(get_current_org_id)
 ):
-    """Update details of an existing AI provider configuration and/or update routing rules."""
     try:
-        config = model_config_service.update_model_config(
+        config = await model_config_service.update_model_config(
             db=db, org_id=org_id, config_id=config_id, config_in=config_in
         )
         if not config:
@@ -92,13 +80,12 @@ def update_model_config(
 
 
 @router.delete("/configs/{config_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_model_config(
+async def delete_model_config(
     config_id: uuid.UUID,
-    db: Session = Depends(get_tenant_db),
+    db: AsyncSession = Depends(get_tenant_db),
     org_id: uuid.UUID = Depends(get_current_org_id)
 ):
-    """Delete an existing AI provider configuration and all its routing rules."""
-    success = model_config_service.delete_model_config(db=db, org_id=org_id, config_id=config_id)
+    success = await model_config_service.delete_model_config(db=db, org_id=org_id, config_id=config_id)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

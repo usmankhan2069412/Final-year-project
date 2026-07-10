@@ -1,6 +1,6 @@
 import pytest
 import uuid
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -24,12 +24,16 @@ def test_send_message_endpoint(mock_get_rag_response):
     from app.api.deps import get_tenant_db, get_current_org_id
 
     org_id = uuid.UUID("00000000-0000-0000-0000-000000000000")
-    mock_db = MagicMock()
     mock_chatbot = MagicMock()
     mock_chatbot.org_id = org_id
-    mock_db.query.return_value.filter.return_value.first.return_value = mock_chatbot
+    mock_chatbot.id = uuid.UUID("00000000-0000-0000-0000-000000000002")
 
-    def override_get_tenant_db():
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_chatbot
+    mock_db = MagicMock()
+    mock_db.execute = AsyncMock(return_value=mock_result)
+
+    async def override_get_tenant_db():
         yield mock_db
 
     def override_get_current_org_id():

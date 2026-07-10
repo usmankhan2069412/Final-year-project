@@ -3,7 +3,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import BackgroundTasks
 
 from app.core.language import detect_message_language
@@ -25,23 +26,28 @@ class EscalationRouter:
         return get_escalated_wait_message(language)
 
     @staticmethod
-    def find_least_busy_agent(db: Session, org_id: uuid.UUID) -> Optional[uuid.UUID]:
+    async def afind_least_busy_agent(db: AsyncSession, org_id: uuid.UUID) -> Optional[uuid.UUID]:
         """Find the least-busy agent (OWNER or ADMIN role) in the organization."""
-        agent_counts = db.query(
-            User.id,
-            func.count(Conversation.id)
-        ).select_from(User).join(
-            OrgMember, OrgMember.user_id == User.id
-        ).outerjoin(
-            Conversation,
-            (Conversation.assigned_agent_id == User.id) &
-            (Conversation.status == ConversationStatus.ESCALATED) &
-            (Conversation.deleted_at == None)
-        ).filter(
-            OrgMember.org_id == org_id,
-            OrgMember.role.in_([OrgRole.OWNER, OrgRole.ADMIN]),
-            User.deleted_at == None
-        ).group_by(User.id).all()
+        from sqlalchemy import select
+        stmt = (
+            select(User.id, func.count(Conversation.id))
+            .select_from(User)
+            .join(OrgMember, OrgMember.user_id == User.id)
+            .outerjoin(
+                Conversation,
+                (Conversation.assigned_agent_id == User.id) &
+                (Conversation.status == ConversationStatus.ESCALATED) &
+                (Conversation.deleted_at == None)
+            )
+            .filter(
+                OrgMember.org_id == org_id,
+                OrgMember.role.in_([OrgRole.OWNER, OrgRole.ADMIN]),
+                User.deleted_at == None
+            )
+            .group_by(User.id)
+        )
+        result = await db.execute(stmt)
+        agent_counts = result.all()
         
         agent_escalated_counts = {user_id: count for user_id, count in agent_counts}
 
@@ -49,13 +55,14 @@ class EscalationRouter:
             return min(agent_escalated_counts, key=agent_escalated_counts.get)
         
         # Fallback to org owner
-        org = db.query(Organization).filter(Organization.id == org_id).first()
+        result = await db.execute(select(Organization).filter(Organization.id == org_id))
+        org = result.scalar_one_or_none()
         return org.owner_id if org else None
 
     @classmethod
-    def _record_and_broadcast(
+    async def _arecord_and_broadcast(
         cls,
-        db: Session,
+        db: AsyncSession,
         conversation: Conversation,
         chatbot: Chatbot,
         org_id: uuid.UUID,
@@ -69,6 +76,7 @@ class EscalationRouter:
     ):
         import asyncio
         from app.services.sse_manager import sse_manager
+        from sqlalchemy import select, update
         
         if write_user_message:
             user_msg = DBMessage(
@@ -83,10 +91,13 @@ class EscalationRouter:
             user_msg_id = str(user_msg.id)
             user_msg_created_at = user_msg.created_at
         else:
-            last_msg = db.query(DBMessage).filter(
-                DBMessage.conversation_id == conversation.id,
-                DBMessage.role == MessageRole.USER
-            ).order_by(DBMessage.created_at.desc()).first()
+            result = await db.execute(
+                select(DBMessage).filter(
+                    DBMessage.conversation_id == conversation.id,
+                    DBMessage.role == MessageRole.USER
+                ).order_by(DBMessage.created_at.desc())
+            )
+            last_msg = result.scalars().first()
             if last_msg:
                 user_msg_id = str(last_msg.id)
                 user_msg_created_at = last_msg.created_at
@@ -105,15 +116,15 @@ class EscalationRouter:
         db.add(bot_msg)
         
         increment = 2 if write_user_message else 1
-        db.query(Chatbot).filter(Chatbot.id == chatbot.id).update(
-            {Chatbot.total_messages: Chatbot.total_messages + increment}
+        await db.execute(
+            update(Chatbot).filter(Chatbot.id == chatbot.id).values(total_messages=Chatbot.total_messages + increment)
         )
         if is_new_conv:
-            db.query(Chatbot).filter(Chatbot.id == chatbot.id).update(
-                {Chatbot.total_conversations: Chatbot.total_conversations + 1}
+            await db.execute(
+                update(Chatbot).filter(Chatbot.id == chatbot.id).values(total_conversations=Chatbot.total_conversations + 1)
             )
         
-        db.commit()
+        await db.commit()
 
         user_msg_data = {
             "conversation_id": str(conversation.id),
@@ -149,33 +160,15 @@ class EscalationRouter:
             if escalation_event:
                 background_tasks.add_task(sse_manager.broadcast, f"organization:{org_id}", "escalation", escalation_event)
         else:
-            def _run_sse():
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    loop.run_until_complete(sse_manager.broadcast(f"organization:{org_id}", "message", user_msg_data))
-                    loop.run_until_complete(sse_manager.broadcast(f"organization:{org_id}", "message", bot_msg_data))
-                    if escalation_event:
-                        loop.run_until_complete(sse_manager.broadcast(f"organization:{org_id}", "escalation", escalation_event))
-                except Exception as e:
-                    logger.error(f"SSE broadcast failed in thread: {e}")
-                finally:
-                    loop.close()
-
-            try:
-                loop = asyncio.get_running_loop()
-                loop.create_task(sse_manager.broadcast(f"organization:{org_id}", "message", user_msg_data))
-                loop.create_task(sse_manager.broadcast(f"organization:{org_id}", "message", bot_msg_data))
-                if escalation_event:
-                    loop.create_task(sse_manager.broadcast(f"organization:{org_id}", "escalation", escalation_event))
-            except RuntimeError:
-                import threading
-                threading.Thread(target=_run_sse, daemon=True).start()
+            asyncio.create_task(sse_manager.broadcast(f"organization:{org_id}", "message", user_msg_data))
+            asyncio.create_task(sse_manager.broadcast(f"organization:{org_id}", "message", bot_msg_data))
+            if escalation_event:
+                asyncio.create_task(sse_manager.broadcast(f"organization:{org_id}", "escalation", escalation_event))
 
     @classmethod
-    def escalate(
+    async def aescalate(
         cls,
-        db: Session,
+        db: AsyncSession,
         conversation: Conversation,
         chatbot: Chatbot,
         org_id: uuid.UUID,
@@ -195,11 +188,11 @@ class EscalationRouter:
         conversation.status = ConversationStatus.ESCALATED
         
         if not conversation.assigned_agent_id:
-            conversation.assigned_agent_id = cls.find_least_busy_agent(db, org_id)
+            conversation.assigned_agent_id = await cls.afind_least_busy_agent(db, org_id)
             
         db.add(conversation)
         
-        cls._record_and_broadcast(
+        await cls._arecord_and_broadcast(
             db=db,
             conversation=conversation,
             chatbot=chatbot,
@@ -221,9 +214,9 @@ class EscalationRouter:
         }
 
     @classmethod
-    def handle_escalated_message(
+    async def ahandle_escalated_message(
         cls,
-        db: Session,
+        db: AsyncSession,
         conversation: Conversation,
         chatbot: Chatbot,
         org_id: uuid.UUID,
@@ -238,6 +231,7 @@ class EscalationRouter:
         inbox via SSE. The agent will reply manually from the inbox.
         """
         import asyncio
+        from sqlalchemy import update
         from app.services.sse_manager import sse_manager
 
         # Save only the user message — no bot reply during live agent chat
@@ -251,10 +245,10 @@ class EscalationRouter:
         )
         db.add(user_msg)
 
-        db.query(Chatbot).filter(Chatbot.id == chatbot.id).update(
-            {Chatbot.total_messages: Chatbot.total_messages + 1}
+        await db.execute(
+            update(Chatbot).filter(Chatbot.id == chatbot.id).values(total_messages=Chatbot.total_messages + 1)
         )
-        db.commit()
+        await db.commit()
 
         # Broadcast user message to both channels:
         # - organization:{org_id}     → inbox receives it
@@ -276,23 +270,8 @@ class EscalationRouter:
             background_tasks.add_task(sse_manager.broadcast, org_channel, "message", user_msg_data)
             background_tasks.add_task(sse_manager.broadcast, conv_channel, "message", user_msg_data)
         else:
-            try:
-                loop = asyncio.get_running_loop()
-                loop.create_task(sse_manager.broadcast(org_channel, "message", user_msg_data))
-                loop.create_task(sse_manager.broadcast(conv_channel, "message", user_msg_data))
-            except RuntimeError:
-                def _run_sse():
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    try:
-                        loop.run_until_complete(sse_manager.broadcast(org_channel, "message", user_msg_data))
-                        loop.run_until_complete(sse_manager.broadcast(conv_channel, "message", user_msg_data))
-                    except Exception as e:
-                        logger.error(f"SSE broadcast failed in thread: {e}")
-                    finally:
-                        loop.close()
-                import threading
-                threading.Thread(target=_run_sse, daemon=True).start()
+            asyncio.create_task(sse_manager.broadcast(org_channel, "message", user_msg_data))
+            asyncio.create_task(sse_manager.broadcast(conv_channel, "message", user_msg_data))
 
         # Return no bot response — agent will reply from inbox
         return {

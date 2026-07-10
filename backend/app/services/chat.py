@@ -5,16 +5,19 @@ import os
 import json
 import httpx
 import time
+import asyncio
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional, TypedDict
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import BackgroundTasks
 from itertools import zip_longest
 
 from app.core.config import settings, resolve_openrouter_key
 from app.core.language import detect_message_language
 from app.core.metrics import chat_requests_total, chat_latency_seconds, fallback_total, validated_chunks_count
-from app.db.base_repository import MessageRepository, ConversationRepository
+from app.models.conversation import Message as DBMessage
 from app.models.chatbot import Chatbot
 from app.models.persona import Persona, PersonaTrait
 from app.models.conversation import Conversation, Message as DBMessage, ConversationStatus, MessageRole
@@ -65,6 +68,7 @@ class AgentState(TypedDict, total=False):
     response: str
     status: ConversationStatus
     callbacks: Optional[List[Any]]
+    status_queue: Optional[Any]
 
 
 from app.services.semantic_router import SemanticRouter
@@ -243,9 +247,13 @@ class AgentGraphExecutor:
 
     # --- Node Functions ---
     @staticmethod
-    def route_intent(state: AgentState) -> AgentState:
+    async def route_intent(state: AgentState) -> AgentState:
+        status_queue = state.get("status_queue")
+        if status_queue:
+            await status_queue.put({"type": "status", "message": "🔍 Understanding your question..."})
+
         # Persona-aware, context-aware intent classification
-        intent = SemanticRouter.classify(
+        intent = await SemanticRouter.classify(
             message=state["user_message"],
             persona=state.get("persona"),
             traits=state.get("traits"),
@@ -270,7 +278,11 @@ class AgentGraphExecutor:
         return {"intent": final_intent, "model_name": model_name}
 
     @staticmethod
-    def agent_handoff_node(state: AgentState) -> AgentState:
+    async def agent_handoff_node(state: AgentState) -> AgentState:
+        status_queue = state.get("status_queue")
+        if status_queue:
+            await status_queue.put({"type": "status", "message": "✨ Generating your answer..."})
+
         from app.core.messages import get_initial_handoff_message
         lang = state["persona"].language
         if lang == "multilingual":
@@ -281,7 +293,11 @@ class AgentGraphExecutor:
         return {"response": text, "status": ConversationStatus.ESCALATED}
 
     @staticmethod
-    def conversational_node(state: AgentState) -> AgentState:
+    async def conversational_node(state: AgentState) -> AgentState:
+        status_queue = state.get("status_queue")
+        if status_queue:
+            await status_queue.put({"type": "status", "message": "✨ Generating your answer..."})
+
         llm = AgentGraphExecutor._get_llm(state, temperature=0.7)
         greeting = getattr(state["persona"], "greeting", None) or "Hello! How can I help you today?"
 
@@ -320,7 +336,8 @@ class AgentGraphExecutor:
                     messages.append(role(content=m.content))
                 messages.append(HumanMessage(content=state["user_message"]))
 
-                result = llm.invoke(messages).content.strip()
+                result_msg = await llm.ainvoke(messages)
+                result = result_msg.content.strip()
                 return {"response": result, "response_source": "conversational"}
             except Exception as e:
                 logger.warning(f"LLM conversational generation failed: {e}")
@@ -328,7 +345,11 @@ class AgentGraphExecutor:
         return {"response": greeting, "response_source": "conversational"}
 
     @staticmethod
-    def history_transform_node(state: AgentState) -> AgentState:
+    async def history_transform_node(state: AgentState) -> AgentState:
+        status_queue = state.get("status_queue")
+        if status_queue:
+            await status_queue.put({"type": "status", "message": "✨ Generating your answer..."})
+
         history = state.get("history") or []
         user_message = state["user_message"]
         lang = detect_message_language(user_message, history)
@@ -390,7 +411,8 @@ class AgentGraphExecutor:
                 f"Target type: {target_type}\n"
                 f"Target text:\n{target_text}"
             ))
-            response = llm.invoke([sys_msg, human_msg]).content.strip()
+            response_msg = await llm.ainvoke([sys_msg, human_msg])
+            response = response_msg.content.strip()
             if not response:
                 response = AgentGraphExecutor._history_transform_unavailable_message(lang)
 
@@ -419,7 +441,11 @@ class AgentGraphExecutor:
             }
 
     @staticmethod
-    def rewrite_node(state: AgentState) -> AgentState:
+    async def rewrite_node(state: AgentState) -> AgentState:
+        status_queue = state.get("status_queue")
+        if status_queue:
+            await status_queue.put({"type": "status", "message": "📚 Searching knowledge base..."})
+
         llm = AgentGraphExecutor._get_llm(state, stream=False)
         user_msg = state["user_message"]
 
@@ -442,7 +468,8 @@ class AgentGraphExecutor:
             ))
             h_msg = HumanMessage(content=f"History:\n{history_str}\nLatest user message: \"{user_msg}\"\nStandalone query:")
 
-            rewritten = llm.invoke([sys_msg, h_msg]).content.strip()
+            rewritten_msg = await llm.ainvoke([sys_msg, h_msg])
+            rewritten = rewritten_msg.content.strip()
             if rewritten.startswith('"') and rewritten.endswith('"'):
                 rewritten = rewritten[1:-1]
             return {"rewritten_query": rewritten}
@@ -451,84 +478,99 @@ class AgentGraphExecutor:
             return {"rewritten_query": user_msg}
 
     @staticmethod
-    def semantic_cache_node(state: AgentState) -> AgentState:
+    async def semantic_cache_node(state: AgentState) -> AgentState:
+        status_queue = state.get("status_queue")
+        if status_queue:
+            await status_queue.put({"type": "status", "message": "📚 Searching knowledge base..."})
+
         rewritten = state.get("rewritten_query")
         if not rewritten:
             return {"cache_hit": False}
 
         from app.services.semantic_cache import SemanticCacheService
         from app.core.metrics import semantic_cache_requests_total, semantic_cache_similarity_score
+        from app.db.session import AsyncSessionLocal
 
-        response_text, chunk_ids, similarity = SemanticCacheService.check_cache(
-            org_id=state["org_id"],
-            chatbot_id=state["chatbot_id"],
-            rewritten_query=rewritten,
-            knowledge_base_version=state.get("knowledge_base_version", 1),
-            persona_version=state.get("persona_version", 1),
-            threshold=settings.CACHE_SIMILARITY_THRESHOLD
-        )
-
-        if response_text:
-            semantic_cache_requests_total.labels(result="hit").inc()
-            if similarity is not None:
-                semantic_cache_similarity_score.observe(similarity)
-            sources = VectorStoreService.fetch_sources_by_chunk_ids(
-                state["chatbot_id"],
-                chunk_ids or []
+        async with AsyncSessionLocal() as db:
+            response_text, chunk_ids, similarity = await SemanticCacheService.acheck_cache(
+                org_id=state["org_id"],
+                chatbot_id=state["chatbot_id"],
+                rewritten_query=rewritten,
+                knowledge_base_version=state.get("knowledge_base_version", 1),
+                persona_version=state.get("persona_version", 1),
+                threshold=settings.CACHE_SIMILARITY_THRESHOLD,
+                db=db
             )
-            return {
-                "cache_hit": True,
-                "response": response_text,
-                "response_source": "semantic_cache",
-                "cache_similarity": similarity,
-                "sources": sources
-            }
+
+            if response_text:
+                semantic_cache_requests_total.labels(result="hit").inc()
+                if similarity is not None:
+                    semantic_cache_similarity_score.observe(similarity)
+                sources = await VectorStoreService.afetch_sources_by_chunk_ids(
+                    state["chatbot_id"],
+                    chunk_ids or [],
+                    db=db
+                )
+                return {
+                    "cache_hit": True,
+                    "response": response_text,
+                    "response_source": "semantic_cache",
+                    "cache_similarity": similarity,
+                    "sources": sources
+                }
 
         semantic_cache_requests_total.labels(result="miss").inc()
         return {"cache_hit": False}
 
     @staticmethod
-    def retrieve_node(state: AgentState) -> AgentState:
+    async def retrieve_node(state: AgentState) -> AgentState:
+        status_queue = state.get("status_queue")
+        if status_queue:
+            await status_queue.put({"type": "status", "message": "📚 Searching knowledge base..."})
+
         rewritten = state.get("rewritten_query")
         original = state["user_message"]
         chatbot_id = state["chatbot_id"]
 
         from app.services.embedding import embedding_service
+        from app.db.session import AsyncSessionLocal
 
-        # If no rewrite or exactly the same, do a single search
-        if not rewritten or rewritten.lower().strip() == original.lower().strip():
-            query_vector = embedding_service.encode([original])[0]
-            query_list = query_vector.tolist() if hasattr(query_vector, "tolist") else list(query_vector)
-            sources_list = VectorStoreService.search_hybrid(chatbot_id, original, top_k=settings.RETRIEVAL_TOP_K_SINGLE, query_vector=query_list)
-            # Save vector for caching
-            state["query_vector"] = query_list
-        else:
-            # Multi-Query Retrieval: search both and merge
-            # Batch encode both queries to halve API calls
-            vectors = embedding_service.encode([rewritten, original])
-            rewritten_vec = vectors[0].tolist() if hasattr(vectors[0], "tolist") else list(vectors[0])
-            original_vec = vectors[1].tolist() if hasattr(vectors[1], "tolist") else list(vectors[1])
+        async with AsyncSessionLocal() as db:
+            # If no rewrite or exactly the same, do a single search
+            if not rewritten or rewritten.lower().strip() == original.lower().strip():
+                query_vectors = await embedding_service.aencode([original])
+                query_vector = query_vectors[0]
+                query_list = query_vector.tolist() if hasattr(query_vector, "tolist") else list(query_vector)
+                sources_list = await VectorStoreService.asearch_hybrid(chatbot_id, original, top_k=settings.RETRIEVAL_TOP_K_SINGLE, query_vector=query_list, db=db)
+                # Save vector for caching
+                state["query_vector"] = query_list
+            else:
+                # Multi-Query Retrieval: search both and merge
+                # Batch encode both queries to halve API calls
+                vectors = await embedding_service.aencode([rewritten, original])
+                rewritten_vec = vectors[0].tolist() if hasattr(vectors[0], "tolist") else list(vectors[0])
+                original_vec = vectors[1].tolist() if hasattr(vectors[1], "tolist") else list(vectors[1])
 
-            # Save rewritten vector to state for caching
-            state["query_vector"] = rewritten_vec
+                # Save rewritten vector to state for caching
+                state["query_vector"] = rewritten_vec
 
-            sources_rewritten = VectorStoreService.search_hybrid(chatbot_id, rewritten, top_k=settings.RETRIEVAL_TOP_K_MULTI, query_vector=rewritten_vec)
-            sources_original = VectorStoreService.search_hybrid(chatbot_id, original, top_k=settings.RETRIEVAL_TOP_K_MULTI, query_vector=original_vec)
+                sources_rewritten = await VectorStoreService.asearch_hybrid(chatbot_id, rewritten, top_k=settings.RETRIEVAL_TOP_K_MULTI, query_vector=rewritten_vec, db=db)
+                sources_original = await VectorStoreService.asearch_hybrid(chatbot_id, original, top_k=settings.RETRIEVAL_TOP_K_MULTI, query_vector=original_vec, db=db)
 
-            seen_chunks = set()
-            sources_list = []
+                seen_chunks = set()
+                sources_list = []
 
-            # Interleave to balance results, deduplicating by chunk_id
-            for r, o in zip_longest(sources_rewritten, sources_original):
-                if r and r["chunk_id"] not in seen_chunks:
-                    sources_list.append(r)
-                    seen_chunks.add(r["chunk_id"])
-                if o and o["chunk_id"] not in seen_chunks:
-                    sources_list.append(o)
-                    seen_chunks.add(o["chunk_id"])
+                # Interleave to balance results, deduplicating by chunk_id
+                for r, o in zip_longest(sources_rewritten, sources_original):
+                    if r and r["chunk_id"] not in seen_chunks:
+                        sources_list.append(r)
+                        seen_chunks.add(r["chunk_id"])
+                    if o and o["chunk_id"] not in seen_chunks:
+                        sources_list.append(o)
+                        seen_chunks.add(o["chunk_id"])
 
-            # Keep top 4 combined
-            sources_list = sources_list[:4]
+                # Keep top 4 combined
+                sources_list = sources_list[:4]
 
         sources = [dict(chunk) for chunk in sources_list]
         context_text = AgentGraphExecutor._context_from_sources(sources)
@@ -542,7 +584,11 @@ class AgentGraphExecutor:
         return {"sources": sources, "context_text": context_text}
 
     @classmethod
-    def validate_node(cls, state: AgentState) -> AgentState:
+    async def validate_node(cls, state: AgentState) -> AgentState:
+        status_queue = state.get("status_queue")
+        if status_queue:
+            await status_queue.put({"type": "status", "message": "📚 Searching knowledge base..."})
+
         sources = state.get("sources", [])
         if not sources:
             logger.info("validation_result", is_relevant=False, chunks_before=0, chunks_after=0)
@@ -578,14 +624,15 @@ class AgentGraphExecutor:
                 "Content-Type": "application/json"
             }
 
-            client = cls.get_http_client()
-            response = client.post(
-                "https://openrouter.ai/api/v1/rerank",
-                json=payload,
-                headers=headers,
-            )
-            response.raise_for_status()
-            result = response.json()
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    "https://openrouter.ai/api/v1/rerank",
+                    json=payload,
+                    headers=headers,
+                    timeout=15.0
+                )
+                response.raise_for_status()
+                result = response.json()
 
             filtered_sources = []
 
@@ -653,7 +700,11 @@ class AgentGraphExecutor:
         return _MSGS.get(lang, "I'm sorry, I don't have the exact details for that right now. Would you like me to connect you to someone from our team who can help?")
 
     @staticmethod
-    def rag_answer_node(state: AgentState) -> AgentState:
+    async def rag_answer_node(state: AgentState) -> AgentState:
+        status_queue = state.get("status_queue")
+        if status_queue:
+            await status_queue.put({"type": "status", "message": "✨ Generating your answer..."})
+
         lang = state["persona"].language
         if lang == "multilingual":
             lang = detect_message_language(state["user_message"], state.get("history"))
@@ -695,7 +746,8 @@ class AgentGraphExecutor:
                     HumanMessage(content="Current user query: " + user_msg + "\nStandalone search query: " + search_query)
                 ]
 
-                ans = llm.invoke(messages).content.strip()
+                ans_msg = await llm.ainvoke(messages)
+                ans = ans_msg.content.strip()
                 return {"response": ans, "response_source": "rag_generation"}
             except Exception as e:
                 logger.warning(f"RAG generation failed: {e}")
@@ -756,8 +808,78 @@ class AgentGraphExecutor:
         return workflow.compile()
 
     @classmethod
-    def execute(cls, initial_state: AgentState) -> AgentState:
-        return cls._get_graph().invoke(initial_state)
+    async def aexecute(cls, initial_state: AgentState) -> AgentState:
+        # Pre-check semantic cache with original query before graph execution.
+        # On hit, skip the entire 5-node pipeline (rewrite → cache → retrieve → validate → generate).
+        cached = await cls._aprecheck_cache(initial_state)
+        if cached is not None:
+            return cached
+        return await cls._get_graph().ainvoke(initial_state)
+
+    @classmethod
+    async def _aprecheck_cache(cls, state: AgentState) -> Optional[AgentState]:
+        """Pre-check semantic cache with the ORIGINAL (un-rewritten) user query.
+        Runs before graph execution. On hit, returns a final state that skips the
+        entire 5-node RAG pipeline (rewrite → cache → retrieve → validate → generate).
+        Cost: 1 embedding call + 1 DB query (~250ms). Benefit on hit: skip 5-25s."""
+        msg = state.get("user_message", "").lower().strip()
+        if not msg:
+            return None
+
+        # Fast keyword filter — skip obvious non-RAG messages
+        common_greetings = {"hi", "hello", "hey", "bye", "thanks", "ok", "okay",
+                            "salam", "thank you", "thankyou", "good morning",
+                            "good evening", "good afternoon", "good night", "bye bye"}
+        if msg in common_greetings:
+            return None
+        handoff_kw = ["talk to human", "human se baat", "agent se connect",
+                      "speak with an agent", "customer care", "help desk"]
+        if any(kw in msg for kw in handoff_kw):
+            return None
+
+        from app.services.semantic_cache import SemanticCacheService
+        from app.core.metrics import semantic_cache_requests_total, semantic_cache_similarity_score
+        from app.db.session import AsyncSessionLocal
+
+        async with AsyncSessionLocal() as db:
+            response_text, chunk_ids, similarity = await SemanticCacheService.acheck_cache(
+                org_id=state["org_id"],
+                chatbot_id=state["chatbot_id"],
+                rewritten_query=state["user_message"],
+                knowledge_base_version=state.get("knowledge_base_version", 1),
+                persona_version=state.get("persona_version", 1),
+                threshold=settings.CACHE_SIMILARITY_THRESHOLD,
+                db=db
+            )
+
+            if response_text:
+                semantic_cache_requests_total.labels(result="hit").inc()
+                if similarity is not None:
+                    semantic_cache_similarity_score.observe(similarity)
+                sources = await VectorStoreService.afetch_sources_by_chunk_ids(
+                    state["chatbot_id"], chunk_ids or [], db=db
+                )
+                logger.info("precheck_cache_hit", chatbot_id=state.get("chatbot_id"),
+                            similarity=similarity, skipped_pipeline=True)
+                return {
+                    "cache_hit": True,
+                    "response": response_text,
+                    "response_source": "semantic_cache",
+                    "cache_similarity": similarity,
+                    "sources": sources,
+                    "intent": "RAG_LOOKUP",
+                    "is_relevant": True,
+                    "validated_chunks_count": len(sources) if sources else 0,
+                    "context_text": cls._context_from_sources(sources) if sources else "",
+                }
+
+        semantic_cache_requests_total.labels(result="miss").inc()
+        return None
+
+    @classmethod
+    async def async_execute(cls, initial_state: AgentState) -> AgentState:
+        """Async graph execution — runs natively async LangGraph."""
+        return await cls.aexecute(initial_state)
 
 
 # --- Chat Service Orchestrator ---
@@ -766,16 +888,14 @@ class ChatService:
     Orchestrator class managing DB transactions, security, lookup, and updates.
     Invokes the pure AgentGraphExecutor for LangGraph execution.
     """
-    message_repo = MessageRepository()
-    conversation_repo = ConversationRepository()
 
     @staticmethod
-    def background_summarize_memory(conversation_id: uuid.UUID, org_id: uuid.UUID, user_message: str, bot_response: str, api_key: str, history_len: int, memory: dict):
-        """Conditionally summarize conversation memory in a background thread."""
+    async def abackground_summarize_memory(conversation_id: uuid.UUID, org_id: uuid.UUID, user_message: str, bot_response: str, api_key: str, history_len: int, memory: dict):
+        """Conditionally summarize conversation memory in a background task natively async."""
         from app.services.semantic_router import MEMORY_THRESHOLD, MEMORY_REFRESH_INTERVAL
         from app.core.metrics import memory_summarization_total
-        from app.db.session import SessionLocal
-        from sqlalchemy import text
+        from app.db.session import AsyncSessionLocal
+        from sqlalchemy import text, select
         from datetime import datetime, timezone
 
         # Fast check without DB
@@ -791,118 +911,128 @@ class ChatService:
         if not api_key:
             return
 
-        db = SessionLocal()
-        try:
-            # Bind tenant context for Row-Level Security
-            db.execute(
-                text("SELECT set_config('app.current_org_id', :org_id, true)"),
-                {"org_id": str(org_id)},
-            )
+        async with AsyncSessionLocal() as db:
+            try:
+                # Bind tenant context for Row-Level Security
+                await db.execute(
+                    text("SELECT set_config('app.current_org_id', :org_id, true)"),
+                    {"org_id": str(org_id)},
+                )
 
-            conv = db.query(Conversation).filter(Conversation.id == conversation_id).first()
-            if not conv:
-                return
+                result = await db.execute(select(Conversation).filter(Conversation.id == conversation_id))
+                conv = result.scalar_one_or_none()
+                if not conv:
+                    return
 
-            effective_key, base_url = resolve_openrouter_key(api_key)
-            if not effective_key:
-                return
+                effective_key, base_url = resolve_openrouter_key(api_key)
+                if not effective_key:
+                    return
 
-            llm_kwargs = {
-                "api_key": effective_key,
-                "model": "openai/gpt-4o-mini" if base_url else "gpt-4o-mini",
-                "temperature": 0.0,
-                "max_tokens": 150,
-            }
-            if base_url:
-                llm_kwargs["base_url"] = base_url
+                llm_kwargs = {
+                    "api_key": effective_key,
+                    "model": "openai/gpt-4o-mini" if base_url else "gpt-4o-mini",
+                    "temperature": 0.0,
+                    "max_tokens": 150,
+                }
+                if base_url:
+                    llm_kwargs["base_url"] = base_url
 
-            llm = ChatOpenAI(**llm_kwargs)
+                llm = ChatOpenAI(**llm_kwargs)
 
-            all_history = ChatService.message_repo.fetch_history(db, conversation_id, conv.started_at, datetime.now(timezone.utc))
+                result = await db.execute(
+                    select(DBMessage).filter(
+                        DBMessage.conversation_id == conversation_id,
+                        DBMessage.created_at >= conv.started_at,
+                        DBMessage.created_at <= datetime.now(timezone.utc)
+                    ).order_by(DBMessage.created_at.asc())
+                )
+                all_history = list(result.scalars().all())
 
-            # Since the user message and bot response have already been committed, they are in all_history.
-            # We don't need to append them manually.
-            covered = memory.get("summary_covers_until_turn", 0) if memory else 0
+                covered = memory.get("summary_covers_until_turn", 0) if memory else 0
 
-            # Take only the unsummarized portion
-            unsummarized_msgs = all_history[covered:] if covered < len(all_history) else all_history[-4:]
+                unsummarized_msgs = all_history[covered:] if covered < len(all_history) else all_history[-4:]
 
-            if not unsummarized_msgs:
-                return
+                if not unsummarized_msgs:
+                    return
 
-            msg_lines = []
-            for m in unsummarized_msgs:
-                role_label = "USER" if m.role == MessageRole.USER else "BOT"
-                msg_lines.append(f"{role_label}: {m.content}")
+                msg_lines = []
+                for m in unsummarized_msgs:
+                    role_label = "USER" if m.role == MessageRole.USER else "BOT"
+                    msg_lines.append(f"{role_label}: {m.content}")
 
-            existing_summary = memory.get("summary", "") if memory else ""
-            prev_context = f"Previous summary: {existing_summary}" if existing_summary else "Previous summary: None (new conversation)"
+                existing_summary = memory.get("summary", "") if memory else ""
+                prev_context = f"Previous summary: {existing_summary}" if existing_summary else "Previous summary: None (new conversation)"
 
-            sys_prompt = (
-                "Analyze this conversation and output a JSON object.\n\n"
-                f"{prev_context}\n\n"
-                f"New messages since last summary:\n" + "\n".join(msg_lines) + "\n\n"
-                "Output this exact JSON structure (no other text):\n"
-                '{\n'
-                '  "summary": "<1-2 sentence summary of entire conversation so far>",\n'
-                '  "topics": ["<topic1>", "<topic2>"],\n'
-                '  "user_mood": "<neutral|friendly|interested|confused|frustrated|closing>",\n'
-                '  "phase": "<greeting|active|closing>"\n'
-                '}'
-            )
+                sys_prompt = (
+                    "Analyze this conversation and output a JSON object.\n\n"
+                    f"{prev_context}\n\n"
+                    f"New messages since last summary:\n" + "\n".join(msg_lines) + "\n\n"
+                    "Output this exact JSON structure (no other text):\n"
+                    '{\n'
+                    '  "summary": "<1-2 sentence summary of entire conversation so far>",\n'
+                    '  "topics": ["<topic1>", "<topic2>"],\n'
+                    '  "user_mood": "<neutral|friendly|interested|confused|frustrated|closing>",\n'
+                    '  "phase": "<greeting|active|closing>"\n'
+                    '}'
+                )
 
-            result = llm.invoke([
-                SystemMessage(content=sys_prompt),
-                HumanMessage(content="Generate the JSON:")
-            ]).content.strip()
+                result_msg = await llm.ainvoke([
+                    SystemMessage(content=sys_prompt),
+                    HumanMessage(content="Generate the JSON:")
+                ])
+                result = result_msg.content.strip()
 
-            if result.startswith("```"):
-                result = result.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+                if result.startswith("```"):
+                    result = result.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
 
-            parsed = json.loads(result)
-            new_memory = {
-                "summary": parsed.get("summary", ""),
-                "turn_count": len(all_history),
-                "summary_covers_until_turn": len(all_history),
-                "topics": parsed.get("topics", []),
-                "user_mood": parsed.get("user_mood", "neutral"),
-                "phase": parsed.get("phase", "active"),
-            }
+                parsed = json.loads(result)
+                new_memory = {
+                    "summary": parsed.get("summary", ""),
+                    "turn_count": len(all_history),
+                    "summary_covers_until_turn": len(all_history),
+                    "topics": parsed.get("topics", []),
+                    "user_mood": parsed.get("user_mood", "neutral"),
+                    "phase": parsed.get("phase", "active"),
+                }
 
-            conv.memory = new_memory
-            db.add(conv)
-            db.commit()
+                conv.memory = new_memory
+                db.add(conv)
+                await db.commit()
 
-            memory_summarization_total.inc()
-            logger.info("conversation_memory_updated", turn_count=len(all_history), phase=new_memory["phase"])
-        except Exception as e:
-            logger.warning(f"Background memory summarization failed: {e}")
-        finally:
-            db.close()
+                memory_summarization_total.inc()
+                logger.info("conversation_memory_updated", turn_count=len(all_history), phase=new_memory["phase"])
+            except Exception as e:
+                logger.warning(f"Background memory summarization failed: {e}")
 
     @staticmethod
-    def route_intent(state: AgentState) -> AgentState:
-        return AgentGraphExecutor.route_intent(state)
+    async def route_intent(state: AgentState) -> AgentState:
+        return await AgentGraphExecutor.route_intent(state)
 
     @classmethod
-    def get_rag_response(
-        cls, db: Session, org_id: uuid.UUID, chatbot_id: uuid.UUID, user_message: str, conversation_id: Optional[uuid.UUID] = None, deployment_id: Optional[uuid.UUID] = None, callbacks: Optional[List[Any]] = None, background_tasks: Optional[BackgroundTasks] = None
+    async def aget_rag_response(
+        cls, db: AsyncSession, org_id: uuid.UUID, chatbot_id: uuid.UUID, user_message: str, conversation_id: Optional[uuid.UUID] = None, deployment_id: Optional[uuid.UUID] = None, callbacks: Optional[List[Any]] = None, background_tasks: Optional[BackgroundTasks] = None, status_queue: Optional[Any] = None
     ) -> Dict[str, Any]:
 
         # 1. Fetch resources
-        chatbot = db.query(Chatbot).filter(
-            Chatbot.id == chatbot_id,
-            Chatbot.org_id == org_id,
-            Chatbot.deleted_at == None
-        ).first()
+        result = await db.execute(
+            select(Chatbot).filter(
+                Chatbot.id == chatbot_id,
+                Chatbot.org_id == org_id,
+                Chatbot.deleted_at == None
+            )
+        )
+        chatbot = result.scalar_one_or_none()
         if not chatbot:
             raise ValueError("Chatbot not found or inaccessible")
 
-        from sqlalchemy.orm import joinedload
-        persona = db.query(Persona).options(joinedload(Persona.traits)).filter(
-            Persona.id == chatbot.persona_id,
-            Persona.deleted_at == None
-        ).first()
+        from sqlalchemy.orm import selectinload
+        result = await db.execute(
+            select(Persona).options(selectinload(Persona.traits)).filter(
+                Persona.id == chatbot.persona_id,
+                Persona.deleted_at == None
+            )
+        )
+        persona = result.scalar_one_or_none()
         if not persona:
             raise ValueError("Chatbot Persona not found")
 
@@ -912,16 +1042,22 @@ class ChatService:
         api_key = None
         routing_rules_dict = {}
 
-        active_config = db.query(AIModelConfig).filter(
-            AIModelConfig.org_id == org_id,
-            AIModelConfig.is_active == True,
-            AIModelConfig.is_default == True,
-        ).first()
-        if not active_config:
-            active_config = db.query(AIModelConfig).filter(
+        result = await db.execute(
+            select(AIModelConfig).options(selectinload(AIModelConfig.routing_rules)).filter(
                 AIModelConfig.org_id == org_id,
                 AIModelConfig.is_active == True,
-            ).first()
+                AIModelConfig.is_default == True,
+            )
+        )
+        active_config = result.scalar_one_or_none()
+        if not active_config:
+            result = await db.execute(
+                select(AIModelConfig).options(selectinload(AIModelConfig.routing_rules)).filter(
+                    AIModelConfig.org_id == org_id,
+                    AIModelConfig.is_active == True,
+                )
+            )
+            active_config = result.scalar_one_or_none()
         if active_config:
             try:
                 api_key = model_config_service.decrypt_key(active_config.encrypted_api_key)
@@ -938,11 +1074,14 @@ class ChatService:
         # 3. Resolve session
         is_new_conv = False
         if conversation_id:
-            conversation = db.query(Conversation).filter(
-                Conversation.id == conversation_id,
-                Conversation.chatbot_id == chatbot_id,
-                Conversation.deleted_at == None
-            ).first()
+            result = await db.execute(
+                select(Conversation).filter(
+                    Conversation.id == conversation_id,
+                    Conversation.chatbot_id == chatbot_id,
+                    Conversation.deleted_at == None
+                )
+            )
+            conversation = result.scalar_one_or_none()
             if not conversation:
                 raise ValueError("Conversation session not found")
 
@@ -953,19 +1092,19 @@ class ChatService:
                 conversation.status = ConversationStatus.ONGOING
                 conversation.assigned_agent_id = None
                 db.add(conversation)
-                db.flush()
+                await db.flush()
         else:
             logger.info("[ESCALATION DEBUG] No conversation_id provided, creating new conversation")
             conversation = Conversation(chatbot_id=chatbot_id, status=ConversationStatus.ONGOING, deployment_id=deployment_id)
             db.add(conversation)
-            db.flush()
+            await db.flush()
             is_new_conv = True
 
         # If already escalated, bypass RAG execution
         if conversation.status == ConversationStatus.ESCALATED:
             logger.info(f"[ESCALATION DEBUG] Conversation {conversation.id} is ESCALATED → calling handle_escalated_message")
             from app.services.escalation_router import EscalationRouter
-            return EscalationRouter.handle_escalated_message(
+            return await EscalationRouter.ahandle_escalated_message(
                 db=db,
                 conversation=conversation,
                 chatbot=chatbot,
@@ -980,7 +1119,14 @@ class ChatService:
 
         start_date = conversation.started_at
         end_date = datetime.now(timezone.utc)
-        history = cls.message_repo.fetch_history(db, conversation.id, start_date, end_date)
+        result = await db.execute(
+            select(DBMessage).filter(
+                DBMessage.conversation_id == conversation.id,
+                DBMessage.created_at >= start_date,
+                DBMessage.created_at <= end_date
+            ).order_by(DBMessage.created_at.asc())
+        )
+        history = list(result.scalars().all())
 
         # Record user message first to avoid ghost turns on execution failure
         user_msg = DBMessage(
@@ -990,10 +1136,11 @@ class ChatService:
             config_id=active_config.id if active_config else None
         )
         db.add(user_msg)
-        db.query(Chatbot).filter(Chatbot.id == chatbot.id).update(
-            {Chatbot.total_messages: Chatbot.total_messages + 1}
+        from sqlalchemy import update
+        await db.execute(
+            update(Chatbot).where(Chatbot.id == chatbot.id).values(total_messages=Chatbot.total_messages + 1)
         )
-        db.flush()
+        await db.flush()
 
         # 4. Invoke graph execution without DB dependencies
         initial_state = {
@@ -1012,11 +1159,12 @@ class ChatService:
             "conversation_memory": conversation.memory,  # Load memory from DB
             "org_id": str(org_id),
             "knowledge_base_version": getattr(chatbot, "knowledge_base_version", 1),
-            "persona_version": getattr(persona, "persona_version", 1)
+            "persona_version": getattr(persona, "persona_version", 1),
+            "status_queue": status_queue
         }
 
         t0 = time.monotonic()
-        final_state = AgentGraphExecutor.execute(initial_state)
+        final_state = await AgentGraphExecutor.aexecute(initial_state)
         latency = time.monotonic() - t0
         chat_latency_seconds.observe(latency)
 
@@ -1039,7 +1187,7 @@ class ChatService:
 
         if new_status == ConversationStatus.ESCALATED:
             from app.services.escalation_router import EscalationRouter
-            return EscalationRouter.escalate(
+            return await EscalationRouter.aescalate(
                 db=db,
                 conversation=conversation,
                 chatbot=chatbot,
@@ -1067,15 +1215,15 @@ class ChatService:
         ))
 
         # Update chatbot statistics
-        db.query(Chatbot).filter(Chatbot.id == chatbot.id).update(
-            {Chatbot.total_messages: Chatbot.total_messages + 1}
+        await db.execute(
+            update(Chatbot).where(Chatbot.id == chatbot.id).values(total_messages=Chatbot.total_messages + 1)
         )
         if is_new_conv:
-            db.query(Chatbot).filter(Chatbot.id == chatbot.id).update(
-                {Chatbot.total_conversations: Chatbot.total_conversations + 1}
+            await db.execute(
+                update(Chatbot).where(Chatbot.id == chatbot.id).values(total_conversations=Chatbot.total_conversations + 1)
             )
 
-        db.commit()
+        await db.commit()
 
         # Update cache on successful new RAG answers
         if intent == "RAG_LOOKUP" and final_state.get("is_relevant") and final_state.get("response_source") == "rag_generation" and final_state.get("validated_chunks_count", 0) > 0 and response_text:
@@ -1085,7 +1233,7 @@ class ChatService:
                 from app.services.semantic_cache import SemanticCacheService
                 if background_tasks:
                     background_tasks.add_task(
-                        SemanticCacheService.add_to_cache,
+                        SemanticCacheService.aadd_to_cache,
                         org_id=str(org_id),
                         chatbot_id=str(chatbot_id),
                         rewritten_query=rewritten_query,
@@ -1096,10 +1244,8 @@ class ChatService:
                         query_vector=final_state.get("query_vector")
                     )
                 else:
-                    import threading
-                    threading.Thread(
-                        target=SemanticCacheService.add_to_cache,
-                        kwargs=dict(
+                    asyncio.create_task(
+                        SemanticCacheService.aadd_to_cache(
                             org_id=str(org_id),
                             chatbot_id=str(chatbot_id),
                             rewritten_query=rewritten_query,
@@ -1109,12 +1255,12 @@ class ChatService:
                             source_chunk_ids=source_chunk_ids,
                             query_vector=final_state.get("query_vector")
                         )
-                    ).start()
+                    )
 
         # Queue background summarization
         if background_tasks:
             background_tasks.add_task(
-                ChatService.background_summarize_memory,
+                ChatService.abackground_summarize_memory,
                 conversation_id=conversation.id,
                 org_id=org_id,
                 user_message=user_message,
@@ -1124,11 +1270,17 @@ class ChatService:
                 memory=conversation.memory
             )
         else:
-            import threading
-            threading.Thread(
-                target=ChatService.background_summarize_memory,
-                args=(conversation.id, org_id, user_message, response_text, api_key, len(history) + 1, conversation.memory)
-            ).start()
+            asyncio.create_task(
+                ChatService.abackground_summarize_memory(
+                    conversation_id=conversation.id,
+                    org_id=org_id,
+                    user_message=user_message,
+                    bot_response=response_text,
+                    api_key=api_key,
+                    history_len=len(history) + 1,
+                    memory=conversation.memory
+                )
+            )
 
         return {
             "response": response_text,
@@ -1138,66 +1290,69 @@ class ChatService:
         }
 
     @classmethod
-    def get_rag_stream(
-        cls, db: Session, org_id: uuid.UUID, chatbot_id: uuid.UUID, user_message: str, conversation_id: Optional[uuid.UUID] = None, deployment_id: Optional[uuid.UUID] = None, background_tasks: Optional[BackgroundTasks] = None
+    async def async_get_rag_response(
+        cls, db: AsyncSession, org_id: uuid.UUID, chatbot_id: uuid.UUID, user_message: str, conversation_id: Optional[uuid.UUID] = None, deployment_id: Optional[uuid.UUID] = None, callbacks: Optional[List[Any]] = None, background_tasks: Optional[BackgroundTasks] = None
+    ) -> Dict[str, Any]:
+        """Async version of get_rag_response. Now natively async!"""
+        return await cls.aget_rag_response(
+            db=db,
+            org_id=org_id,
+            chatbot_id=chatbot_id,
+            user_message=user_message,
+            conversation_id=conversation_id,
+            deployment_id=deployment_id,
+            callbacks=callbacks,
+            background_tasks=background_tasks,
+        )
+
+    @classmethod
+    async def aget_rag_stream(
+        cls, db: AsyncSession, org_id: uuid.UUID, chatbot_id: uuid.UUID, user_message: str, conversation_id: Optional[uuid.UUID] = None, deployment_id: Optional[uuid.UUID] = None, background_tasks: Optional[BackgroundTasks] = None
     ):
-        import queue
-        import threading
+        import asyncio
         import json
-        from app.services.streaming import StreamingCallbackHandler
+        from app.services.streaming import AsyncStreamingCallbackHandler
 
-        q = queue.Queue()
-        handler = StreamingCallbackHandler(q)
+        q = asyncio.Queue()
+        handler = AsyncStreamingCallbackHandler(q)
 
-        result_container = []
-        error_container = []
-
-        def run_sync():
-            from app.db.session import SessionLocal
-            from sqlalchemy import text
-
-            thread_db = SessionLocal()
+        async def run_async():
             try:
-                # Bind tenant organization context for RLS in this thread's session
-                thread_db.execute(
-                    text("SELECT set_config('app.current_org_id', :org_id, true)"),
-                    {"org_id": str(org_id)},
+                await q.put({"type": "status", "message": "🔍 Understanding your question..."})
+                res = await cls.aget_rag_response(
+                    db=db, org_id=org_id, chatbot_id=chatbot_id, user_message=user_message, conversation_id=conversation_id, deployment_id=deployment_id, callbacks=[handler], background_tasks=background_tasks, status_queue=q
                 )
-                res = cls.get_rag_response(
-                    thread_db, org_id, chatbot_id, user_message, conversation_id, deployment_id, callbacks=[handler], background_tasks=background_tasks
-                )
-                result_container.append(res)
+                await q.put({"type": "final", "data": res})
             except Exception as e:
-                error_container.append(str(e))
-                logger.error("Error in RAG streaming thread", exc_info=True)
+                import traceback
+                with open("scratch_error.txt", "w") as f:
+                    f.write(traceback.format_exc())
+                await q.put({"type": "error", "error": str(e)})
+                logger.error(f"Error in RAG streaming task: {e}", exc_info=True)
             finally:
-                thread_db.close()
-                q.put(None)  # Sentinel to stop generator
+                await q.put(None)  # Sentinel
 
-        thread = threading.Thread(target=run_sync)
-        thread.start()
+        task = asyncio.create_task(run_async())
 
-        def generate():
-            while True:
-                token = q.get()
-                if token is None:
-                    break
+        while True:
+            token = await q.get()
+            if token is None:
+                break
+            if isinstance(token, dict) and "type" in token:
+                if token["type"] == "status":
+                    yield f"data: {json.dumps(token)}\n\n"
+                elif token["type"] == "final":
+                    res = token["data"]
+                    res["conversation_id"] = str(res["conversation_id"])
+                    if "status" in res and hasattr(res["status"], "value"):
+                        res["status"] = res["status"].value
+                    for src in res.get("sources", []):
+                        if "chunk_id" in src: src["chunk_id"] = str(src["chunk_id"])
+                        if "source_id" in src: src["source_id"] = str(src["source_id"])
+                    yield f"data: {json.dumps({'type': 'final', 'data': res})}\n\n"
+                elif token["type"] == "error":
+                    yield f"data: {json.dumps({'type': 'error', 'error': token['error']})}\n\n"
+            else:
                 yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
 
-            if error_container:
-                yield f"data: {json.dumps({'type': 'error', 'error': error_container[0]})}\n\n"
-            elif result_container:
-                res = result_container[0]
-                res["conversation_id"] = str(res["conversation_id"])
-                # Serialize enum status to string for JSON
-                if "status" in res and hasattr(res["status"], "value"):
-                    res["status"] = res["status"].value
-                # stringify chunk uuids if needed
-                for src in res.get("sources", []):
-                    if "chunk_id" in src: src["chunk_id"] = str(src["chunk_id"])
-                    if "source_id" in src: src["source_id"] = str(src["source_id"])
-                yield f"data: {json.dumps({'type': 'final', 'data': res})}\n\n"
-
-            yield "data: [DONE]\n\n"
-
-        return generate()
+        yield "data: [DONE]\n\n"

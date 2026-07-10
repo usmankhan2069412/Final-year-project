@@ -2,8 +2,8 @@ import logging
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any
-from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, or_
 
 from app.models.message_job import MessageJob, MessageJobStatus
 
@@ -13,8 +13,8 @@ logger = logging.getLogger(__name__)
 
 class OutboxService:
     @staticmethod
-    def enqueue(
-        db: Session,
+    async def enqueue(
+        db: AsyncSession,
         conversation_id: uuid.UUID,
         channel: str,
         payload: Dict[str, Any],
@@ -26,12 +26,13 @@ class OutboxService:
             status=MessageJobStatus.QUEUED,
         )
         db.add(job)
-        db.flush()
+        await db.flush()
         logger.info("Enqueued MessageJob %s for channel=%s", job.id, channel)
         return job
 
     @classmethod
-    def process_next_job(cls, db: Session) -> bool:
+    def process_next_job(cls, db) -> bool:
+        """Sync version for background workers."""
         now = datetime.now(timezone.utc)
         job = (
             db.query(MessageJob)

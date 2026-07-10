@@ -241,6 +241,7 @@ export const api = {
     chatbotId: string,
     payload: { message: string; conversation_id?: string | null },
     onToken: (token: string) => void,
+    onStatus?: (message: string) => void,
     onError?: (error: string) => void,
     signal?: AbortSignal
   ): Promise<ChatResponse> => {
@@ -285,6 +286,8 @@ export const api = {
 
       if (parsed.type === "token") {
         onToken(parsed.content);
+      } else if (parsed.type === "status") {
+        if (onStatus) onStatus(parsed.message);
       } else if (parsed.type === "final") {
         finalData = parsed.data;
       } else if (parsed.type === "error") {

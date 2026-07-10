@@ -43,16 +43,6 @@ export default function Step3Test({ persona, botName, chatbotId, onRequireDraft 
       setTypingStage("");
       return;
     }
-
-    const t1 = setTimeout(() => setTypingStage("🔍 Understanding your question"), 1500);
-    const t2 = setTimeout(() => setTypingStage("📚 Searching knowledge base"), 5000);
-    const t3 = setTimeout(() => setTypingStage("✨ Generating your answer"), 8000);
-
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-    };
   }, [isTyping]);
 
   // Listen for out-of-band messages (e.g. human agent replies) via SSE
@@ -149,6 +139,9 @@ export default function Step3Test({ persona, botName, chatbotId, onRequireDraft 
             rafId = requestAnimationFrame(flushTokens);
           }
         },
+        (statusMessage) => {
+          setTypingStage(statusMessage);
+        },
         undefined,
         abortController.signal
       );
@@ -207,6 +200,7 @@ export default function Step3Test({ persona, botName, chatbotId, onRequireDraft 
       if (isMountedRef.current) {
         setIsSending(false);
         setIsTyping(false);
+        setTypingStage("");
       }
     }
   };

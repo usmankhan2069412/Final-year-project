@@ -4,8 +4,8 @@ import uuid
 from datetime import datetime, date, timedelta
 from typing import List, Optional, Literal
 from fastapi import APIRouter, Depends, Query, Response, HTTPException
-from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import select, func
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_tenant_db, get_current_org_id
 from app.models.analytics import AnalyticsDaily, AnalyticsByChannel, AnalyticsByLang
@@ -34,7 +34,6 @@ def _format_duration(seconds: Optional[int]) -> str:
 def _parse_status_filter(status: Optional[str]) -> Optional[ConversationStatus]:
     if not status:
         return None
-
     normalized = status.strip().lower()
     try:
         return ConversationStatus(normalized)
@@ -42,8 +41,8 @@ def _parse_status_filter(status: Optional[str]) -> Optional[ConversationStatus]:
         raise HTTPException(status_code=400, detail="Invalid conversation status filter.") from exc
 
 
-def _get_interactions(
-    db: Session,
+async def _get_interactions(
+    db: AsyncSession,
     org_id: uuid.UUID,
     days: int,
     status: Optional[ConversationStatus] = None,
@@ -53,7 +52,7 @@ def _get_interactions(
     start_date = datetime.utcnow() - timedelta(days=days)
 
     msg_agg = (
-        db.query(
+        select(
             Message.conversation_id,
             func.count(Message.id).label("msg_count"),
             func.max(Message.created_at).label("last_msg_at"),
@@ -62,8 +61,8 @@ def _get_interactions(
         .subquery()
     )
 
-    q = (
-        db.query(
+    stmt = (
+        select(
             Conversation.id,
             Conversation.chatbot_id,
             Persona.name.label("chatbot_name"),
@@ -75,7 +74,7 @@ def _get_interactions(
         .join(Chatbot, Chatbot.id == Conversation.chatbot_id)
         .join(Persona, Persona.id == Chatbot.persona_id)
         .outerjoin(msg_agg, msg_agg.c.conversation_id == Conversation.id)
-        .filter(
+        .where(
             Chatbot.org_id == org_id,
             Conversation.deleted_at == None,
             Conversation.started_at >= start_date,
@@ -83,22 +82,24 @@ def _get_interactions(
     )
 
     if status:
-        q = q.filter(Conversation.status == status)
+        stmt = stmt.where(Conversation.status == status)
     if chatbot_id:
-        q = q.filter(Conversation.chatbot_id == chatbot_id)
+        stmt = stmt.where(Conversation.chatbot_id == chatbot_id)
 
-    q = q.order_by(Conversation.started_at.desc())
+    stmt = stmt.order_by(Conversation.started_at.desc())
     if limit is not None:
-        q = q.limit(limit)
+        stmt = stmt.limit(limit)
 
-    rows = q.all()
-    result = []
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    result_list = []
     for row in rows:
         duration = None
         if row.last_msg_at and row.started_at:
             duration = int((row.last_msg_at - row.started_at).total_seconds())
 
-        result.append({
+        result_list.append({
             "id": row.id,
             "chatbot_id": row.chatbot_id,
             "chatbot_name": row.chatbot_name,
@@ -109,34 +110,37 @@ def _get_interactions(
             "last_msg_at": row.last_msg_at,
         })
 
-    return result
+    return result_list
 
 
 @router.get("/kpi", response_model=KPIResponse)
-def get_kpis(
+async def get_kpis(
     days: int = Query(30, ge=1),
     chatbot_id: Optional[uuid.UUID] = Query(None),
-    db: Session = Depends(get_tenant_db),
+    db: AsyncSession = Depends(get_tenant_db),
     org_id: uuid.UUID = Depends(get_current_org_id),
 ):
     today = date.today()
     start_current = today - timedelta(days=days)
     start_prior = today - timedelta(days=2 * days)
 
-    def build_query(start, end):
-        q = db.query(AnalyticsDaily).join(
-            Chatbot, Chatbot.id == AnalyticsDaily.chatbot_id
-        ).filter(
-            Chatbot.org_id == org_id,
-            AnalyticsDaily.stat_date >= start,
-            AnalyticsDaily.stat_date <= end,
+    async def build_query(start, end):
+        stmt = (
+            select(AnalyticsDaily)
+            .join(Chatbot, Chatbot.id == AnalyticsDaily.chatbot_id)
+            .where(
+                Chatbot.org_id == org_id,
+                AnalyticsDaily.stat_date >= start,
+                AnalyticsDaily.stat_date <= end,
+            )
         )
         if chatbot_id:
-            q = q.filter(AnalyticsDaily.chatbot_id == chatbot_id)
-        return q.all()
+            stmt = stmt.where(AnalyticsDaily.chatbot_id == chatbot_id)
+        result = await db.execute(stmt)
+        return list(result.scalars().all())
 
-    current_records = build_query(start_current, today)
-    prior_records = build_query(start_prior, start_current - timedelta(days=1))
+    current_records = await build_query(start_current, today)
+    prior_records = await build_query(start_prior, start_current - timedelta(days=1))
 
     def aggregate_stats(records):
         total_convs = sum(r.total_conversations for r in records)
@@ -205,25 +209,29 @@ def get_kpis(
 
 
 @router.get("/volume", response_model=List[VolumeSeriesItem])
-def get_volume_chart(
+async def get_volume_chart(
     days: int = Query(30, ge=1),
     chatbot_id: Optional[uuid.UUID] = Query(None),
-    db: Session = Depends(get_tenant_db),
+    db: AsyncSession = Depends(get_tenant_db),
     org_id: uuid.UUID = Depends(get_current_org_id),
 ):
     today = date.today()
     start_current = today - timedelta(days=days)
 
-    q = db.query(AnalyticsDaily).join(
-        Chatbot, Chatbot.id == AnalyticsDaily.chatbot_id
-    ).filter(
-        Chatbot.org_id == org_id,
-        AnalyticsDaily.stat_date >= start_current,
-        AnalyticsDaily.stat_date <= today,
+    stmt = (
+        select(AnalyticsDaily)
+        .join(Chatbot, Chatbot.id == AnalyticsDaily.chatbot_id)
+        .where(
+            Chatbot.org_id == org_id,
+            AnalyticsDaily.stat_date >= start_current,
+            AnalyticsDaily.stat_date <= today,
+        )
     )
     if chatbot_id:
-        q = q.filter(AnalyticsDaily.chatbot_id == chatbot_id)
-    records = q.order_by(AnalyticsDaily.stat_date.asc()).all()
+        stmt = stmt.where(AnalyticsDaily.chatbot_id == chatbot_id)
+    stmt = stmt.order_by(AnalyticsDaily.stat_date.asc())
+    result = await db.execute(stmt)
+    records = list(result.scalars().all())
 
     volume_by_date: dict = {}
     for r in records:
@@ -251,27 +259,29 @@ def get_volume_chart(
 
 
 @router.get("/languages", response_model=List[LanguageMixItem])
-def get_languages(
+async def get_languages(
     days: int = Query(30, ge=1),
     chatbot_id: Optional[uuid.UUID] = Query(None),
-    db: Session = Depends(get_tenant_db),
+    db: AsyncSession = Depends(get_tenant_db),
     org_id: uuid.UUID = Depends(get_current_org_id),
 ):
     today = date.today()
     start_current = today - timedelta(days=days)
 
-    q = db.query(AnalyticsByLang).join(
-        AnalyticsDaily, AnalyticsDaily.id == AnalyticsByLang.analytics_daily_id
-    ).join(
-        Chatbot, Chatbot.id == AnalyticsDaily.chatbot_id
-    ).filter(
-        Chatbot.org_id == org_id,
-        AnalyticsDaily.stat_date >= start_current,
-        AnalyticsDaily.stat_date <= today,
+    stmt = (
+        select(AnalyticsByLang)
+        .join(AnalyticsDaily, AnalyticsDaily.id == AnalyticsByLang.analytics_daily_id)
+        .join(Chatbot, Chatbot.id == AnalyticsDaily.chatbot_id)
+        .where(
+            Chatbot.org_id == org_id,
+            AnalyticsDaily.stat_date >= start_current,
+            AnalyticsDaily.stat_date <= today,
+        )
     )
     if chatbot_id:
-        q = q.filter(AnalyticsDaily.chatbot_id == chatbot_id)
-    lang_records = q.all()
+        stmt = stmt.where(AnalyticsDaily.chatbot_id == chatbot_id)
+    result = await db.execute(stmt)
+    lang_records = list(result.scalars().all())
 
     lang_counts: dict = {}
     for r in lang_records:
@@ -290,27 +300,29 @@ def get_languages(
 
 
 @router.get("/channels", response_model=List[ChannelPerfItem])
-def get_channels(
+async def get_channels(
     days: int = Query(30, ge=1),
     chatbot_id: Optional[uuid.UUID] = Query(None),
-    db: Session = Depends(get_tenant_db),
+    db: AsyncSession = Depends(get_tenant_db),
     org_id: uuid.UUID = Depends(get_current_org_id),
 ):
     today = date.today()
     start_current = today - timedelta(days=days)
 
-    q = db.query(AnalyticsByChannel).join(
-        AnalyticsDaily, AnalyticsDaily.id == AnalyticsByChannel.analytics_daily_id
-    ).join(
-        Chatbot, Chatbot.id == AnalyticsDaily.chatbot_id
-    ).filter(
-        Chatbot.org_id == org_id,
-        AnalyticsDaily.stat_date >= start_current,
-        AnalyticsDaily.stat_date <= today,
+    stmt = (
+        select(AnalyticsByChannel)
+        .join(AnalyticsDaily, AnalyticsDaily.id == AnalyticsByChannel.analytics_daily_id)
+        .join(Chatbot, Chatbot.id == AnalyticsDaily.chatbot_id)
+        .where(
+            Chatbot.org_id == org_id,
+            AnalyticsDaily.stat_date >= start_current,
+            AnalyticsDaily.stat_date <= today,
+        )
     )
     if chatbot_id:
-        q = q.filter(AnalyticsDaily.chatbot_id == chatbot_id)
-    channel_records = q.all()
+        stmt = stmt.where(AnalyticsDaily.chatbot_id == chatbot_id)
+    result = await db.execute(stmt)
+    channel_records = list(result.scalars().all())
 
     channel_counts: dict = {}
     for r in channel_records:
@@ -329,15 +341,15 @@ def get_channels(
 
 
 @router.get("/interactions", response_model=List[InteractionItem])
-def get_interactions(
+async def get_interactions(
     limit: int = Query(50, ge=1, le=100),
     status: Optional[str] = Query(None),
     chatbot_id: Optional[uuid.UUID] = Query(None),
-    days: int = Query(30, ge=1),  # date-range filter now honoured
-    db: Session = Depends(get_tenant_db),
+    days: int = Query(30, ge=1),
+    db: AsyncSession = Depends(get_tenant_db),
     org_id: uuid.UUID = Depends(get_current_org_id),
 ):
-    return _get_interactions(
+    return await _get_interactions(
         db,
         org_id,
         days,
@@ -348,23 +360,23 @@ def get_interactions(
 
 
 @router.get("/export")
-def export_report(
+async def export_report(
     report_type: Literal["analytics", "conversations"] = Query(...),
     format: Literal["csv", "pdf"] = Query("csv"),
     days: int = Query(30, ge=1),
     chatbot_id: Optional[uuid.UUID] = Query(None),
     status: Optional[str] = Query(None),
-    db: Session = Depends(get_tenant_db),
+    db: AsyncSession = Depends(get_tenant_db),
     org_id: uuid.UUID = Depends(get_current_org_id),
 ):
     export_date = date.today().isoformat()
     parsed_status = _parse_status_filter(status)
 
     if report_type == "analytics":
-        kpis = get_kpis(days=days, chatbot_id=chatbot_id, db=db, org_id=org_id)
-        volume = get_volume_chart(days=days, chatbot_id=chatbot_id, db=db, org_id=org_id)
-        languages = get_languages(days=days, chatbot_id=chatbot_id, db=db, org_id=org_id)
-        channels = get_channels(days=days, chatbot_id=chatbot_id, db=db, org_id=org_id)
+        kpis = await get_kpis(days=days, chatbot_id=chatbot_id, db=db, org_id=org_id)
+        volume = await get_volume_chart(days=days, chatbot_id=chatbot_id, db=db, org_id=org_id)
+        languages = await get_languages(days=days, chatbot_id=chatbot_id, db=db, org_id=org_id)
+        channels = await get_channels(days=days, chatbot_id=chatbot_id, db=db, org_id=org_id)
 
         if format == "csv":
             output = io.StringIO()
@@ -463,7 +475,7 @@ def export_report(
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 
-    interactions = _get_interactions(
+    interactions = await _get_interactions(
         db,
         org_id,
         days,

@@ -27,3 +27,32 @@ class StreamingCallbackHandler(BaseCallbackHandler):
     def on_llm_error(self, error: BaseException, **kwargs: Any) -> None:
         """Run when LLM errors."""
         pass
+
+
+from langchain_core.callbacks.base import AsyncCallbackHandler
+import asyncio
+
+class AsyncStreamingCallbackHandler(AsyncCallbackHandler):
+    """Async callback handler that pushes LLM tokens into an asyncio queue."""
+    def __init__(self, q: asyncio.Queue):
+        self.q = q
+        self.is_done = False
+
+    async def on_llm_start(
+        self, serialized: Dict[str, Any], prompts: List[str], **kwargs: Any
+    ) -> None:
+        """Run when LLM starts running."""
+        pass
+
+    async def on_llm_new_token(self, token: str, **kwargs: Any) -> None:
+        """Run on new LLM token."""
+        if token:
+            await self.q.put(token)
+
+    async def on_llm_end(self, response: LLMResult, **kwargs: Any) -> None:
+        """Run when LLM ends running."""
+        pass
+
+    async def on_llm_error(self, error: BaseException, **kwargs: Any) -> None:
+        """Run when LLM errors."""
+        pass

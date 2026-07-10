@@ -131,6 +131,92 @@ class EmbeddingService:
 
         return np.array(all_embeddings, dtype=np.float32)
 
+    async def aencode(self, texts: List[str]) -> np.ndarray:
+        if not texts:
+            return np.array([])
+
+        if gemini_breaker.is_open:
+            logger.error("gemini_embedding_circuit_breaker_open — skipping call.")
+            embedding_errors_total.inc()
+            raise RuntimeError("Gemini embedding API circuit is open due to recent failures.")
+
+        client = self.get_client()
+        all_embeddings = []
+
+        logger.info(
+            "Generating embeddings for %d chunks using %s (batch_size=%d) [ASYNC]...",
+            len(texts), settings.EMBEDDING_MODEL, EMBEDDING_BATCH_SIZE
+        )
+
+        import asyncio
+        import httpx
+
+        async with httpx.AsyncClient() as http_client:
+            for batch_start in range(0, len(texts), EMBEDDING_BATCH_SIZE):
+                batch = texts[batch_start:batch_start + EMBEDDING_BATCH_SIZE]
+                retries = 3
+                while retries > 0:
+                    try:
+                        if settings.OPENROUTER_API_KEY:
+                            payload = {
+                                "model": settings.EMBEDDING_MODEL,
+                                "input": batch
+                            }
+                            headers = {
+                                "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
+                                "Content-Type": "application/json"
+                            }
+                            resp = await http_client.post("https://openrouter.ai/api/v1/embeddings", json=payload, headers=headers, timeout=30.0)
+                            
+                            if resp.status_code != 200:
+                                raise ValueError(f"OpenRouter HTTP {resp.status_code}: {resp.text}")
+                                
+                            result = resp.json()
+                            
+                            if "error" in result:
+                                raise ValueError(f"OpenRouter API Error: {result['error']}")
+                                
+                            if "data" not in result or result["data"] is None:
+                                raise ValueError(f"No data in OpenRouter response. Raw: {result}")
+                                
+                            for item in result["data"]:
+                                all_embeddings.append(item["embedding"])
+                        else:
+                            # Use asyncio.to_thread for Gemini SDK as a safe fallback
+                            result = await asyncio.to_thread(
+                                client.models.embed_content,
+                                model=settings.EMBEDDING_MODEL,
+                                contents=batch
+                            )
+                            for emb in result.embeddings:
+                                all_embeddings.append(emb.values)
+                        gemini_breaker.record_success()
+                        break
+                    except Exception as e:
+                        gemini_breaker.record_failure()
+                        embedding_errors_total.inc()
+                        if "429" in str(e):
+                            logger.warning(
+                                "Rate limit hit at batch starting chunk %d, sleeping 5 s...",
+                                batch_start
+                            )
+                            await asyncio.sleep(5)
+                            retries -= 1
+                            if retries == 0:
+                                raise
+                        else:
+                            logger.error(
+                                "Failed to generate embeddings for batch starting at chunk %d: %s",
+                                batch_start, e
+                            )
+                            raise
+
+                if batch_start + EMBEDDING_BATCH_SIZE < len(texts) and settings.EMBEDDING_BATCH_DELAY > 0:
+                    await asyncio.sleep(settings.EMBEDDING_BATCH_DELAY)
+
+        return np.array(all_embeddings, dtype=np.float32)
+
+
 
 embedding_service = EmbeddingService()
 

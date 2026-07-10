@@ -5,7 +5,9 @@ from datetime import datetime, timezone
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
+from sqlalchemy import select, func, update
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_tenant_db, get_current_org_id, get_current_user_or_api_key
 from app.models.user import User
@@ -18,33 +20,46 @@ from app.services.outbox import OutboxService
 
 router = APIRouter()
 
+
 @router.get("/conversations")
-def get_escalated_conversations(
+async def get_escalated_conversations(
     assigned_only: bool = False,
-    db: Session = Depends(get_tenant_db),
+    db: AsyncSession = Depends(get_tenant_db),
     current_user: User = Depends(get_current_user_or_api_key),
     org_id: uuid.UUID = Depends(get_current_org_id),
 ):
-    query = db.query(Conversation).join(
-        Chatbot, Chatbot.id == Conversation.chatbot_id
-    ).filter(
-        Chatbot.org_id == org_id,
-        Conversation.status == ConversationStatus.ESCALATED,
-        Conversation.deleted_at == None
+    stmt = (
+        select(Conversation)
+        .join(Chatbot, Chatbot.id == Conversation.chatbot_id)
+        .where(
+            Chatbot.org_id == org_id,
+            Conversation.status == ConversationStatus.ESCALATED,
+            Conversation.deleted_at == None
+        )
     )
     if assigned_only:
-        query = query.filter(Conversation.assigned_agent_id == current_user.id)
-    
-    conversations = query.order_by(Conversation.started_at.desc()).all()
-    
+        stmt = stmt.where(Conversation.assigned_agent_id == current_user.id)
+
+    stmt = stmt.order_by(Conversation.started_at.desc())
+    result = await db.execute(stmt)
+    conversations = list(result.scalars().all())
+
     result = []
     for conv in conversations:
-        chatbot_name = db.query(Persona.name).join(Chatbot, Chatbot.persona_id == Persona.id).filter(Chatbot.id == conv.chatbot_id).scalar() or "Bot"
-        
-        messages = db.query(Message).filter(
-            Message.conversation_id == conv.id
-        ).order_by(Message.created_at.asc()).all()
-        
+        persona_name_result = await db.execute(
+            select(Persona.name)
+            .join(Chatbot, Chatbot.persona_id == Persona.id)
+            .where(Chatbot.id == conv.chatbot_id)
+        )
+        chatbot_name = persona_name_result.scalar() or "Bot"
+
+        msg_result = await db.execute(
+            select(Message)
+            .where(Message.conversation_id == conv.id)
+            .order_by(Message.created_at.asc())
+        )
+        messages = list(msg_result.scalars().all())
+
         msg_list = [
             {
                 "id": str(m.id),
@@ -54,9 +69,9 @@ def get_escalated_conversations(
             }
             for m in messages
         ]
-        
+
         last_msg = msg_list[-1]["content"] if msg_list else ""
-        
+
         result.append({
             "id": str(conv.id),
             "chatbot_id": str(conv.chatbot_id),
@@ -67,40 +82,46 @@ def get_escalated_conversations(
             "messages": msg_list,
             "last_message": last_msg
         })
-        
+
     return result
 
 
 @router.post("/conversations/{conversation_id}/reply")
-def reply_to_conversation(
+async def reply_to_conversation(
     conversation_id: uuid.UUID,
     payload: AgentReplyRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_tenant_db),
+    db: AsyncSession = Depends(get_tenant_db),
     org_id: uuid.UUID = Depends(get_current_org_id),
 ):
-    conversation = db.query(Conversation).join(
-        Chatbot, Chatbot.id == Conversation.chatbot_id
-    ).filter(
-        Conversation.id == conversation_id,
-        Chatbot.org_id == org_id,
-        Conversation.deleted_at == None
-    ).first()
-    
+    stmt = (
+        select(Conversation)
+        .options(
+            selectinload(Conversation.chatbot),
+            selectinload(Conversation.deployment)
+        )
+        .join(Chatbot, Chatbot.id == Conversation.chatbot_id)
+        .where(
+            Conversation.id == conversation_id,
+            Chatbot.org_id == org_id,
+            Conversation.deleted_at == None
+        )
+    )
+    result = await db.execute(stmt)
+    conversation = result.scalar_one_or_none()
+
     if not conversation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Conversation not found or inaccessible"
         )
-        
-    # Check if conversation is escalated
+
     if conversation.status != ConversationStatus.ESCALATED:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Conversation is not in escalated state"
         )
 
-    # Insert agent reply message
     reply_msg = Message(
         conversation_id=conversation.id,
         role=MessageRole.BOT,
@@ -109,16 +130,16 @@ def reply_to_conversation(
     )
     db.add(reply_msg)
 
-    # Update chatbot stats
     chatbot = conversation.chatbot
     if chatbot:
-        db.query(Chatbot).filter(Chatbot.id == chatbot.id).update(
-            {Chatbot.total_messages: Chatbot.total_messages + 1}
+        await db.execute(
+            update(Chatbot)
+            .where(Chatbot.id == chatbot.id)
+            .values({Chatbot.total_messages: Chatbot.total_messages + 1})
         )
 
-    # If WhatsApp, enqueue outbound message job in the same transaction
     if conversation.deployment and conversation.deployment.channel == Channel.WHATSAPP and conversation.sender_phone:
-        OutboxService.enqueue(
+        await OutboxService.enqueue(
             db=db,
             conversation_id=conversation.id,
             channel="whatsapp",
@@ -129,10 +150,9 @@ def reply_to_conversation(
             },
         )
 
-    db.commit()
-    db.refresh(reply_msg)
+    await db.commit()
+    await db.refresh(reply_msg)
 
-    # Broadcast agent reply message via SSE
     agent_msg_data = {
         "conversation_id": str(conversation.id),
         "message": {
@@ -142,7 +162,7 @@ def reply_to_conversation(
             "created_at": reply_msg.created_at.isoformat()
         }
     }
-    
+
     background_tasks.add_task(sse_manager.broadcast, f"organization:{org_id}", "message", agent_msg_data)
     background_tasks.add_task(sse_manager.broadcast, f"conversation:{conversation.id}", "message", agent_msg_data)
 
@@ -150,37 +170,39 @@ def reply_to_conversation(
 
 
 @router.post("/conversations/{conversation_id}/resolve")
-def resolve_conversation(
+async def resolve_conversation(
     conversation_id: uuid.UUID,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_tenant_db),
+    db: AsyncSession = Depends(get_tenant_db),
     org_id: uuid.UUID = Depends(get_current_org_id),
 ):
-    conversation = db.query(Conversation).join(
-        Chatbot, Chatbot.id == Conversation.chatbot_id
-    ).filter(
-        Conversation.id == conversation_id,
-        Chatbot.org_id == org_id,
-        Conversation.deleted_at == None
-    ).first()
-    
+    stmt = (
+        select(Conversation)
+        .join(Chatbot, Chatbot.id == Conversation.chatbot_id)
+        .where(
+            Conversation.id == conversation_id,
+            Chatbot.org_id == org_id,
+            Conversation.deleted_at == None
+        )
+    )
+    result = await db.execute(stmt)
+    conversation = result.scalar_one_or_none()
+
     if not conversation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Conversation not found or inaccessible"
         )
 
-    # Transition to resolved
     conversation.status = ConversationStatus.RESOLVED
     db.add(conversation)
-    db.commit()
+    await db.commit()
 
-    # Broadcast resolve event via SSE
     resolve_event = {
         "conversation_id": str(conversation.id),
         "status": "resolved"
     }
-    
+
     background_tasks.add_task(sse_manager.broadcast, f"organization:{org_id}", "resolve", resolve_event)
     background_tasks.add_task(sse_manager.broadcast, f"conversation:{conversation.id}", "resolve", resolve_event)
 
@@ -202,5 +224,5 @@ async def sse_stream(
                 yield f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
         finally:
             await sse_manager.unsubscribe(f"organization:{org_id}", queue)
-            
+
     return StreamingResponse(event_generator(), media_type="text/event-stream")
