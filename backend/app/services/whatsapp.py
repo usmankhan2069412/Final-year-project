@@ -4,8 +4,8 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 import httpx
-from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text, select
 
 from app.core.config import settings
 from app.models.conversation import Conversation, ConversationStatus, Deployment, ProcessedEvent
@@ -77,13 +77,13 @@ class WhatsAppService:
             return None
 
     @classmethod
-    def find_or_create_conversation(
-        cls, db: Session, sender_phone: str, deployment: Deployment
+    async def find_or_create_conversation(
+        cls, db: AsyncSession, sender_phone: str, deployment: Deployment
     ) -> Conversation:
         from app.models.conversation import Message as DBMessage
 
-        conversation = (
-            db.query(Conversation)
+        stmt = (
+            select(Conversation)
             .filter(
                 Conversation.deployment_id == deployment.id,
                 Conversation.sender_phone == sender_phone,
@@ -91,18 +91,20 @@ class WhatsAppService:
                 Conversation.deleted_at == None
             )
             .order_by(Conversation.started_at.desc())
-            .first()
         )
+        res = await db.execute(stmt)
+        conversation = res.scalars().first()
 
         now = datetime.now(timezone.utc)
 
         if conversation:
-            last_message = (
-                db.query(DBMessage)
+            msg_stmt = (
+                select(DBMessage)
                 .filter(DBMessage.conversation_id == conversation.id)
                 .order_by(DBMessage.created_at.desc())
-                .first()
             )
+            msg_res = await db.execute(msg_stmt)
+            last_message = msg_res.scalars().first()
 
             last_activity = last_message.created_at if last_message else conversation.started_at
             if last_activity.tzinfo is None:
@@ -111,7 +113,7 @@ class WhatsAppService:
             if now - last_activity > timedelta(hours=24):
                 conversation.status = ConversationStatus.RESOLVED
                 db.add(conversation)
-                db.flush()
+                await db.flush()
                 conversation = None
 
         if not conversation:
@@ -122,99 +124,102 @@ class WhatsAppService:
                 status=ConversationStatus.ONGOING
             )
             db.add(conversation)
-            db.flush()
+            await db.flush()
 
         return conversation
 
     @classmethod
-    def process_inbound_message(cls, payload: dict) -> None:
+    async def process_inbound_message(cls, payload: dict) -> None:
         """Process inbound WhatsApp messages in a background task.
-        Creates its own sync session."""
-        from app.db.session import SessionLocal
+        Creates its own async session."""
+        from app.db.session import AsyncSessionLocal
 
-        db = SessionLocal()
-        try:
-            entry = payload.get("entry", [])[0]
-            change = entry.get("changes", [])[0]
-            value = change.get("value", {})
-            phone_number_id = value.get("metadata", {}).get("phone_number_id")
+        async with AsyncSessionLocal() as db:
+            try:
+                entry = payload.get("entry", [])[0]
+                change = entry.get("changes", [])[0]
+                value = change.get("value", {})
+                phone_number_id = value.get("metadata", {}).get("phone_number_id")
 
-            if not phone_number_id:
-                logger.warning("Incoming payload is missing phone_number_id metadata. Skipping.")
-                return
+                if not phone_number_id:
+                    logger.warning("Incoming payload is missing phone_number_id metadata. Skipping.")
+                    return
 
-            message = cls.parse_incoming_message(payload)
-            if not message:
-                return
+                message = cls.parse_incoming_message(payload)
+                if not message:
+                    return
 
-            processed = db.query(ProcessedEvent).filter(ProcessedEvent.event_id == message.message_id).first()
-            if processed:
-                logger.info("Event %s already processed. Skipping.", message.message_id)
-                return
+                stmt_proc = select(ProcessedEvent).filter(ProcessedEvent.event_id == message.message_id)
+                res_proc = await db.execute(stmt_proc)
+                processed = res_proc.scalars().first()
+                if processed:
+                    logger.info("Event %s already processed. Skipping.", message.message_id)
+                    return
 
-            deployment = (
-                db.query(Deployment)
-                .join(Chatbot, Deployment.chatbot_id == Chatbot.id)
-                .filter(
-                    Deployment.whatsapp_phone_number_id == phone_number_id,
-                    Deployment.is_active == True,
-                    Chatbot.deleted_at == None
+                stmt_dep = (
+                    select(Deployment)
+                    .join(Chatbot, Deployment.chatbot_id == Chatbot.id)
+                    .filter(
+                        Deployment.whatsapp_phone_number_id == phone_number_id,
+                        Deployment.is_active == True,
+                        Chatbot.deleted_at == None
+                    )
                 )
-                .first()
-            )
+                res_dep = await db.execute(stmt_dep)
+                deployment = res_dep.scalars().first()
 
-            if not deployment:
-                logger.warning("No active WhatsApp deployment found for phone_number_id: %s", phone_number_id)
-                return
+                if not deployment:
+                    logger.warning("No active WhatsApp deployment found for phone_number_id: %s", phone_number_id)
+                    return
 
-            conversation = cls.find_or_create_conversation(db, message.sender_phone, deployment)
+                conversation = await cls.find_or_create_conversation(db, message.sender_phone, deployment)
 
-            chatbot = db.query(Chatbot).filter(Chatbot.id == deployment.chatbot_id).first()
-            if not chatbot:
-                logger.error("Chatbot not found for deployment %s", deployment.id)
-                return
+                stmt_cb = select(Chatbot).filter(Chatbot.id == deployment.chatbot_id)
+                res_cb = await db.execute(stmt_cb)
+                chatbot = res_cb.scalars().first()
+                if not chatbot:
+                    logger.error("Chatbot not found for deployment %s", deployment.id)
+                    return
 
-            # Bind tenant context for RLS
-            db.execute(
-                text("SELECT set_config('app.current_org_id', :org_id, true)"),
-                {"org_id": str(chatbot.org_id)}
-            )
+                # Bind tenant context for RLS
+                await db.execute(
+                    text("SELECT set_config('app.current_org_id', :org_id, true)"),
+                    {"org_id": str(chatbot.org_id)}
+                )
 
-            result = ChatService.get_rag_response(
-                db=db,
-                org_id=chatbot.org_id,
-                chatbot_id=chatbot.id,
-                user_message=message.text,
-                conversation_id=conversation.id,
-                deployment_id=deployment.id
-            )
-
-            ai_response = result.get("response")
-
-            if ai_response:
-                OutboxService.enqueue_sync(
+                result = await ChatService.aget_rag_response(
                     db=db,
+                    org_id=chatbot.org_id,
+                    chatbot_id=chatbot.id,
+                    user_message=message.text,
                     conversation_id=conversation.id,
-                    channel="whatsapp",
-                    payload={
-                        "phone_number": message.sender_phone,
-                        "text": ai_response,
-                        "phone_number_id": phone_number_id,
-                    },
+                    deployment_id=deployment.id
                 )
 
-            event = ProcessedEvent(
-                event_id=message.message_id,
-                event_type="whatsapp_message"
-            )
-            db.add(event)
-            db.commit()
+                ai_response = result.get("response")
 
-        except Exception as e:
-            logger.exception("Error processing WhatsApp message: %s", str(e))
-            db.rollback()
-        finally:
-            db.close()
+                if ai_response:
+                    await OutboxService.enqueue(
+                        db=db,
+                        conversation_id=conversation.id,
+                        channel="whatsapp",
+                        payload={
+                            "phone_number": message.sender_phone,
+                            "text": ai_response,
+                            "phone_number_id": phone_number_id,
+                        },
+                    )
+
+                event = ProcessedEvent(
+                    event_id=message.message_id,
+                    event_type="whatsapp_message"
+                )
+                db.add(event)
+                await db.commit()
+
+            except Exception as e:
+                logger.exception("Error processing WhatsApp message: %s", str(e))
+                await db.rollback()
 
     @classmethod
     def send_whatsapp_message(cls, phone_number: str, text: str, phone_number_id: str) -> dict:

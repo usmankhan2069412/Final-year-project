@@ -32,9 +32,18 @@ async def lifespan(app: FastAPI):
             conn.execute(text("ALTER TABLE personas ALTER COLUMN description TYPE TEXT;"))
             conn.execute(text("ALTER TABLE personas ALTER COLUMN greeting TYPE TEXT;"))
             conn.execute(text("ALTER TABLE personas ALTER COLUMN fallback TYPE TEXT;"))
-        logger.info("Successfully migrated personas table columns to TEXT type.")
+            conn.execute(text("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'enum_message_job_status') THEN
+                        CREATE TYPE enum_message_job_status AS ENUM ('QUEUED', 'PROCESSING', 'COMPLETED', 'FAILED');
+                    END IF;
+                END
+                $$;
+            """))
+        logger.info("Successfully migrated personas table columns to TEXT type and ensured enum_message_job_status exists.")
     except Exception as db_err:
-        logger.error("Failed to run automatic personas schema update: %s", str(db_err))
+        logger.error("Failed to run automatic schema updates: %s", str(db_err))
 
     # Configure structured JSON logging once at startup
     structlog.configure(

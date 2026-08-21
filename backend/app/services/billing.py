@@ -3,6 +3,7 @@ import uuid
 from typing import List, Optional
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from fastapi import HTTPException, status
 
 from app.models.subscription import SubscriptionPlan, Subscription
@@ -61,7 +62,7 @@ class BillingService:
     @staticmethod
     async def get_subscription(db: AsyncSession, org_id: uuid.UUID) -> SubscriptionResponse:
         result = await db.execute(
-            select(Subscription).where(
+            select(Subscription).options(selectinload(Subscription.plan)).where(
                 Subscription.org_id == org_id,
                 Subscription.status == "active"
             )
@@ -70,7 +71,7 @@ class BillingService:
 
         if not sub:
             result = await db.execute(
-                select(Subscription).where(
+                select(Subscription).options(selectinload(Subscription.plan)).where(
                     Subscription.org_id == org_id,
                     Subscription.status == "cancelled"
                 ).order_by(Subscription.period_start.desc())
@@ -87,13 +88,19 @@ class BillingService:
 
         if not sub or is_expired:
             result = await db.execute(
-                select(SubscriptionPlan).where(SubscriptionPlan.name == "Starter")
+                select(SubscriptionPlan).where(SubscriptionPlan.name.ilike("starter%"))
             )
             starter_plan = result.scalar_one_or_none()
             if not starter_plan:
+                result = await db.execute(
+                    select(SubscriptionPlan).order_by(SubscriptionPlan.price_pkr.asc())
+                )
+                starter_plan = result.scalars().first()
+
+            if not starter_plan:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail="No active subscription found and Starter plan is not seeded."
+                    detail="No subscription plans available in the system."
                 )
 
             plan_resp = SubscriptionPlanResponse.model_validate(starter_plan)
@@ -125,64 +132,79 @@ class BillingService:
 
     @staticmethod
     async def subscribe(db: AsyncSession, org_id: uuid.UUID, plan_id: uuid.UUID) -> SubscriptionResponse:
-        result = await db.execute(select(SubscriptionPlan).where(SubscriptionPlan.id == plan_id))
-        plan = result.scalar_one_or_none()
-        if not plan:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Subscription plan not found"
+        try:
+            result = await db.execute(select(SubscriptionPlan).where(SubscriptionPlan.id == plan_id))
+            plan = result.scalar_one_or_none()
+            if not plan:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Subscription plan not found"
+                )
+
+            result = await db.execute(
+                select(Subscription).where(
+                    Subscription.org_id == org_id,
+                    Subscription.status == "active"
+                )
             )
+            active_subs = list(result.scalars().all())
+            for sub in active_subs:
+                sub.status = "cancelled"
 
-        result = await db.execute(
-            select(Subscription).where(
-                Subscription.org_id == org_id,
-                Subscription.status == "active"
+            now = datetime.now(timezone.utc)
+            new_sub = Subscription(
+                org_id=org_id,
+                plan_id=plan.id,
+                status="active",
+                period_start=now,
+                period_end=now + timedelta(days=30)
             )
-        )
-        active_subs = list(result.scalars().all())
-        for sub in active_subs:
-            sub.status = "cancelled"
+            db.add(new_sub)
+            await db.commit()
+            await db.refresh(new_sub)
 
-        now = datetime.now(timezone.utc)
-        new_sub = Subscription(
-            org_id=org_id,
-            plan_id=plan.id,
-            status="active",
-            period_start=now,
-            period_end=now + timedelta(days=30)
-        )
-        db.add(new_sub)
-        await db.commit()
-        await db.refresh(new_sub)
-
-        return await BillingService.get_subscription(db, org_id)
+            return await BillingService.get_subscription(db, org_id)
+        except HTTPException:
+            await db.rollback()
+            raise
+        except Exception as e:
+            await db.rollback()
+            raise e
 
     @staticmethod
     async def cancel_subscription(db: AsyncSession, org_id: uuid.UUID) -> SubscriptionResponse:
-        result = await db.execute(
-            select(Subscription).where(
-                Subscription.org_id == org_id,
-                Subscription.status == "active"
+        try:
+            result = await db.execute(
+                select(Subscription).where(
+                    Subscription.org_id == org_id,
+                    Subscription.status == "active"
+                )
             )
-        )
-        sub = result.scalar_one_or_none()
+            sub = result.scalar_one_or_none()
 
-        if not sub:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="No active subscription found to cancel"
-            )
+            if not sub:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="No active subscription found to cancel"
+                )
 
-        sub.status = "cancelled"
-        await db.commit()
-        await db.refresh(sub)
+            sub.status = "cancelled"
+            await db.commit()
+            await db.refresh(sub)
 
-        return await BillingService.get_subscription(db, org_id)
+            return await BillingService.get_subscription(db, org_id)
+        except HTTPException:
+            await db.rollback()
+            raise
+        except Exception as e:
+            await db.rollback()
+            raise e
 
     @staticmethod
     async def get_billing_history(db: AsyncSession, org_id: uuid.UUID) -> List[BillingHistoryItem]:
         result = await db.execute(
             select(Subscription)
+            .options(selectinload(Subscription.plan))
             .where(Subscription.org_id == org_id)
             .order_by(Subscription.period_start.desc())
         )
@@ -194,7 +216,7 @@ class BillingService:
                 BillingHistoryItem(
                     id=s.id,
                     date=s.created_at,
-                    amount=float(s.plan.price_pkr),
+                    amount=float(s.plan.price_pkr) if s.plan else 0.0,
                     status="Paid" if s.status in ["active", "cancelled"] else "Failed",
                     invoice=f"INV-{s.created_at.strftime('%Y%m%d')}-{str(s.id)[:8].upper()}"
                 )
@@ -204,7 +226,7 @@ class BillingService:
     @staticmethod
     async def check_quota(db: AsyncSession, org_id: uuid.UUID, resource: str) -> bool:
         result = await db.execute(
-            select(Subscription).where(
+            select(Subscription).options(selectinload(Subscription.plan)).where(
                 Subscription.org_id == org_id,
                 Subscription.status == "active"
             )
@@ -213,7 +235,7 @@ class BillingService:
 
         if not sub:
             result = await db.execute(
-                select(Subscription).where(
+                select(Subscription).options(selectinload(Subscription.plan)).where(
                     Subscription.org_id == org_id,
                     Subscription.status == "cancelled"
                 ).order_by(Subscription.period_start.desc())

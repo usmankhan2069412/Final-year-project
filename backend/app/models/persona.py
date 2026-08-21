@@ -18,7 +18,7 @@ class Persona(Base):
     deleted_at = Column(DateTime(timezone=True), nullable=True)
 
     # Relationships
-    traits = relationship("PersonaTrait", back_populates="persona", cascade="all, delete-orphan")
+    traits = relationship("PersonaTrait", back_populates="persona", cascade="all, delete-orphan", lazy="selectin")
     chatbots = relationship("Chatbot", back_populates="persona")
 
     __table_args__ = (

@@ -1,15 +1,15 @@
 Traceback (most recent call last):
-  File "C:\Users\USMAN\Desktop\final year project\backend\app\services\chat.py", line 1293, in run_async
+  File "C:\Users\USMAN\Desktop\final year project\backend\app\services\chat.py", line 1322, in run_async
     res = await cls.aget_rag_response(
           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        db=db, org_id=org_id, chatbot_id=chatbot_id, user_message=user_message, conversation_id=conversation_id, deployment_id=deployment_id, callbacks=[handler], background_tasks=background_tasks
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        db=db, org_id=org_id, chatbot_id=chatbot_id, user_message=user_message, conversation_id=conversation_id, deployment_id=deployment_id, callbacks=[handler], background_tasks=background_tasks, status_queue=q
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     )
     ^
-  File "C:\Users\USMAN\Desktop\final year project\backend\app\services\chat.py", line 1139, in aget_rag_response
+  File "C:\Users\USMAN\Desktop\final year project\backend\app\services\chat.py", line 1167, in aget_rag_response
     final_state = await AgentGraphExecutor.aexecute(initial_state)
                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\USMAN\Desktop\final year project\backend\app\services\chat.py", line 790, in aexecute
+  File "C:\Users\USMAN\Desktop\final year project\backend\app\services\chat.py", line 817, in aexecute
     return await cls._get_graph().ainvoke(initial_state)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   File "C:\Users\USMAN\Desktop\final year project\backend\venv\Lib\site-packages\langgraph\pregel\main.py", line 4057, in ainvoke
@@ -37,8 +37,10 @@ Traceback (most recent call last):
   File "C:\Users\USMAN\Desktop\final year project\backend\venv\Lib\site-packages\langgraph\_internal\_runnable.py", line 501, in ainvoke
     ret = await self.afunc(*args, **kwargs)
           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Users\USMAN\Desktop\final year project\backend\app\services\chat.py", line 261, in route_intent
-    intent = await SemanticRouter.aclassify(
-                   ^^^^^^^^^^^^^^^^^^^^^^^^
-AttributeError: type object 'SemanticRouter' has no attribute 'aclassify'. Did you mean: 'classify'?
-During task with name 'route' and id 'e60cb8ae-e58a-cf83-bfd7-46d84a19571e'
+  File "C:\Users\USMAN\Desktop\final year project\backend\app\services\chat.py", line 541, in retrieve_node
+    query_vectors = await embedding_service.aencode([original])
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USMAN\Desktop\final year project\backend\app\services\embedding.py", line 141, in aencode
+    raise RuntimeError("Gemini embedding API circuit is open due to recent failures.")
+RuntimeError: Gemini embedding API circuit is open due to recent failures.
+During task with name 'retrieve' and id '12eeaf64-37dd-7384-7425-00c18be0617c'

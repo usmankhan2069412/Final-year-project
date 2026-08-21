@@ -19,7 +19,17 @@ async def create_persona(
     db: AsyncSession = Depends(get_tenant_db),
     org_id: uuid.UUID = Depends(get_current_org_id)
 ):
-    return await bot_service.create_persona(db=db, org_id=org_id, persona_in=persona_in)
+    try:
+        return await bot_service.create_persona(db=db, org_id=org_id, persona_in=persona_in)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create persona."
+        )
 
 
 @router.get("/personas", response_model=List[PersonaResponse])
@@ -27,7 +37,13 @@ async def get_personas(
     db: AsyncSession = Depends(get_tenant_db),
     org_id: uuid.UUID = Depends(get_current_org_id)
 ):
-    return await bot_service.get_personas(db=db, org_id=org_id)
+    try:
+        return await bot_service.get_personas(db=db, org_id=org_id)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch personas."
+        )
 
 
 @router.get("/personas/{persona_id}", response_model=PersonaResponse)
@@ -36,13 +52,21 @@ async def get_persona(
     db: AsyncSession = Depends(get_tenant_db),
     org_id: uuid.UUID = Depends(get_current_org_id)
 ):
-    persona = await bot_service.get_persona(db=db, org_id=org_id, persona_id=persona_id)
-    if not persona:
+    try:
+        persona = await bot_service.get_persona(db=db, org_id=org_id, persona_id=persona_id)
+        if not persona:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Persona not found or access denied."
+            )
+        return persona
+    except HTTPException:
+        raise
+    except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Persona not found or access denied."
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch persona."
         )
-    return persona
 
 
 @router.patch("/personas/{persona_id}", response_model=PersonaResponse)
@@ -52,15 +76,25 @@ async def update_persona(
     db: AsyncSession = Depends(get_tenant_db),
     org_id: uuid.UUID = Depends(get_current_org_id)
 ):
-    persona = await bot_service.update_persona(
-        db=db, org_id=org_id, persona_id=persona_id, persona_in=persona_in
-    )
-    if not persona:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Persona not found, access denied, or system personas cannot be updated."
+    try:
+        persona = await bot_service.update_persona(
+            db=db, org_id=org_id, persona_id=persona_id, persona_in=persona_in
         )
-    return persona
+        if not persona:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Persona not found, access denied, or system personas cannot be updated."
+            )
+        return persona
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update persona."
+        )
 
 
 @router.delete("/personas/{persona_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -69,13 +103,21 @@ async def delete_persona(
     db: AsyncSession = Depends(get_tenant_db),
     org_id: uuid.UUID = Depends(get_current_org_id)
 ):
-    success = await bot_service.delete_persona(db=db, org_id=org_id, persona_id=persona_id)
-    if not success:
+    try:
+        success = await bot_service.delete_persona(db=db, org_id=org_id, persona_id=persona_id)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Persona not found or access denied."
+            )
+        return None
+    except HTTPException:
+        raise
+    except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Persona not found or access denied."
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete persona."
         )
-    return None
 
 
 @router.post("/chatbots", response_model=ChatbotResponse, status_code=status.HTTP_201_CREATED)

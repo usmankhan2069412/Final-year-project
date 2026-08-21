@@ -20,7 +20,7 @@ class MessageJob(Base):
     channel = Column(String, index=True, nullable=False) # e.g. "whatsapp", "web"
     payload = Column(JSON, nullable=False) # e.g. {"phone_number": "+123", "text": "hello", "phone_number_id": "123"}
     
-    status = Column(Enum(MessageJobStatus), default=MessageJobStatus.QUEUED, index=True)
+    status = Column(Enum(MessageJobStatus, name="enum_message_job_status"), default=MessageJobStatus.QUEUED, index=True)
     
     attempts = Column(Integer, default=0)
     max_attempts = Column(Integer, default=3)

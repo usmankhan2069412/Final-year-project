@@ -5,6 +5,7 @@ import logging
 from typing import List, Optional
 from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from cryptography.fernet import Fernet
 
 from app.core.config import settings
@@ -34,25 +35,34 @@ class BotService:
 
     @staticmethod
     async def create_persona(db: AsyncSession, org_id: uuid.UUID, persona_in: PersonaCreate) -> Persona:
+        cleaned_name = (persona_in.name or "").strip()
+        if not cleaned_name:
+            raise ValueError("Persona name cannot be empty")
+
         try:
             db_persona = Persona(
                 org_id=org_id,
-                name=persona_in.name,
-                language=persona_in.language,
-                greeting=persona_in.greeting,
-                fallback=persona_in.fallback,
-                description=persona_in.description
+                name=cleaned_name,
+                language=(persona_in.language or "en").strip(),
+                greeting=persona_in.greeting.strip() if persona_in.greeting else None,
+                fallback=persona_in.fallback.strip() if persona_in.fallback else None,
+                description=persona_in.description.strip() if persona_in.description else None
             )
             db.add(db_persona)
             await db.flush()
 
-            for trait_name in persona_in.traits:
-                trait = PersonaTrait(persona_id=db_persona.id, trait_name=trait_name)
-                db.add(trait)
+            if persona_in.traits:
+                for trait_name in persona_in.traits:
+                    cleaned_trait = trait_name.strip() if isinstance(trait_name, str) else ""
+                    if cleaned_trait:
+                        trait = PersonaTrait(persona_id=db_persona.id, trait_name=cleaned_trait)
+                        db.add(trait)
 
             await db.commit()
-            await db.refresh(db_persona)
-            return db_persona
+            return await BotService.get_persona(db=db, org_id=org_id, persona_id=db_persona.id)
+        except ValueError:
+            await db.rollback()
+            raise
         except Exception as e:
             await db.rollback()
             logger.error("Database error in create_persona: %s", str(e), exc_info=True)
@@ -60,7 +70,6 @@ class BotService:
 
     @staticmethod
     async def get_personas(db: AsyncSession, org_id: uuid.UUID) -> List[Persona]:
-        from sqlalchemy.orm import selectinload
         stmt = (
             select(Persona)
             .options(selectinload(Persona.traits))
@@ -74,7 +83,6 @@ class BotService:
 
     @staticmethod
     async def get_persona(db: AsyncSession, org_id: uuid.UUID, persona_id: uuid.UUID) -> Optional[Persona]:
-        from sqlalchemy.orm import selectinload
         stmt = (
             select(Persona)
             .options(selectinload(Persona.traits))
@@ -106,11 +114,15 @@ class BotService:
         try:
             changed = False
             if persona_in.name is not None:
-                changed = changed or db_persona.name != persona_in.name
-                db_persona.name = persona_in.name
+                cleaned_name = persona_in.name.strip()
+                if not cleaned_name:
+                    raise ValueError("Persona name cannot be empty")
+                changed = changed or db_persona.name != cleaned_name
+                db_persona.name = cleaned_name
             if persona_in.language is not None:
-                changed = changed or db_persona.language != persona_in.language
-                db_persona.language = persona_in.language
+                cleaned_lang = persona_in.language.strip()
+                changed = changed or db_persona.language != cleaned_lang
+                db_persona.language = cleaned_lang
             if persona_in.greeting is not None:
                 changed = changed or db_persona.greeting != persona_in.greeting
                 db_persona.greeting = persona_in.greeting
@@ -127,7 +139,7 @@ class BotService:
                 )
                 existing_trait_objs = list(result.scalars().all())
                 existing_traits_set = {t.trait_name for t in existing_trait_objs}
-                new_traits_set = set(persona_in.traits)
+                new_traits_set = {t.strip() for t in persona_in.traits if isinstance(t, str) and t.strip()}
 
                 traits_to_delete = existing_traits_set - new_traits_set
                 traits_to_add = new_traits_set - existing_traits_set
@@ -150,8 +162,10 @@ class BotService:
                 db_persona.persona_version = (db_persona.persona_version or 1) + 1
 
             await db.commit()
-            await db.refresh(db_persona)
-            return db_persona
+            return await BotService.get_persona(db=db, org_id=org_id, persona_id=persona_id)
+        except ValueError:
+            await db.rollback()
+            raise
         except Exception as e:
             await db.rollback()
             logger.error("Database error in update_persona: %s", str(e), exc_info=True)
@@ -205,8 +219,6 @@ class BotService:
             db.add(db_chatbot)
             await db.commit()
             
-            from sqlalchemy.orm import selectinload
-            from app.models.persona import Persona
             res = await db.execute(
                 select(Chatbot).options(selectinload(Chatbot.persona).selectinload(Persona.traits)).where(Chatbot.id == db_chatbot.id)
             )
@@ -218,8 +230,6 @@ class BotService:
 
     @staticmethod
     async def get_chatbots(db: AsyncSession, org_id: uuid.UUID) -> List[Chatbot]:
-        from sqlalchemy.orm import selectinload
-        from app.models.persona import Persona
         result = await db.execute(
             select(Chatbot)
             .options(selectinload(Chatbot.persona).selectinload(Persona.traits))
@@ -251,8 +261,6 @@ class BotService:
 
     @staticmethod
     async def get_chatbot(db: AsyncSession, org_id: uuid.UUID, chatbot_id: uuid.UUID) -> Optional[Chatbot]:
-        from sqlalchemy.orm import selectinload
-        from app.models.persona import Persona
         result = await db.execute(
             select(Chatbot)
             .options(selectinload(Chatbot.persona).selectinload(Persona.traits))
@@ -310,8 +318,6 @@ class BotService:
 
             await db.commit()
             
-            from sqlalchemy.orm import selectinload
-            from app.models.persona import Persona
             res = await db.execute(
                 select(Chatbot).options(selectinload(Chatbot.persona).selectinload(Persona.traits)).where(Chatbot.id == db_chatbot.id)
             )
