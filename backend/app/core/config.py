@@ -54,6 +54,8 @@ class Settings(BaseSettings):
     CORS_ORIGINS: List[str] = []
 
     # Website scraping settings
+    FIRECRAWL_API_KEY: str = ""
+    FIRECRAWL_API_URL: str = "https://api.firecrawl.dev"
     SCRAPE_TIMEOUT_SECS: int = 45        # Per-page HTTP timeout in seconds
     SCRAPE_MAX_PAGES: int = 15           # Max pages to crawl per job
     SCRAPE_MAX_DEPTH: int = 2            # BFS crawl depth

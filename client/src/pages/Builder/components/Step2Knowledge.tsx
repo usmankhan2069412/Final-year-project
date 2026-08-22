@@ -42,10 +42,12 @@ export default function Step2Knowledge({ items, onAddItem, onUploadFiles, onRemo
       setIsSubmitting(true);
       try {
         const res = await api.validateWebsiteUrl({ url });
-        if (res.links_found === 0) {
-          toast.warning("Warning: No internal links found. Only this single page will be crawled (Site may use JavaScript/Cloudflare).", { duration: 6000 });
+        if (res.title) {
+          toast.success(`Website accessible: "${res.title}". Crawling & vector indexing queued.`);
+        } else if (res.links_found > 0) {
+          toast.success(`Website accessible (${res.links_found} internal link(s) found). Crawling queued.`);
         } else {
-          toast.success(`Website accessible. Found ${res.links_found} internal link(s). Deep crawling started.`);
+          toast.success("Website verified. Crawling & vector indexing queued.");
         }
       } catch (err: any) {
         toast.error(err.message || "Cannot crawl this website.");
@@ -207,40 +209,46 @@ export default function Step2Knowledge({ items, onAddItem, onUploadFiles, onRemo
                         : "bg-[#F5F5F7] border-black/5"
                     }`}
                   >
-                    <p className={`font-bold uppercase tracking-widest mb-3 ${c("text-[#1c1c1e]/60", "text-[#85948b]")}`}>
-                      Crawling Compatibility
-                    </p>
+                    <div className="flex items-center justify-between mb-3">
+                      <p className={`font-bold uppercase tracking-widest ${c("text-[#1c1c1e]/60", "text-[#85948b]")}`}>
+                        Web Scraping Engine
+                      </p>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        isDark ? "bg-[#59eeb4]/10 text-[#59eeb4]" : "bg-emerald-100 text-emerald-800"
+                      }`}>
+                        Firecrawl Powered
+                      </span>
+                    </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {/* Supported */}
                       <div className="space-y-1.5">
                         <p className={`font-bold mb-1.5 flex items-center gap-1.5 ${c("text-green-700", "text-green-400")}`}>
                           <span className="material-symbols-outlined text-[14px]">check_circle</span>
-                          Works
+                          Supported
                         </p>
                         {[
-                          "Static blogs & articles",
-                          "University / info portals",
-                          "Public documentation",
-                          "Server-rendered HTML sites",
+                          "React / Next.js / Vue SPAs",
+                          "Dynamic JavaScript websites",
+                          "Documentation & Knowledge bases",
+                          "Company blogs & Landing pages",
                         ].map((t) => (
-                          <p key={t} className={`leading-snug ${c("text-[#1c1c1e]/60", "text-[#85948b]")}`}>
+                          <p key={t} className={`leading-snug ${c("text-[#1c1c1e]/70", "text-[#85948b]")}`}>
                             · {t}
                           </p>
                         ))}
                       </div>
                       {/* Unsupported */}
                       <div className="space-y-1.5">
-                        <p className={`font-bold mb-1.5 flex items-center gap-1.5 ${c("text-red-600", "text-red-400")}`}>
-                          <span className="material-symbols-outlined text-[14px]">cancel</span>
-                          Won't work
+                        <p className={`font-bold mb-1.5 flex items-center gap-1.5 ${c("text-amber-600", "text-amber-400")}`}>
+                          <span className="material-symbols-outlined text-[14px]">info</span>
+                          Not supported via URL
                         </p>
                         {[
-                          "Cloudflare / firewall-protected",
-                          "React / Vue / Angular SPAs",
-                          "Login-required pages",
-                          "PDF / ZIP / media links",
+                          "Password-protected / Login pages",
+                          "Raw media (MP4, MP3, ZIP)",
+                          "Private intranet URLs (localhost/127.0.0.1)",
                         ].map((t) => (
-                          <p key={t} className={`leading-snug ${c("text-[#1c1c1e]/60", "text-[#85948b]")}`}>
+                          <p key={t} className={`leading-snug ${c("text-[#1c1c1e]/70", "text-[#85948b]")}`}>
                             · {t}
                           </p>
                         ))}

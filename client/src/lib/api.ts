@@ -220,7 +220,7 @@ export const api = {
     apiRequest<KnowledgeSourceResponse>("/api/v1/knowledge", { method: "POST", body: JSON.stringify(payload) }),
 
   validateWebsiteUrl: (payload: { url: string }) =>
-    apiRequest<{ status: string; links_found: number }>("/api/v1/knowledge/validate-url", { method: "POST", body: JSON.stringify(payload) }),
+    apiRequest<{ status: string; links_found: number; title?: string; chars_extracted?: number }>("/api/v1/knowledge/validate-url", { method: "POST", body: JSON.stringify(payload) }),
 
 
   uploadKnowledgeFile: (chatbotId: string, file: File) => {

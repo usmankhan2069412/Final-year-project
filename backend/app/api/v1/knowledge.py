@@ -43,13 +43,19 @@ async def validate_url(
 ):
     try:
         url = KnowledgeService._validate_public_url(payload.url)
-        meta = TextExtractor.validate_url_sync(url)
-        return {"status": "ok", "links_found": meta["links_found"]}
+        meta = await TextExtractor.fast_validate_url(url)
+        return {
+            "status": "ok",
+            "links_found": meta.get("links_found", 0),
+            "title": meta.get("title", ""),
+            "chars_extracted": meta.get("chars_extracted", 0),
+        }
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error("Error validating url: %s", str(e), exc_info=True)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot crawl this website.")
+        detail_msg = str(e) if str(e) else "Cannot crawl this website."
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail_msg)
 
 
 @router.post("", response_model=KnowledgeSourceResponse, status_code=status.HTTP_201_CREATED)

@@ -66,6 +66,12 @@ class KnowledgeService:
         return job
 
     @staticmethod
+    def _bump_knowledge_base_version_sync(db, chatbot_id: uuid.UUID) -> None:
+        chatbot = db.query(Chatbot).filter(Chatbot.id == chatbot_id).first()
+        if chatbot:
+            chatbot.knowledge_base_version = (chatbot.knowledge_base_version or 1) + 1
+
+    @staticmethod
     async def _bump_knowledge_base_version(db: AsyncSession, chatbot_id: uuid.UUID) -> None:
         result = await db.execute(select(Chatbot).where(Chatbot.id == chatbot_id))
         chatbot = result.scalar_one_or_none()
@@ -143,14 +149,6 @@ class KnowledgeService:
         }:
             raise ValueError("Unsupported file content type")
 
-        os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-        file_id = uuid.uuid4()
-        storage_filename = f"{file_id}.{ext}"
-        upload_root = os.path.abspath(settings.UPLOAD_DIR)
-        storage_path = os.path.abspath(os.path.join(upload_root, storage_filename))
-        if not storage_path.startswith(upload_root):
-            raise ValueError("Invalid upload path")
-
         size = 0
         content = file.file.read(settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024 + 1)
         size = len(content)
@@ -158,8 +156,11 @@ class KnowledgeService:
             raise ValueError("Uploaded file is empty")
         if size > settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024:
             raise ValueError("File exceeds maximum allowed size")
+
+        file_id = uuid.uuid4()
+        storage_filename = f"{file_id}.{ext}"
         from app.services.storage import StorageService
-        StorageService.save_file(storage_path, content)
+        storage_path = StorageService.save_file_content(storage_filename, content)
 
         try:
             source = KnowledgeSource(
@@ -297,13 +298,9 @@ class KnowledgeService:
             source.crawl_duration_secs = int(result.crawl_duration_secs)
 
             from app.services.storage import StorageService
-            os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
             storage_filename = f"{source.id}_crawl.md"
-            upload_root = os.path.abspath(settings.UPLOAD_DIR)
-            storage_path = os.path.abspath(os.path.join(upload_root, storage_filename))
-
             content_bytes = text.encode("utf-8")
-            StorageService.save_file(storage_path, content_bytes)
+            storage_path = StorageService.save_file_content(storage_filename, content_bytes)
 
             doc = source.document
             if not doc:
@@ -319,6 +316,7 @@ class KnowledgeService:
                 )
                 db.add(doc)
             else:
+                doc.storage_path = storage_path
                 doc.file_size_bytes = len(content_bytes)
                 doc.uploaded_at = datetime.now(timezone.utc)
             db.flush()
@@ -331,7 +329,7 @@ class KnowledgeService:
 
         if not chunks:
             source.status = SourceStatus.INDEXED
-            cls._bump_knowledge_base_version(db, source.chatbot_id)
+            cls._bump_knowledge_base_version_sync(db, source.chatbot_id)
             return
 
         chunk_records = []
@@ -354,7 +352,7 @@ class KnowledgeService:
         for r in chunk_records:
             r.index_status = ChunkStatus.COMPLETED
         source.status = SourceStatus.INDEXED
-        cls._bump_knowledge_base_version(db, source.chatbot_id)
+        cls._bump_knowledge_base_version_sync(db, source.chatbot_id)
 
     @classmethod
     def _notify_job_update(cls, db, job: KnowledgeJob):
