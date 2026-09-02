@@ -37,9 +37,9 @@ class AIModelConfig(Base):
     )
 
     # Relationships
-    provider = relationship("AIProvider", back_populates="configs")
+    provider = relationship("AIProvider", back_populates="configs", lazy="selectin")
     organization = relationship("Organization")
-    routing_rules = relationship("RoutingRule", back_populates="config", cascade="all, delete-orphan", foreign_keys="[RoutingRule.config_id]")
+    routing_rules = relationship("RoutingRule", back_populates="config", cascade="all, delete-orphan", foreign_keys="[RoutingRule.config_id]", lazy="selectin")
 
     __table_args__ = (
         UniqueConstraint("org_id", "provider_id", "model_name", name="uq_ai_model_configs_org_provider_model"),

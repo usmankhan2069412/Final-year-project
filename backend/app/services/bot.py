@@ -428,8 +428,7 @@ class ModelConfigService:
                     db.add(rule)
 
             await db.commit()
-            await db.refresh(db_config)
-            return db_config
+            return await ModelConfigService.get_model_config(db=db, org_id=org_id, config_id=db_config.id)
         except Exception as e:
             await db.rollback()
             logger.error("Database error in create_model_config: %s", str(e), exc_info=True)
@@ -438,7 +437,9 @@ class ModelConfigService:
     @staticmethod
     async def get_model_configs(db: AsyncSession, org_id: uuid.UUID) -> List[AIModelConfig]:
         result = await db.execute(
-            select(AIModelConfig).where(AIModelConfig.org_id == org_id)
+            select(AIModelConfig)
+            .options(selectinload(AIModelConfig.provider), selectinload(AIModelConfig.routing_rules))
+            .where(AIModelConfig.org_id == org_id)
         )
         return list(result.scalars().all())
 
@@ -447,7 +448,9 @@ class ModelConfigService:
         db: AsyncSession, org_id: uuid.UUID, config_id: uuid.UUID
     ) -> Optional[AIModelConfig]:
         result = await db.execute(
-            select(AIModelConfig).where(
+            select(AIModelConfig)
+            .options(selectinload(AIModelConfig.provider), selectinload(AIModelConfig.routing_rules))
+            .where(
                 AIModelConfig.id == config_id,
                 AIModelConfig.org_id == org_id
             )
@@ -513,8 +516,7 @@ class ModelConfigService:
                     db.add(rule)
 
             await db.commit()
-            await db.refresh(db_config)
-            return db_config
+            return await ModelConfigService.get_model_config(db=db, org_id=org_id, config_id=db_config.id)
         except Exception as e:
             await db.rollback()
             logger.error("Database error in update_model_config: %s", str(e), exc_info=True)
