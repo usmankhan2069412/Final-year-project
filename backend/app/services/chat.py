@@ -455,8 +455,16 @@ class AgentGraphExecutor:
         try:
             history_str = ""
             for m in state["history"][-4:]:
-                role_label = "USER" if m.role == MessageRole.USER else "BOT"
-                history_str += f"{role_label}: {m.content}\n"
+                if hasattr(m, "role"):
+                    role_label = "USER" if m.role == MessageRole.USER else "BOT"
+                elif isinstance(m, HumanMessage) or getattr(m, "type", "") == "human":
+                    role_label = "USER"
+                elif isinstance(m, dict):
+                    role_label = "USER" if m.get("role") in ("user", "human") else "BOT"
+                else:
+                    role_label = "BOT"
+                content = getattr(m, "content", "") or (m.get("content", "") if isinstance(m, dict) else str(m))
+                history_str += f"{role_label}: {content}\n"
 
             sys_msg = SystemMessage(content=(
                 "You are a search query rewriter. Given the chat history and the latest user message, rewrite the user message to be a standalone search query.\n"

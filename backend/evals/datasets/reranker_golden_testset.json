@@ -1,0 +1,92 @@
+[
+  {
+    "id": "rr_01",
+    "query": "How many days do I have to request a refund?",
+    "chunks": [
+      {
+        "chunk_id": "c1",
+        "text": "Customers can request a refund within 14 days of purchase if usage is under 100 API calls.",
+        "expected_keep": true
+      },
+      {
+        "chunk_id": "c2",
+        "text": "Office hours are Monday to Friday from 9 AM to 5 PM Eastern Time.",
+        "expected_keep": false
+      },
+      {
+        "chunk_id": "c3",
+        "text": "We support credit cards, JazzCash, and bank wire transfers for subscription payments.",
+        "expected_keep": false
+      }
+    ],
+    "expected_is_relevant": true,
+    "description": "Single relevant chunk mixed with 2 distractors"
+  },
+  {
+    "id": "rr_02",
+    "query": "What are the limitations of the Starter tier?",
+    "chunks": [
+      {
+        "chunk_id": "c4",
+        "text": "The Starter tier allows up to 3 chatbots, 500 documents, and 2 team members maximum.",
+        "expected_keep": true
+      },
+      {
+        "chunk_id": "c5",
+        "text": "Enterprise users get dedicated account managers and 99.9% uptime SLA.",
+        "expected_keep": false
+      }
+    ],
+    "expected_is_relevant": true,
+    "description": "Starter query with Enterprise distractor"
+  },
+  {
+    "id": "rr_03",
+    "query": "What is the capital city of France?",
+    "chunks": [
+      {
+        "chunk_id": "c6",
+        "text": "Aina AI is a multi-tenant AI chatbot platform built on PostgreSQL pgvector.",
+        "expected_keep": false
+      },
+      {
+        "chunk_id": "c7",
+        "text": "You can connect your custom chatbot to WhatsApp Cloud API in Phase 5.",
+        "expected_keep": false
+      }
+    ],
+    "expected_is_relevant": false,
+    "description": "Out-of-scope question: 100% distractors, must trigger safe fallback"
+  },
+  {
+    "id": "rr_04",
+    "query": "Aina platform mein PDF file kaise upload hoti hai?",
+    "chunks": [
+      {
+        "chunk_id": "c8",
+        "text": "PDF files are uploaded via the Builder Knowledge Base tab and extracted using PyMuPDF.",
+        "expected_keep": true
+      },
+      {
+        "chunk_id": "c9",
+        "text": "SMTP emails are sent using Resend API on port 587.",
+        "expected_keep": false
+      }
+    ],
+    "expected_is_relevant": true,
+    "description": "Roman Urdu upload query with unrelated SMTP distractor"
+  },
+  {
+    "id": "rr_05",
+    "query": "Who won the cricket world cup in 1992?",
+    "chunks": [
+      {
+        "chunk_id": "c10",
+        "text": "We store embeddings using 3072 dimensions in PostgreSQL.",
+        "expected_keep": false
+      }
+    ],
+    "expected_is_relevant": false,
+    "description": "Irrelevant general knowledge query: must trigger safe fallback"
+  }
+]

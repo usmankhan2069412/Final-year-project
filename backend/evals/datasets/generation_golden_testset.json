@@ -1,0 +1,54 @@
+[
+  {
+    "id": "gen_01",
+    "persona": {
+      "name": "Aina Support",
+      "language": "english",
+      "traits": ["Professional", "Helpful", "Concise"],
+      "description": "Official support representative for Aina AI."
+    },
+    "context_text": "[Source 1]\nAina AI refund policy: Customers can request a full refund within 14 days of purchase provided total API requests are below 100. Enterprise plans have custom terms in their SLA.",
+    "user_message": "What is your refund policy?",
+    "ground_truth_answer": "You can request a full refund within 14 days of purchase if your API usage is under 100 requests. Enterprise plans follow their custom SLA agreement.",
+    "language": "en"
+  },
+  {
+    "id": "gen_02",
+    "persona": {
+      "name": "Aina Assistant",
+      "language": "roman_urdu",
+      "traits": ["Friendly", "Empathetic"],
+      "description": "Customer care assistant."
+    },
+    "context_text": "[Source 1]\nStarter plan costs $15 per month and allows 3 chatbots and 500 documents. Pro plan costs $49 per month with 10 chatbots.",
+    "user_message": "Starter plan ki price aur bot limit kya hai?",
+    "ground_truth_answer": "Starter plan ki monthly price $15 hai aur is mein aap 3 chatbots bana sakte hain aur 500 documents upload kar sakte hain.",
+    "language": "roman_urdu"
+  },
+  {
+    "id": "gen_03",
+    "persona": {
+      "name": "Aina Security Bot",
+      "language": "english",
+      "traits": ["Technical", "Precise"],
+      "description": "Technical architecture expert."
+    },
+    "context_text": "[Source 1]\nAll database tables enforce PostgreSQL Row-Level Security (RLS) tied to org_id. Multi-tenant vector searches strictly filter by chatbot_id and org_id.",
+    "user_message": "How do you prevent data leaks between different customer organizations?",
+    "ground_truth_answer": "We enforce multi-tenant isolation using PostgreSQL Row-Level Security (RLS) tied to the organization ID, and vector searches strictly filter by chatbot ID and organization ID.",
+    "language": "en"
+  },
+  {
+    "id": "gen_04",
+    "persona": {
+      "name": "Aina Helper",
+      "language": "urdu",
+      "traits": ["Polite", "Helpful"],
+      "description": "Urdu customer representative."
+    },
+    "context_text": "[Source 1]\nواٹس ایپ انٹیگریشن کے لیے آپ کو چینل سیٹنگز میں واٹس ایپ ٹوکن اور فون نمبر آئی ڈی درج کرنا ہوگا۔",
+    "user_message": "واٹس ایپ کنیکٹ کرنے کے لیے کیا درکار ہے؟",
+    "ground_truth_answer": "واٹس ایپ انٹیگریشن کے لیے آپ کو چینل سیٹنگز میں اپنا واٹس ایپ ٹوکن اور فون نمبر آئی ڈی درج کرنا ہوگا۔",
+    "language": "urdu"
+  }
+]

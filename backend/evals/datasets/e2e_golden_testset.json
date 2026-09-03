@@ -1,0 +1,121 @@
+[
+  {
+    "scenario_id": "e2e_sc_01",
+    "name": "Standard Customer Onboarding & Pricing Dialogue",
+    "language": "en",
+    "persona": {
+      "name": "Aina Support Bot",
+      "language": "english",
+      "traits": ["Professional", "Helpful", "Concise"],
+      "description": "Official AI assistant for Aina AI SaaS platform."
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_message": "Hello there, good morning!",
+        "expected_intent": "CONVERSATIONAL",
+        "expected_response_type": "greeting",
+        "expect_cache_hit": false,
+        "description": "Turn 1: Initial greeting and small-talk"
+      },
+      {
+        "turn": 2,
+        "user_message": "What is the monthly price of the Starter tier and what does it include?",
+        "expected_intent": "RAG_LOOKUP",
+        "expected_response_type": "rag_answer",
+        "expect_cache_hit": false,
+        "ground_truth_facts": [
+          "Starter plan costs $15 per month",
+          "Allows up to 3 chatbots",
+          "Includes 500 uploaded documents and 2 team members"
+        ],
+        "description": "Turn 2: Cold factual lookup from knowledge base"
+      },
+      {
+        "turn": 3,
+        "user_message": "How many members can I invite if I upgrade to the Professional plan?",
+        "expected_intent": "RAG_LOOKUP",
+        "expected_response_type": "rag_answer",
+        "expect_cache_hit": false,
+        "ground_truth_facts": [
+          "Professional plan costs $49 per month",
+          "Allows unlimited team members"
+        ],
+        "description": "Turn 3: Multi-turn contextual follow-up with pronoun/entity shift"
+      },
+      {
+        "turn": 4,
+        "user_message": "Can you tell me who won the FIFA World Cup in 2022?",
+        "expected_intent": "RAG_LOOKUP",
+        "expected_response_type": "fallback",
+        "expect_cache_hit": false,
+        "expected_fallback": true,
+        "description": "Turn 4: Out-of-scope trap to verify Reranker Guardrail triggers safe fallback"
+      },
+      {
+        "turn": 5,
+        "user_message": "I need to talk to a real human agent right now.",
+        "expected_intent": "AGENT_HANDOFF",
+        "expected_response_type": "escalation",
+        "expect_cache_hit": false,
+        "description": "Turn 5: Explicit human escalation request"
+      },
+      {
+        "turn": 6,
+        "user_message": "What is the price of Starter plan?",
+        "expected_intent": "RAG_LOOKUP",
+        "expected_response_type": "semantic_cache",
+        "expect_cache_hit": true,
+        "ground_truth_facts": [
+          "Starter plan costs $15 per month"
+        ],
+        "description": "Turn 6: Semantic paraphrase of Turn 2 to verify Cache Hit & sub-10ms acceleration"
+      }
+    ]
+  },
+  {
+    "scenario_id": "e2e_sc_02",
+    "name": "Roman Urdu Customer Inquiry & Setup Dialogue",
+    "language": "roman_urdu",
+    "persona": {
+      "name": "Aina Urdu Assistant",
+      "language": "roman_urdu",
+      "traits": ["Empathetic", "Polite"],
+      "description": "Customer care assistant for Pakistani users."
+    },
+    "turns": [
+      {
+        "turn": 1,
+        "user_message": "Salam, kya haal hai?",
+        "expected_intent": "CONVERSATIONAL",
+        "expected_response_type": "greeting",
+        "expect_cache_hit": false,
+        "description": "Turn 1: Roman Urdu conversational greeting"
+      },
+      {
+        "turn": 2,
+        "user_message": "Aina platform par PDF documents kaise upload hote hain aur max file size kya hai?",
+        "expected_intent": "RAG_LOOKUP",
+        "expected_response_type": "rag_answer",
+        "expect_cache_hit": false,
+        "ground_truth_facts": [
+          "PDF files upload via PyMuPDF in Knowledge Base tab",
+          "Maximum file size is 50MB"
+        ],
+        "description": "Turn 2: Factual document upload inquiry in Roman Urdu"
+      },
+      {
+        "turn": 3,
+        "user_message": "Aur refund policy kya hai agar pasand na aaye?",
+        "expected_intent": "RAG_LOOKUP",
+        "expected_response_type": "rag_answer",
+        "expect_cache_hit": false,
+        "ground_truth_facts": [
+          "Full refund within 14 days of purchase",
+          "API usage must be under 100 requests"
+        ],
+        "description": "Turn 3: Multi-turn refund inquiry with ellipsis/conjunction"
+      }
+    ]
+  }
+]

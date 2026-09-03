@@ -33,20 +33,25 @@ class Settings(BaseSettings):
 
     # Document Processing & Vector DB Settings
     UPLOAD_DIR: str = "data/uploads"
-    EMBEDDING_MODEL: str = "gemini-embedding-2"
-    EMBEDDING_DIM: int = 3072            # gemini-embedding-2 output dimension
+    EMBEDDING_MODEL: str = "openai/text-embedding-3-small"
+    EMBEDDING_DIM: int = 1536            # openai/text-embedding-3-small output dimension
     GEMINI_API_KEY: str = ""
     OPENROUTER_API_KEY: str = ""
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     CHUNK_SIZE: int = 500                # Tokens per chunk
     CHUNK_OVERLAP: int = 50              # Overlap between chunks
     MAX_UPLOAD_SIZE_MB: int = 50
-    CACHE_SIMILARITY_THRESHOLD: float = 0.95
+    CACHE_SIMILARITY_THRESHOLD: float = 0.65
     RETRIEVAL_TOP_K_SINGLE: int = 4
     RETRIEVAL_TOP_K_MULTI: int = 3
     EMBEDDING_BATCH_DELAY: float = 0.0
+    # Rerank & Relevance Settings
     RERANK_THRESHOLD: float = 0.3            # Min Cohere rerank score to keep a chunk
     RERANK_FALLBACK_SIMILARITY_THRESHOLD: float = 0.55  # Max cosine distance for semantic fallback
+
+    # RAG Evaluation Settings
+    EVAL_JUDGE_MODEL: str = "openai/gpt-4o-mini"
+    EVAL_JUDGE_TEMPERATURE: float = 0.0
 
     # CORS Settings
     # Production: set to ["https://app.yourdomain.com"] in .env
@@ -72,13 +77,17 @@ class Settings(BaseSettings):
 settings = Settings()
 
 
-def resolve_openrouter_key(api_key: str) -> Tuple[Optional[str], Optional[str]]:
-    """Resolve an API key that may be 'managed-by-openrouter' into (effective_key, base_url).
+def resolve_openrouter_key(api_key: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
+    """Resolve an API key that may be 'managed-by-openrouter' or an OpenRouter key into (effective_key, base_url).
     Returns (None, None) if no key can be resolved."""
-    if api_key != "managed-by-openrouter":
-        return api_key, None
-    effective = getattr(settings, "OPENROUTER_API_KEY", None) or os.getenv("OPENROUTER_API_KEY")
-    if effective:
-        return effective, "https://openrouter.ai/api/v1"
-    effective = getattr(settings, "OPENAI_API_KEY", None) or os.getenv("OPENAI_API_KEY")
-    return (effective, None) if effective else (None, None)
+    if not api_key:
+        return None, None
+    if api_key == "managed-by-openrouter":
+        effective = getattr(settings, "OPENROUTER_API_KEY", None) or os.getenv("OPENROUTER_API_KEY")
+        if effective:
+            return effective, "https://openrouter.ai/api/v1"
+        effective = getattr(settings, "OPENAI_API_KEY", None) or os.getenv("OPENAI_API_KEY")
+        return (effective, None) if effective else (None, None)
+    if isinstance(api_key, str) and api_key.startswith("sk-or-"):
+        return api_key, "https://openrouter.ai/api/v1"
+    return api_key, None

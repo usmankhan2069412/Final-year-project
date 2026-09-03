@@ -8,6 +8,7 @@ import numpy as np
 from typing import Optional, Dict, List, Any, Tuple
 from app.services.embedding import embedding_service
 from app.core.config import resolve_openrouter_key
+from app.models.conversation import MessageRole
 import logging
 
 logger = logging.getLogger(__name__)
@@ -121,8 +122,9 @@ class SemanticRouter:
 
     @classmethod
     def _get_routes_hash(cls) -> str:
-        # Generate a stable hash of the static routes dictionary
-        routes_str = json.dumps(cls.ROUTES, sort_keys=True)
+        from app.core.config import settings
+        # Generate a stable hash incorporating the embedding model, dimension, and routes
+        routes_str = f"{settings.EMBEDDING_MODEL}:{settings.EMBEDDING_DIM}:" + json.dumps(cls.ROUTES, sort_keys=True)
         return hashlib.sha256(routes_str.encode("utf-8")).hexdigest()
 
     @classmethod
@@ -223,13 +225,14 @@ class SemanticRouter:
         history: Optional[List[Any]] = None,
         conversation_memory: Optional[dict] = None,
         api_key: Optional[str] = None,
-        threshold: float = 0.82,
+        threshold: float = 0.65,
     ) -> Optional[str]:
         """
         Multi-tier intent classification:
-        1. Keyword short-circuit (AGENT_HANDOFF only â€” free, instant)
-        2. LLM classification (persona-aware, context-aware)
-        3. Embedding fallback (when LLM unavailable)
+        1. Keyword short-circuit (AGENT_HANDOFF, HISTORY_TRANSFORM, exact greetings)
+        2. Embedding Fast-Path (high confidence vector match)
+        3. LLM classification (persona-aware, context-aware)
+        4. Embedding fallback
         """
         from app.core.metrics import intent_classification_method, intent_classification_latency
 
@@ -238,10 +241,10 @@ class SemanticRouter:
 
         # --- Tier 1: Fast keyword short-circuit for Agent Handoff / History Transform ---
         handoff_keywords = [
-            "talk to human", "speak with an agent", "connect to a person",
+            "talk to human", "talk to a human", "speak with an agent", "connect to a person",
             "human support", "representative", "agent se connect karo",
             "human se baat karao", "mujhe insan se baat karni hai",
-            "customer care se baat karni hai"
+            "customer care se baat karni hai", "real human", "human agent", "real person"
         ]
         if any(kw in msg_lower for kw in handoff_keywords):
             latency = time.monotonic() - t0
@@ -265,14 +268,14 @@ class SemanticRouter:
         # --- Tier 2: Embedding Fast-Path (First LLM Avoidance) ---
         # Prioritize embedding search for high-confidence intents to save LLM costs.
         emb_intent, emb_score = await cls._classify_with_embeddings(message, 0.0) # get best regardless of threshold
-        if emb_score >= 0.85 and emb_intent:
+        if emb_score >= 0.72 and emb_intent:
             latency = time.monotonic() - t0
             intent_classification_latency.observe(latency)
             intent_classification_method.labels(method="embedding_fastpath").inc()
             return emb_intent
 
         # --- Tier 3: LLM-based classification (persona + context aware) ---
-        if persona and api_key:
+        if api_key:
             llm_result = await cls._classify_with_llm(
                 message=message,
                 persona=persona,
@@ -287,7 +290,7 @@ class SemanticRouter:
                 intent_classification_method.labels(method="llm").inc()
                 return llm_result
 
-        # --- Tier 4: Embedding fallback (existing behavior) ---
+        # --- Tier 4: Embedding fallback ---
         if emb_score >= threshold and emb_intent:
             latency = time.monotonic() - t0
             intent_classification_latency.observe(latency)
@@ -379,36 +382,38 @@ class SemanticRouter:
             logger.warning(f"LLM intent classification failed, falling back to embeddings: {e}")
             return None
 
+    @staticmethod
+    def _format_history_line(m: Any) -> str:
+        if hasattr(m, "role"):
+            role_label = "USER" if m.role == MessageRole.USER else "BOT"
+        elif getattr(m, "type", "") == "human" or type(m).__name__ == "HumanMessage":
+            role_label = "USER"
+        elif isinstance(m, dict):
+            role_label = "USER" if m.get("role") in ("user", "human") else "BOT"
+        else:
+            role_label = "BOT"
+        content = getattr(m, "content", "") or (m.get("content", "") if isinstance(m, dict) else str(m))
+        return f"{role_label}: {content}"
+
     @classmethod
     def _build_classifier_context(cls, history: List[Any], memory: Optional[dict]) -> str:
-        """
-        Build conversation context for the intent classifier.
-        Short conversations (â‰¤6 msgs): use raw history directly (zero LLM cost).
-        Long conversations (>6 msgs): use structured summary + last 4 raw messages.
-        """
-        from app.models.conversation import MessageRole
+        from app.services.semantic_router import MEMORY_THRESHOLD
 
         if not history:
-            return "New conversation"
+            return "No previous conversation."
 
         if len(history) <= MEMORY_THRESHOLD:
-            # Short conversation â€” raw history is small enough
-            lines = []
-            for m in history[-6:]:
-                role_label = "USER" if m.role == MessageRole.USER else "BOT"
-                lines.append(f"{role_label}: {m.content}")
+            # Short conversation — raw history is small enough
+            lines = [cls._format_history_line(m) for m in history[-6:]]
             return "Recent messages:\n" + "\n".join(lines)
 
-        # Long conversation â€” use summary + recent raw messages
+        # Long conversation — use summary + recent raw messages
         if memory and memory.get("summary"):
             summary = memory.get("summary", "")
             mood = memory.get("user_mood", "unknown")
             phase = memory.get("phase", "unknown")
 
-            lines = []
-            for m in history[-4:]:
-                role_label = "USER" if m.role == MessageRole.USER else "BOT"
-                lines.append(f"{role_label}: {m.content}")
+            lines = [cls._format_history_line(m) for m in history[-4:]]
 
             return (
                 f"Summary: {summary}\n"
@@ -416,11 +421,8 @@ class SemanticRouter:
                 f"Recent:\n" + "\n".join(lines)
             )
 
-        # Long conversation but no summary yet â€” use last 6 raw
-        lines = []
-        for m in history[-6:]:
-            role_label = "USER" if m.role == MessageRole.USER else "BOT"
-            lines.append(f"{role_label}: {m.content}")
+        # Long conversation but no summary yet — use last 6 raw
+        lines = [cls._format_history_line(m) for m in history[-6:]]
         return "Recent messages:\n" + "\n".join(lines)
 
     @classmethod

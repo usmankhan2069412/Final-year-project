@@ -1,0 +1,87 @@
+[
+  {
+    "id": "rw_01",
+    "history": [
+      {"role": "USER", "content": "Tell me about the Aina AI Starter plan."},
+      {"role": "BOT", "content": "The Starter plan includes 3 chatbots, 500 documents, and email support for $15/month."}
+    ],
+    "user_message": "Does it support WhatsApp integration?",
+    "expected_standalone_query": "Does the Aina AI Starter plan support WhatsApp integration?",
+    "test_type": "pronoun_resolution",
+    "language": "en"
+  },
+  {
+    "id": "rw_02",
+    "history": [
+      {"role": "USER", "content": "Aina AI ke Pro plan ke bare mein batao."},
+      {"role": "BOT", "content": "Pro plan mein unlimited chatbots aur dedicated support milti hai."}
+    ],
+    "user_message": "Is ki monthly price kitni hai?",
+    "expected_standalone_query": "Aina AI Pro plan ki monthly price kitni hai?",
+    "test_type": "pronoun_resolution",
+    "language": "roman_urdu"
+  },
+  {
+    "id": "rw_03",
+    "history": [
+      {"role": "USER", "content": "What is the refund policy?"},
+      {"role": "BOT", "content": "You can get a refund within 14 days of purchase if usage is under 100 API calls."}
+    ],
+    "user_message": "How do I apply for that?",
+    "expected_standalone_query": "How do I apply for a refund on Aina AI?",
+    "test_type": "pronoun_resolution",
+    "language": "en"
+  },
+  {
+    "id": "rw_04",
+    "history": [
+      {"role": "USER", "content": "I want to deploy a chatbot on my website."},
+      {"role": "BOT", "content": "You can embed our web widget script tag into your HTML."}
+    ],
+    "user_message": "What is the refund policy for annual subscriptions?",
+    "expected_standalone_query": "What is the refund policy for annual subscriptions?",
+    "test_type": "topic_shift_preservation",
+    "language": "en"
+  },
+  {
+    "id": "rw_05",
+    "history": [
+      {"role": "USER", "content": "How do I upload a PDF document?"},
+      {"role": "BOT", "content": "Go to the Builder page, click Knowledge Base, and upload your PDF."}
+    ],
+    "user_message": "Can I also upload CSV files?",
+    "expected_standalone_query": "Can I upload CSV files to Aina AI Knowledge Base?",
+    "test_type": "context_expansion",
+    "language": "en"
+  },
+  {
+    "id": "rw_06",
+    "history": [],
+    "user_message": "How many members can I invite on the Enterprise tier?",
+    "expected_standalone_query": "How many members can I invite on the Enterprise tier?",
+    "test_type": "no_history_standalone",
+    "language": "en"
+  },
+  {
+    "id": "rw_07",
+    "history": [
+      {"role": "USER", "content": "ہماری تنظیم کے پاس 5 بوٹس ہیں۔"},
+      {"role": "BOT", "content": "بہت اچھا! آپ اپنی ضرورت کے مطابق پلان منتخب کر سکتے ہیں۔"}
+    ],
+    "user_message": "اس کے لیے کون سا پلان بہترین رہے گا؟",
+    "expected_standalone_query": "5 بوٹس کے لیے کون سا پلان بہترین رہے گا؟",
+    "test_type": "pronoun_resolution",
+    "language": "urdu"
+  },
+  {
+    "id": "rw_08",
+    "history": [
+      {"role": "USER", "content": "Tell me about vector embeddings."},
+      {"role": "BOT", "content": "We use Gemini 3072-dimensional embeddings stored in PostgreSQL pgvector."}
+    ],
+    "user_message": "What distance metric is used for search?",
+    "expected_standalone_query": "What distance metric is used for pgvector embedding search in Aina AI?",
+    "test_type": "context_expansion",
+    "language": "en"
+  }
+]

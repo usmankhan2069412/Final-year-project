@@ -1,0 +1,177 @@
+[
+  {
+    "id": "rt_01",
+    "message": "What is the refund policy of Aina AI?",
+    "expected_intent": "RAG_LOOKUP",
+    "language": "en",
+    "category": "factual_query"
+  },
+  {
+    "id": "rt_02",
+    "message": "How much does the professional tier cost per month?",
+    "expected_intent": "RAG_LOOKUP",
+    "language": "en",
+    "category": "pricing_query"
+  },
+  {
+    "id": "rt_03",
+    "message": "Aina platform mein document upload karne ka tareeqa kya hai?",
+    "expected_intent": "RAG_LOOKUP",
+    "language": "roman_urdu",
+    "category": "knowledge_query"
+  },
+  {
+    "id": "rt_04",
+    "message": "کیا واٹس ایپ انٹیگریشن سپورٹڈ ہے؟",
+    "expected_intent": "RAG_LOOKUP",
+    "language": "urdu",
+    "category": "feature_query"
+  },
+  {
+    "id": "rt_05",
+    "message": "Can you tell me about the team member limits on starter plan?",
+    "expected_intent": "RAG_LOOKUP",
+    "language": "en",
+    "category": "quota_query"
+  },
+  {
+    "id": "rt_06",
+    "message": "Hello, good morning!",
+    "expected_intent": "CONVERSATIONAL",
+    "language": "en",
+    "category": "greeting"
+  },
+  {
+    "id": "rt_07",
+    "message": "Assalam o alaikum",
+    "expected_intent": "CONVERSATIONAL",
+    "language": "roman_urdu",
+    "category": "greeting"
+  },
+  {
+    "id": "rt_08",
+    "message": "السلام علیکم، آپ کیسے ہیں؟",
+    "expected_intent": "CONVERSATIONAL",
+    "language": "urdu",
+    "category": "greeting"
+  },
+  {
+    "id": "rt_09",
+    "message": "Thank you so much for your help!",
+    "expected_intent": "CONVERSATIONAL",
+    "language": "en",
+    "category": "gratitude"
+  },
+  {
+    "id": "rt_10",
+    "message": "Bohot shukriya aap ka",
+    "expected_intent": "CONVERSATIONAL",
+    "language": "roman_urdu",
+    "category": "gratitude"
+  },
+  {
+    "id": "rt_11",
+    "message": "Allah hafiz, see you later",
+    "expected_intent": "CONVERSATIONAL",
+    "language": "roman_urdu",
+    "category": "farewell"
+  },
+  {
+    "id": "rt_12",
+    "message": "I want to talk to a human support agent",
+    "expected_intent": "AGENT_HANDOFF",
+    "language": "en",
+    "category": "human_escalation"
+  },
+  {
+    "id": "rt_13",
+    "message": "Mujhe kisi human agent se connect karo",
+    "expected_intent": "AGENT_HANDOFF",
+    "language": "roman_urdu",
+    "category": "human_escalation"
+  },
+  {
+    "id": "rt_14",
+    "message": "Transfer me to your customer care representative",
+    "expected_intent": "AGENT_HANDOFF",
+    "language": "en",
+    "category": "human_escalation"
+  },
+  {
+    "id": "rt_15",
+    "message": "مجھے کسی انسان سے بات کرنی ہے",
+    "expected_intent": "AGENT_HANDOFF",
+    "language": "urdu",
+    "category": "human_escalation"
+  },
+  {
+    "id": "rt_16",
+    "message": "This is totally useless, you don't understand anything!",
+    "expected_intent": "FRUSTRATION",
+    "language": "en",
+    "category": "user_frustration"
+  },
+  {
+    "id": "rt_17",
+    "message": "Bakwas service hai, bilkul samajh nahi aa raha tumhein",
+    "expected_intent": "FRUSTRATION",
+    "language": "roman_urdu",
+    "category": "user_frustration"
+  },
+  {
+    "id": "rt_18",
+    "message": "You are wasting my time, stupid bot",
+    "expected_intent": "FRUSTRATION",
+    "language": "en",
+    "category": "user_frustration"
+  },
+  {
+    "id": "rt_19",
+    "message": "یہ بالکل فضول بوٹ ہے",
+    "expected_intent": "FRUSTRATION",
+    "language": "urdu",
+    "category": "user_frustration"
+  },
+  {
+    "id": "rt_20",
+    "message": "Please translate the above answer into Roman Urdu",
+    "expected_intent": "HISTORY_TRANSFORM",
+    "language": "en",
+    "category": "translation_transform"
+  },
+  {
+    "id": "rt_21",
+    "message": "Is ko thora short aur concise kar do",
+    "expected_intent": "HISTORY_TRANSFORM",
+    "language": "roman_urdu",
+    "category": "shorten_transform"
+  },
+  {
+    "id": "rt_22",
+    "message": "Make it in bullet points",
+    "expected_intent": "HISTORY_TRANSFORM",
+    "language": "en",
+    "category": "format_transform"
+  },
+  {
+    "id": "rt_23",
+    "message": "Summarize the previous response in 2 sentences",
+    "expected_intent": "HISTORY_TRANSFORM",
+    "language": "en",
+    "category": "summary_transform"
+  },
+  {
+    "id": "rt_24",
+    "message": "اس کا خلاصہ لکھیں",
+    "expected_intent": "HISTORY_TRANSFORM",
+    "language": "urdu",
+    "category": "summary_transform"
+  },
+  {
+    "id": "rt_25",
+    "message": "How does pgvector hybrid search work with reciprocal rank fusion?",
+    "expected_intent": "RAG_LOOKUP",
+    "language": "en",
+    "category": "technical_query"
+  }
+]

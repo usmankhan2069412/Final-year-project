@@ -1,0 +1,58 @@
+[
+  {
+    "id": "c_01",
+    "cached_query": "What is the refund policy of Aina AI?",
+    "test_query": "How can I get my money back on Aina AI?",
+    "expected_outcome": "HIT",
+    "description": "Direct semantic paraphrase"
+  },
+  {
+    "id": "c_02",
+    "cached_query": "How do I invite team members to my organization?",
+    "test_query": "Where can I add new members to the team?",
+    "expected_outcome": "HIT",
+    "description": "Synonym paraphrase"
+  },
+  {
+    "id": "c_03",
+    "cached_query": "What are the features of the Starter plan?",
+    "test_query": "Tell me what is included in the Starter tier.",
+    "expected_outcome": "HIT",
+    "description": "Phrasing variation"
+  },
+  {
+    "id": "c_04",
+    "cached_query": "How do I upgrade to the Professional plan?",
+    "test_query": "How do I cancel my Professional subscription?",
+    "expected_outcome": "MISS",
+    "description": "False positive trap: Upgrade vs Cancel"
+  },
+  {
+    "id": "c_05",
+    "cached_query": "How to upload PDF documents?",
+    "test_query": "How to delete uploaded documents?",
+    "expected_outcome": "MISS",
+    "description": "False positive trap: Upload vs Delete"
+  },
+  {
+    "id": "c_06",
+    "cached_query": "What is the token limit for gpt-4o?",
+    "test_query": "What is the token limit for claude-3.5-sonnet?",
+    "expected_outcome": "MISS",
+    "description": "False positive trap: Different entity"
+  },
+  {
+    "id": "c_07",
+    "cached_query": "Aina platform mein document upload karne ka tareeqa kya hai?",
+    "test_query": "Aina par files kaise upload karein?",
+    "expected_outcome": "HIT",
+    "description": "Roman Urdu paraphrase"
+  },
+  {
+    "id": "c_08",
+    "cached_query": "Does Aina support WhatsApp integration?",
+    "test_query": "How do I integrate my bot with WhatsApp?",
+    "expected_outcome": "HIT",
+    "description": "Inquiry vs Setup question"
+  }
+]

@@ -1,0 +1,94 @@
+{
+  "corpus": [
+    {
+      "chunk_id": "chunk_01",
+      "text": "Aina AI Refund Policy: Customers can request a full refund within 14 days of purchase if their API usage is under 100 requests. Enterprise contracts have custom refund terms specified in their SLA."
+    },
+    {
+      "chunk_id": "chunk_02",
+      "text": "Pricing Plans & Tiers: The Starter plan costs $15 per month and allows up to 3 chatbots, 500 uploaded documents, and 2 team members. The Professional plan costs $49 per month with 10 chatbots and unlimited team members."
+    },
+    {
+      "chunk_id": "chunk_03",
+      "text": "WhatsApp Integration: Connect your chatbot to WhatsApp using the Meta Cloud API v21.0. You must provide your WhatsApp Verify Token, Access Token, and Phone Number ID in the Channel Deployments tab."
+    },
+    {
+      "chunk_id": "chunk_04",
+      "text": "Document Ingestion & File Formats: Aina AI supports PDF (via PyMuPDF), Word Documents (.docx via python-docx), CSV files, and Website URLs (crawled via Firecrawl). Maximum single file upload size is 50MB."
+    },
+    {
+      "chunk_id": "chunk_05",
+      "text": "Vector Database & Embeddings: We use Google Gemini 3072-dimensional embeddings (gemini-embedding-2-preview) stored in PostgreSQL with the pgvector extension. Hybrid search combines dense vector distance with TSVECTOR keyword ranking."
+    },
+    {
+      "chunk_id": "chunk_06",
+      "text": "Persona Configuration: Each chatbot can have a custom Persona with name, greeting message, fallback message, and personality traits (e.g., Professional, Empathetic, Concise)."
+    },
+    {
+      "chunk_id": "chunk_07",
+      "text": "Multi-Tenancy & Security: All documents, vectors, and conversations are isolated by organization ID (org_id) using PostgreSQL Row-Level Security (RLS). No data leaks across tenant organizations."
+    },
+    {
+      "chunk_id": "chunk_08",
+      "text": "Human Escalation & Live Handoff: When users express frustration or ask to speak with a human agent, the conversation is marked ESCALATED and routed to the least-busy administrator via Server-Sent Events (SSE)."
+    }
+  ],
+  "queries": [
+    {
+      "id": "ret_01",
+      "query": "How many days do I have to request a refund?",
+      "relevant_chunk_ids": ["chunk_01"],
+      "query_type": "semantic_dense",
+      "language": "en"
+    },
+    {
+      "id": "ret_02",
+      "query": "Meta Cloud API v21.0 Verify Token Access Token",
+      "relevant_chunk_ids": ["chunk_03"],
+      "query_type": "sparse_keyword",
+      "language": "en"
+    },
+    {
+      "id": "ret_03",
+      "query": "What is the monthly price and limits of the Starter plan?",
+      "relevant_chunk_ids": ["chunk_02"],
+      "query_type": "hybrid",
+      "language": "en"
+    },
+    {
+      "id": "ret_04",
+      "query": "PDF aur Word files upload karne ki limit kya hai?",
+      "relevant_chunk_ids": ["chunk_04"],
+      "query_type": "roman_urdu_hybrid",
+      "language": "roman_urdu"
+    },
+    {
+      "id": "ret_05",
+      "query": "How are embeddings stored and searched in PostgreSQL?",
+      "relevant_chunk_ids": ["chunk_05"],
+      "query_type": "semantic_dense",
+      "language": "en"
+    },
+    {
+      "id": "ret_06",
+      "query": "What happens when a user wants to talk to a real human agent?",
+      "relevant_chunk_ids": ["chunk_08"],
+      "query_type": "semantic_dense",
+      "language": "en"
+    },
+    {
+      "id": "ret_07",
+      "query": "PostgreSQL Row-Level Security RLS tenant org_id",
+      "relevant_chunk_ids": ["chunk_07"],
+      "query_type": "sparse_keyword",
+      "language": "en"
+    },
+    {
+      "id": "ret_08",
+      "query": "How can I customize the bot's tone and greeting message?",
+      "relevant_chunk_ids": ["chunk_06"],
+      "query_type": "semantic_dense",
+      "language": "en"
+    }
+  ]
+}
