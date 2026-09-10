@@ -64,9 +64,10 @@ class KnowledgeSource(Base):
     )
 
     # Relationships
-    chunks = relationship("KnowledgeChunk", back_populates="source", cascade="all, delete-orphan")
-    document = relationship("Document", uselist=False, back_populates="source", cascade="all, delete-orphan")
-    jobs = relationship("KnowledgeJob", back_populates="source", cascade="all, delete-orphan")
+    chunks = relationship("KnowledgeChunk", back_populates="source", cascade="all, delete-orphan", passive_deletes=True)
+    document = relationship("Document", uselist=False, back_populates="source", cascade="all, delete-orphan", passive_deletes=True)
+    jobs = relationship("KnowledgeJob", back_populates="source", cascade="all, delete-orphan", passive_deletes=True)
+
 
     @property
     def is_searchable(self) -> bool:

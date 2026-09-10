@@ -7,6 +7,9 @@ docs/
 .agents/
 graphify-out/
 .gemini/
+.architectural diagram/
+.rag_architecture/
+.system architecture/
 # Build outputs
 dist/
 build/

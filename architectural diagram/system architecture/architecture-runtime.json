@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Aina AI Platform Runtime Architecture",
+    "output": "architecture-runtime.html",
+    "quality_profile": "showcase",
+    "viewBox": [1060, 490],
+    "views": [
+      {
+        "id": "rag-chat",
+        "label": "RAG Chat & Streaming",
+        "focus": ["users", "spa", "api", "db", "llm_service"],
+        "note": "User query enters via SPA or Widget, checks semantic cache in PostgreSQL, and streams LLM response via SSE."
+      },
+      {
+        "id": "knowledge-ingestion",
+        "label": "Knowledge Ingestion",
+        "focus": ["spa", "api", "kw_worker", "firecrawl", "db"],
+        "note": "Documents and web URLs are enqueued in PostgreSQL and ingested by Knowledge Worker into pgvector."
+      },
+      {
+        "id": "omnichannel-messaging",
+        "label": "Omnichannel Messaging",
+        "focus": ["users", "meta_api", "api", "db", "msg_worker"],
+        "note": "Inbound WhatsApp messages arrive via webhooks, and replies are reliably delivered by the outbox worker."
+      },
+      {
+        "id": "auth-security",
+        "label": "Security & Identity",
+        "focus": ["users", "google_auth", "auth", "api", "db"],
+        "note": "Authentication via JWT, bcrypt password hashes, and Google OAuth with tenant isolation."
+      }
+    ]
+  },
+  "components": [
+    { "id": "google_auth", "type": "external", "label": "Google OAuth", "sublabel": "ID Token Verification", "pos": [40, 25], "size": [140, 52] },
+    { "id": "users", "type": "external", "label": "Users & Clients", "sublabel": "Browser & Embedded Widget", "pos": [40, 160], "size": [140, 60] },
+    { "id": "spa", "type": "frontend", "label": "React 19 SPA", "sublabel": "Vite :5173 / Wouter", "brand": "react", "pos": [280, 115], "size": [140, 56] },
+    { "id": "widget", "type": "frontend", "label": "Web Chat Widget", "sublabel": "Vanilla JS / widget.js", "pos": [280, 235], "size": [140, 56] },
+    { "id": "auth", "type": "security", "label": "Auth Service", "sublabel": "JWT / Bcrypt / API Keys", "tag": "HS256", "pos": [530, 25], "size": [150, 52] },
+    { "id": "api", "type": "backend", "label": "FastAPI Core API", "sublabel": "Uvicorn :8000 / REST / SSE / WS", "brand": "fastapi", "pos": [530, 145], "size": [150, 64] },
+    { "id": "kw_worker", "type": "backend", "label": "Knowledge Worker", "sublabel": "Doc Parsing & Ingestion", "pos": [530, 275], "size": [150, 56] },
+    { "id": "msg_worker", "type": "backend", "label": "Message Worker", "sublabel": "Transactional Outbox", "pos": [530, 395], "size": [150, 56] },
+    { "id": "llm_service", "type": "external", "label": "LLM & Reranker", "sublabel": "Gemini / OpenRouter / Cohere", "brand": "google-gemini", "pos": [800, 25], "size": [150, 58] },
+    { "id": "db", "type": "database", "label": "PostgreSQL 15", "sublabel": "pgvector & Cache :5432", "brand": "postgresql", "tag": "HNSW halfvec", "pos": [800, 145], "size": [150, 64] },
+    { "id": "firecrawl", "type": "external", "label": "Firecrawl API", "sublabel": "Web Scraper & Crawler", "pos": [800, 275], "size": [150, 56] },
+    { "id": "meta_api", "type": "external", "label": "WhatsApp Cloud", "sublabel": "Meta Graph API v21.0", "brand": "whatsapp", "pos": [800, 395], "size": [150, 56] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Docker Application Stack", "wraps": ["spa", "api", "kw_worker", "msg_worker", "db"] }
+  ],
+  "connections": [
+    { "id": "users-to-google", "from": "users", "to": "google_auth", "label": "Sign In", "fromSide": "top", "toSide": "bottom" },
+    { "id": "google-to-auth", "from": "google_auth", "to": "auth", "label": "Token Auth", "variant": "security", "fromSide": "right", "toSide": "left" },
+    { "id": "users-to-spa", "from": "users", "to": "spa", "label": "HTTPS UI", "variant": "emphasis", "fromSide": "right", "toSide": "left" },
+    { "id": "users-to-widget", "from": "users", "to": "widget", "label": "Embed Chat", "fromSide": "bottom", "toSide": "left" },
+    { "id": "spa-to-api", "from": "spa", "to": "api", "label": "REST / SSE", "fromSide": "right", "toSide": "left" },
+    { "id": "widget-to-api", "from": "widget", "to": "api", "label": "Public SSE", "fromSide": "right", "toSide": "left" },
+    { "id": "auth-to-api", "from": "auth", "to": "api", "label": "Verify JWT", "variant": "security", "fromSide": "bottom", "toSide": "top", "labelDy": 18 },
+    { "id": "api-to-llm", "from": "api", "to": "llm_service", "label": "Chat & Stream", "variant": "emphasis", "fromSide": "top", "toSide": "left" },
+    { "id": "api-to-db", "from": "api", "to": "db", "label": "SQL & Cache", "variant": "emphasis", "fromSide": "right", "toSide": "left" },
+    { "id": "kw-to-db", "from": "kw_worker", "to": "db", "label": "Store Vectors", "fromSide": "top", "toSide": "bottom" },
+    { "id": "kw-to-firecrawl", "from": "kw_worker", "to": "firecrawl", "label": "Scrape Web", "fromSide": "right", "toSide": "left" },
+    { "id": "msg-to-meta", "from": "msg_worker", "to": "meta_api", "label": "Outbound Send", "variant": "dashed", "fromSide": "right", "toSide": "left" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Client & Channel Edge", "items": ["React 19 SPA & embeddable JS widget for end-user chat", "Google OAuth 2.0 and email/password authentication", "Firecrawl web scraping integration for knowledge base ingestion"] },
+    { "dot": "emerald", "title": "Core Backend & Processing", "items": ["FastAPI application with REST, Server-Sent Events (SSE), and WebSocket notifications", "Dedicated Knowledge Worker parsing PDF/DOCX/CSV/TXT and indexing embeddings", "Transactional Outbox Message Worker for reliable WhatsApp delivery"] },
+    { "dot": "violet", "title": "State, RAG & AI Pipeline", "items": ["PostgreSQL 15 relational store with pgvector HNSW indexing", "Semantic Cache bypassing LLM generation on repeated or similar user intents", "LangGraph orchestrating OpenRouter, Google Gemini, and Cohere Rerank-4-fast"] }
+  ]
+}

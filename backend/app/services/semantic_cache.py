@@ -22,6 +22,106 @@ class SemanticCacheService:
         return hashlib.sha256(normalized.encode()).hexdigest()
 
     @classmethod
+    def verify_cache_compatibility(cls, query1: str, query2: str) -> Tuple[bool, Optional[str]]:
+        """
+        Deterministic Guardrail: Validates that two semantically close queries
+        do not contain conflicting polarities, numbers, action antonyms, or entity substitutions.
+        Returns (True, None) if compatible, or (False, rejection_reason) if rejected.
+        """
+        import re
+
+        q1_lower = query1.strip().lower()
+        q2_lower = query2.strip().lower()
+
+        # Token sets (alphanumeric words)
+        words1 = set(re.findall(r"\b\w+\b", q1_lower))
+        words2 = set(re.findall(r"\b\w+\b", q2_lower))
+
+        # 1. Polarity & Negation Guard
+        polarity_pairs = [
+            ("enable", "disable"),
+            ("enabled", "disabled"),
+            ("with", "without"),
+            ("mute", "unmute"),
+            ("muted", "unmuted"),
+            ("activate", "deactivate"),
+            ("connect", "disconnect"),
+            ("install", "uninstall"),
+            ("subscribe", "unsubscribe"),
+            ("allow", "block"),
+            ("allow", "disallow"),
+            ("lock", "unlock"),
+        ]
+        for w1, w2 in polarity_pairs:
+            if (w1 in words1 and w2 in words2) or (w2 in words1 and w1 in words2):
+                return False, f"Polarity mismatch: '{w1}' vs '{w2}'"
+
+        # Phrasal "turn on" / "turn off"
+        has_turn_on = ("turn on" in q1_lower) or ("turn on" in q2_lower)
+        has_turn_off = ("turn off" in q1_lower) or ("turn off" in q2_lower)
+        if has_turn_on and has_turn_off:
+            return False, "Polarity mismatch: 'turn on' vs 'turn off'"
+
+        # Standalone negation check: "with" vs "without"
+        if ("without" in words1 and "without" not in words2 and "with" in words2) or \
+           ("without" in words2 and "without" not in words1 and "with" in words1):
+            return False, "Negation mismatch: 'with' vs 'without'"
+
+        # 2. Action Antonyms Guard
+        action_pairs = [
+            ("upgrade", "cancel"),
+            ("upload", "delete"),
+            ("uploading", "deleting"),
+            ("create", "delete"),
+            ("creating", "deleting"),
+            ("register", "remove"),
+            ("register", "delete"),
+            ("update", "delete"),
+            ("updating", "deleting"),
+        ]
+        for a1, a2 in action_pairs:
+            if (a1 in words1 and a2 in words2) or (a2 in words1 and a1 in words2):
+                return False, f"Action antonym mismatch: '{a1}' vs '{a2}'"
+
+        # 3. Numeric & Parameter Quota Guard
+        clean_q1 = re.sub(r"(\d+),(\d+)", r"\1\2", q1_lower)
+        clean_q2 = re.sub(r"(\d+),(\d+)", r"\1\2", q2_lower)
+        nums1 = set(re.findall(r"\b\d+(?:\.\d+)?\b", clean_q1))
+        nums2 = set(re.findall(r"\b\d+(?:\.\d+)?\b", clean_q2))
+
+        # If both queries specify numbers/codes and they don't match exactly
+        if nums1 and nums2 and nums1 != nums2:
+            return False, f"Numeric parameter mismatch: {nums1} vs {nums2}"
+
+        # 4. Domain Entity Substitution Guard
+        entity_groups = [
+            # Integrations
+            {"slack", "discord", "whatsapp", "telegram", "messenger", "instagram", "واٹس ایپ", "ٹیلی گرام"},
+            # Payment Gateways
+            {"jazzcash", "easypaisa", "stripe", "paypal", "credit card", "bank wire"},
+            # AI Models
+            {"gpt-4o", "gpt-4o-mini", "claude-3.5-sonnet", "claude-3-opus", "gemini-1.5-pro", "llama-3"},
+            # RBAC Roles
+            {"admin", "viewer", "editor", "member", "owner"},
+            # Subscription Tiers
+            {"starter", "professional", "enterprise", "free"},
+        ]
+
+        for group in entity_groups:
+            found1 = {e for e in group if e in q1_lower}
+            found2 = {e for e in group if e in q2_lower}
+            # Normalize "pro" alias to "professional"
+            if "pro" in words1 and "professional" in group:
+                found1.add("professional")
+            if "pro" in words2 and "professional" in group:
+                found2.add("professional")
+
+            if found1 and found2 and found1 != found2:
+                return False, f"Entity substitution mismatch: {found1} vs {found2}"
+
+        return True, None
+
+    @classmethod
     def check_cache(
         cls, 
         org_id: str, 
@@ -73,6 +173,15 @@ class SemanticCacheService:
             if row:
                 match, distance = row
                 similarity_score = 1.0 - float(distance)
+
+                # Deterministic Guardrail Check
+                is_compatible, guard_reason = cls.verify_cache_compatibility(match.query_text, rewritten_query)
+                if not is_compatible:
+                    logger.info(
+                        f"Semantic Cache candidate rejected by guardrail for chatbot {chatbot_id}: "
+                        f"{guard_reason} (similarity: {similarity_score:.4f})"
+                    )
+                    return None, None, None
                 
                 match.hit_count += 1
                 match.last_accessed_at = now
@@ -201,7 +310,16 @@ class SemanticCacheService:
             if row:
                 match, distance = row
                 similarity_score = 1.0 - float(distance)
-                
+
+                # Deterministic Guardrail Check
+                is_compatible, guard_reason = cls.verify_cache_compatibility(match.query_text, rewritten_query)
+                if not is_compatible:
+                    logger.info(
+                        f"Semantic Cache candidate rejected by guardrail for chatbot {chatbot_id} (async): "
+                        f"{guard_reason} (similarity: {similarity_score:.4f})"
+                    )
+                    return None, None, None
+
                 match.hit_count += 1
                 match.last_accessed_at = now
                 await db.commit()

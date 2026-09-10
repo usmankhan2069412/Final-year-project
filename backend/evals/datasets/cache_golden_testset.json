@@ -4,6 +4,9 @@
     "cached_query": "What is the refund policy of Aina AI?",
     "test_query": "How can I get my money back on Aina AI?",
     "expected_outcome": "HIT",
+    "category": "direct_paraphrase",
+    "difficulty": "easy",
+    "language": "en",
     "description": "Direct semantic paraphrase"
   },
   {
@@ -11,6 +14,9 @@
     "cached_query": "How do I invite team members to my organization?",
     "test_query": "Where can I add new members to the team?",
     "expected_outcome": "HIT",
+    "category": "synonym_substitution",
+    "difficulty": "easy",
+    "language": "en",
     "description": "Synonym paraphrase"
   },
   {
@@ -18,6 +24,9 @@
     "cached_query": "What are the features of the Starter plan?",
     "test_query": "Tell me what is included in the Starter tier.",
     "expected_outcome": "HIT",
+    "category": "phrasing_variation",
+    "difficulty": "medium",
+    "language": "en",
     "description": "Phrasing variation"
   },
   {
@@ -25,6 +34,9 @@
     "cached_query": "How do I upgrade to the Professional plan?",
     "test_query": "How do I cancel my Professional subscription?",
     "expected_outcome": "MISS",
+    "category": "action_antonym",
+    "difficulty": "hard",
+    "language": "en",
     "description": "False positive trap: Upgrade vs Cancel"
   },
   {
@@ -32,6 +44,9 @@
     "cached_query": "How to upload PDF documents?",
     "test_query": "How to delete uploaded documents?",
     "expected_outcome": "MISS",
+    "category": "action_antonym",
+    "difficulty": "hard",
+    "language": "en",
     "description": "False positive trap: Upload vs Delete"
   },
   {
@@ -39,6 +54,9 @@
     "cached_query": "What is the token limit for gpt-4o?",
     "test_query": "What is the token limit for claude-3.5-sonnet?",
     "expected_outcome": "MISS",
+    "category": "entity_swap",
+    "difficulty": "hard",
+    "language": "en",
     "description": "False positive trap: Different entity"
   },
   {
@@ -46,6 +64,9 @@
     "cached_query": "Aina platform mein document upload karne ka tareeqa kya hai?",
     "test_query": "Aina par files kaise upload karein?",
     "expected_outcome": "HIT",
+    "category": "multilingual_roman_urdu",
+    "difficulty": "medium",
+    "language": "roman_urdu",
     "description": "Roman Urdu paraphrase"
   },
   {
@@ -53,6 +74,289 @@
     "cached_query": "Does Aina support WhatsApp integration?",
     "test_query": "How do I integrate my bot with WhatsApp?",
     "expected_outcome": "HIT",
+    "category": "syntactic_inversion",
+    "difficulty": "medium",
+    "language": "en",
     "description": "Inquiry vs Setup question"
+  },
+  {
+    "id": "c_09",
+    "cached_query": "How do I enable two-factor authentication on my account?",
+    "test_query": "How do I disable two-factor authentication on my account?",
+    "expected_outcome": "MISS",
+    "category": "negation_trap",
+    "difficulty": "adversarial",
+    "language": "en",
+    "description": "Negation trap: Enable vs Disable 2FA"
+  },
+  {
+    "id": "c_10",
+    "cached_query": "Can I use Aina AI platform without adding a credit card?",
+    "test_query": "Can I use Aina AI platform with a credit card?",
+    "expected_outcome": "MISS",
+    "category": "negation_trap",
+    "difficulty": "adversarial",
+    "language": "en",
+    "description": "Negation trap: With vs Without credit card"
+  },
+  {
+    "id": "c_11",
+    "cached_query": "How can I turn on automatic subscription renewal?",
+    "test_query": "How can I turn off automatic subscription renewal?",
+    "expected_outcome": "MISS",
+    "category": "negation_trap",
+    "difficulty": "adversarial",
+    "language": "en",
+    "description": "Negation trap: Turn on vs Turn off auto-renew"
+  },
+  {
+    "id": "c_12",
+    "cached_query": "How do I connect Slack to my customer support bot?",
+    "test_query": "How do I connect Discord to my customer support bot?",
+    "expected_outcome": "MISS",
+    "category": "entity_swap",
+    "difficulty": "hard",
+    "language": "en",
+    "description": "Entity swap: Slack vs Discord integration"
+  },
+  {
+    "id": "c_13",
+    "cached_query": "What permissions are granted to the Admin role?",
+    "test_query": "What permissions are granted to the Viewer role?",
+    "expected_outcome": "MISS",
+    "category": "entity_swap",
+    "difficulty": "hard",
+    "language": "en",
+    "description": "Entity swap: Admin vs Viewer RBAC permissions"
+  },
+  {
+    "id": "c_14",
+    "cached_query": "Can I pay for my subscription using JazzCash in Pakistan?",
+    "test_query": "Can I pay for my subscription using EasyPaisa in Pakistan?",
+    "expected_outcome": "MISS",
+    "category": "entity_swap",
+    "difficulty": "hard",
+    "language": "en",
+    "description": "Entity swap: JazzCash vs EasyPaisa payment gateway"
+  },
+  {
+    "id": "c_15",
+    "cached_query": "How many chatbots can I create on the Starter plan?",
+    "test_query": "How many chatbots can I create on the Enterprise plan?",
+    "expected_outcome": "MISS",
+    "category": "numerical_quota_shift",
+    "difficulty": "hard",
+    "language": "en",
+    "description": "Quota shift: Starter (3 bots) vs Enterprise limits"
+  },
+  {
+    "id": "c_16",
+    "cached_query": "How do I export interaction analytics for the past 7 days?",
+    "test_query": "How do I export interaction analytics for the past 90 days?",
+    "expected_outcome": "MISS",
+    "category": "numerical_quota_shift",
+    "difficulty": "hard",
+    "language": "en",
+    "description": "Parameter shift: 7-day vs 90-day analytics window"
+  },
+  {
+    "id": "c_17",
+    "cached_query": "What happens when my knowledge base exceeds 500 documents?",
+    "test_query": "What happens when my knowledge base exceeds 50,000 documents?",
+    "expected_outcome": "MISS",
+    "category": "numerical_quota_shift",
+    "difficulty": "hard",
+    "language": "en",
+    "description": "Quota shift: Tier document threshold 500 vs 50,000"
+  },
+  {
+    "id": "c_18",
+    "cached_query": "How do I register a new webhook endpoint for message events?",
+    "test_query": "How do I delete or remove an existing webhook endpoint?",
+    "expected_outcome": "MISS",
+    "category": "action_antonym",
+    "difficulty": "hard",
+    "language": "en",
+    "description": "Action antonym: Register vs Delete webhook"
+  },
+  {
+    "id": "c_19",
+    "cached_query": "How do I mute notification alerts from active chats?",
+    "test_query": "How do I unmute notification alerts from active chats?",
+    "expected_outcome": "MISS",
+    "category": "action_antonym",
+    "difficulty": "hard",
+    "language": "en",
+    "description": "Action antonym: Mute vs Unmute notifications"
+  },
+  {
+    "id": "c_20",
+    "cached_query": "How does document ingestion and chunking work in Aina?",
+    "test_query": "What exact token chunk size and chunk overlap integers are configured for the text splitter?",
+    "expected_outcome": "MISS",
+    "category": "granularity_mismatch",
+    "difficulty": "hard",
+    "language": "en",
+    "description": "Granularity mismatch: High-level overview vs exact chunk parameters"
+  },
+  {
+    "id": "c_21",
+    "cached_query": "How can I delete my organization account?",
+    "test_query": "Mera org account delete karne ka tareeqa kya hai?",
+    "expected_outcome": "HIT",
+    "category": "multilingual_roman_urdu",
+    "difficulty": "medium",
+    "language": "roman_urdu",
+    "description": "Cross-lingual paraphrase: English vs Roman Urdu account deletion"
+  },
+  {
+    "id": "c_22",
+    "cached_query": "Why am I getting an HTTP 401 Unauthorized error when calling the API?",
+    "test_query": "Why am I getting an HTTP 429 Too Many Requests rate limit error when calling the API?",
+    "expected_outcome": "MISS",
+    "category": "error_code_trap",
+    "difficulty": "hard",
+    "language": "en",
+    "description": "Technical error trap: 401 Auth failure vs 429 Rate limiting"
+  },
+  {
+    "id": "c_23",
+    "cached_query": "How do I update credit card billing details?",
+    "test_query": "Where can I enter a new payment method for my subscription?",
+    "expected_outcome": "HIT",
+    "category": "synonym_substitution",
+    "difficulty": "medium",
+    "language": "en",
+    "description": "Synonym substitution: Update credit card vs enter new payment method"
+  },
+  {
+    "id": "c_24",
+    "cached_query": "Aina bot ka display name aur persona kaise update karein?",
+    "test_query": "Aina bot ko permanently delete karne ka procedure kya hai?",
+    "expected_outcome": "MISS",
+    "category": "multilingual_roman_urdu",
+    "difficulty": "hard",
+    "language": "roman_urdu",
+    "description": "Roman Urdu trap: Update bot persona vs Permanently delete bot"
+  },
+  {
+    "id": "c_25",
+    "cached_query": "کیا میں اپنے واٹس ایپ بزنس نمبر کو بوٹ کے ساتھ جوڑ سکتا ہوں؟",
+    "test_query": "کیا میں اپنے ٹیلی گرام چینل کو بوٹ کے ساتھ جوڑ سکتا ہوں؟",
+    "expected_outcome": "MISS",
+    "category": "multilingual_urdu",
+    "difficulty": "hard",
+    "language": "urdu",
+    "description": "Urdu script entity trap: WhatsApp vs Telegram channel connection"
+  },
+  {
+    "id": "c_26",
+    "cached_query": "Does Aina provide an on-premise self-hosted deployment option?",
+    "test_query": "Can we host and deploy Aina on our own private infrastructure?",
+    "expected_outcome": "HIT",
+    "category": "direct_paraphrase",
+    "difficulty": "medium",
+    "language": "en",
+    "description": "Direct paraphrase: On-premise self-hosted vs own private infrastructure"
+  },
+  {
+    "id": "c_27",
+    "cached_query": "How do I reset my forgotten account password?",
+    "test_query": "I cannot remember my login password, what are the steps to recover it?",
+    "expected_outcome": "HIT",
+    "category": "direct_paraphrase",
+    "difficulty": "medium",
+    "language": "en",
+    "description": "Semantic paraphrase: Reset password vs Recover forgotten login"
+  },
+  {
+    "id": "c_28",
+    "cached_query": "Where can I view my monthly API usage and billing invoices?",
+    "test_query": "How do I check my monthly consumption metrics and download payment receipts?",
+    "expected_outcome": "HIT",
+    "category": "synonym_substitution",
+    "difficulty": "medium",
+    "language": "en",
+    "description": "Synonym substitution: Invoices & usage vs receipts & consumption"
+  },
+  {
+    "id": "c_29",
+    "cached_query": "Can multiple administrators manage the same organization workspace?",
+    "test_query": "Is it possible for more than one admin user to have co-management access to the org?",
+    "expected_outcome": "HIT",
+    "category": "syntactic_inversion",
+    "difficulty": "hard",
+    "language": "en",
+    "description": "Syntactic complexity: Multi-admin permissions inquiry"
+  },
+  {
+    "id": "c_30",
+    "cached_query": "Pricing?",
+    "test_query": "Hi support team, could you please provide a comprehensive breakdown of your platform pricing plans?",
+    "expected_outcome": "HIT",
+    "category": "length_verbosity_mismatch",
+    "difficulty": "hard",
+    "language": "en",
+    "description": "Verbosity mismatch: Ultra-concise keyword vs verbose polite question"
+  },
+  {
+    "id": "c_31",
+    "cached_query": "What file formats are supported for document upload?",
+    "test_query": "Which file types can I upload to the knowledge base (e.g. PDF, DOCX, TXT)?",
+    "expected_outcome": "HIT",
+    "category": "phrasing_variation",
+    "difficulty": "medium",
+    "language": "en",
+    "description": "Phrasing variation: Supported file formats with parenthetical examples"
+  },
+  {
+    "id": "c_32",
+    "cached_query": "How do I change the temperature and system prompt of my bot?",
+    "test_query": "Where in the settings can I adjust my chatbot's system prompt and temperature parameter?",
+    "expected_outcome": "HIT",
+    "category": "phrasing_variation",
+    "difficulty": "medium",
+    "language": "en",
+    "description": "Configuration paraphrase: Adjust temperature & system prompt"
+  },
+  {
+    "id": "c_33",
+    "cached_query": "How do I generate a new API secret key?",
+    "test_query": "how do i genrate a new api secert key?",
+    "expected_outcome": "HIT",
+    "category": "typo_and_casing_noise",
+    "difficulty": "medium",
+    "language": "en",
+    "description": "Typo & casing noise: Lowercase and misspelled words ('genrate', 'secert')"
+  },
+  {
+    "id": "c_34",
+    "cached_query": "Is there a free trial period for the Professional plan?",
+    "test_query": "Can I try out the Pro tier for free before being charged?",
+    "expected_outcome": "HIT",
+    "category": "synonym_substitution",
+    "difficulty": "medium",
+    "language": "en",
+    "description": "Colloquial paraphrase: Pro tier free trial vs try before charged"
+  },
+  {
+    "id": "c_35",
+    "cached_query": "Aina AI par naya chatbot kaise create karein?",
+    "test_query": "Aina platform par fresh bot banane ka tarika kya hai?",
+    "expected_outcome": "HIT",
+    "category": "multilingual_roman_urdu",
+    "difficulty": "medium",
+    "language": "roman_urdu",
+    "description": "Roman Urdu paraphrase: Naya bot create vs Fresh bot banane ka tarika"
+  },
+  {
+    "id": "c_36",
+    "cached_query": "رقم کی واپسی کی کیا شرائط و ضوابط ہیں؟",
+    "test_query": "میں اپنے پیسے واپس لینے کی درخواست کیسے دائر کر سکتا ہوں؟",
+    "expected_outcome": "HIT",
+    "category": "multilingual_urdu",
+    "difficulty": "hard",
+    "language": "urdu",
+    "description": "Urdu script paraphrase: Refund terms & conditions vs How to file refund request"
   }
 ]

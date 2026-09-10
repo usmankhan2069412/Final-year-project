@@ -15,6 +15,12 @@ import argparse
 import asyncio
 from pathlib import Path
 
+# Ensure UTF-8 output encoding on Windows consoles
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if sys.stderr and hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 # Ensure backend root is on Python path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 

@@ -1,8 +1,14 @@
+from typing import Tuple
 import logging
 import structlog
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy.exc import SQLAlchemyError
+
+try:
+    from asyncpg.exceptions import AsyncpgException
+except ImportError:
+    AsyncpgException = None
 
 from app.core.config import settings
 from app.db.base import Base  # Ensure all models are registered
@@ -152,20 +158,84 @@ else:
         allow_headers=["*"],
     )
 
-# 🛡️ Global Database Exception Handler
-# Prevents backend from crashing on db connection failures and keeps details out of the API response
-@app.exception_handler(SQLAlchemyError)
-def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
-    # Log the real error securely on the server side so developers can diagnose it
-    logger.error("Database connection or query execution failure: %s", str(exc), exc_info=True)
-    
-    # Return a clean, safe, and structured 503 response to the frontend client
+# 🛡️ Global Database Exception Handler & Diagnostic Classifier
+# Prevents backend from crashing on db connection failures and provides actionable diagnostics
+def classify_db_error(exc: Exception) -> Tuple[str, str]:
+    """
+    Analyzes database exceptions (SQLAlchemyError or AsyncpgException) and returns:
+    (error_code, human_friendly_diagnostic_hint)
+    """
+    exc_str = str(exc).lower()
+    exc_repr = repr(exc).lower()
+    full_text = f"{exc_str} {exc_repr}"
+
+    if "eauthtimeout" in full_text or "timeout while waiting for message" in full_text:
+        return (
+            "DB_AUTH_TIMEOUT",
+            "Database authentication timed out while waiting for the PostgreSQL server to respond. "
+            "If using cloud-hosted PostgreSQL (e.g. Supabase or Neon), the database compute may have been paused (cold start) "
+            "or experienced a transient network latency spike. Subsequent retries usually succeed immediately.",
+        )
+    elif "connectionrefused" in full_text or "econnrefused" in full_text or "could not connect to server" in full_text:
+        return (
+            "DB_CONNECTION_REFUSED",
+            "Could not establish a connection to PostgreSQL. Please verify that the database server is running and reachable.",
+        )
+    elif "password authentication failed" in full_text or "invalidpassworderror" in full_text:
+        return (
+            "DB_AUTH_FAILED",
+            "PostgreSQL password authentication failed. Please verify credentials in DATABASE_URL in your .env file.",
+        )
+    elif "too many clients" in full_text or "remaining connection slots are reserved" in full_text or "pooltimeout" in full_text:
+        return (
+            "DB_POOL_EXHAUSTED",
+            "PostgreSQL connection limit reached or connection pool timed out. Check active connections or pool_size settings.",
+        )
+    elif "timeout" in full_text:
+        return (
+            "DB_TIMEOUT",
+            "Database operation or connection attempt timed out.",
+        )
+    else:
+        return (
+            "DB_UNAVAILABLE",
+            "Database service is temporarily unavailable. Please verify that the database server is running and reachable.",
+        )
+
+
+def _handle_database_exception(request: Request, exc: Exception) -> JSONResponse:
+    error_code, hint = classify_db_error(exc)
+    logger.error(
+        "DATABASE FAILURE [%s] on %s %s: %s\n"
+        "💡 DIAGNOSIS [%s]: %s",
+        exc.__class__.__name__,
+        request.method,
+        request.url.path,
+        str(exc),
+        error_code,
+        hint,
+        exc_info=True,
+    )
     return JSONResponse(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         content={
-            "detail": "Database service is temporarily unavailable. Please verify that the database server is running and connection credentials in your .env file are correct."
-        }
+            "detail": "Database service is temporarily unavailable. Please retry shortly.",
+            "error_code": error_code,
+            "hint": hint,
+        },
     )
+
+
+@app.exception_handler(SQLAlchemyError)
+async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
+    return _handle_database_exception(request, exc)
+
+
+if AsyncpgException is not None:
+    @app.exception_handler(AsyncpgException)
+    async def asyncpg_exception_handler(request: Request, exc: AsyncpgException):
+        return _handle_database_exception(request, exc)
+
 
 # Include Routers
 app.include_router(auth_router, prefix=f"{settings.API_V1_STR}/auth", tags=["auth"])

@@ -7,7 +7,9 @@ from pathlib import Path
 from urllib.parse import urlparse
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import select, func, or_
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from fastapi import UploadFile
 
 from app.core.config import settings
@@ -442,7 +444,9 @@ class KnowledgeService:
     @classmethod
     async def delete_source(cls, db: AsyncSession, org_id: uuid.UUID, source_id: uuid.UUID) -> bool:
         result = await db.execute(
-            select(KnowledgeSource).where(
+            select(KnowledgeSource)
+            .options(selectinload(KnowledgeSource.document))
+            .where(
                 KnowledgeSource.id == source_id,
                 KnowledgeSource.org_id == org_id
             )
@@ -450,6 +454,7 @@ class KnowledgeService:
         source = result.scalar_one_or_none()
         if not source:
             return False
+
 
         try:
             if source.document and source.source_type in [SourceType.FILE, SourceType.WEBSITE]:

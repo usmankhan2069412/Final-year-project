@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Aina AI Platform — In-Depth RAG Architecture & Workflow",
+    "output": "rag-architecture.html",
+    "quality_profile": "showcase",
+    "viewBox": [1100, 480],
+    "views": [
+      {
+        "id": "full-rag-loop",
+        "label": "Complete RAG Request Loop",
+        "focus": ["client", "router", "rewriter", "semantic_cache", "retriever", "reranker", "generator"],
+        "note": "Follow the end-to-end question answering lifecycle from user message to streaming response."
+      },
+      {
+        "id": "semantic-caching",
+        "label": "Semantic Cache Fast Path",
+        "focus": ["client", "router", "rewriter", "semantic_cache"],
+        "note": "Cosine similarity >= 0.65 with version checks and polarity guardrails allows immediate response delivery."
+      },
+      {
+        "id": "hybrid-search-rerank",
+        "label": "Hybrid Search & Cohere Rerank",
+        "focus": ["retriever", "vector_store", "reranker", "generator"],
+        "note": "Multi-query dense + sparse RRF retrieval validated by Cohere cross-encoder before LLM generation."
+      },
+      {
+        "id": "ingestion-track",
+        "label": "Document & Web Ingestion",
+        "focus": ["ingest_api", "extractor", "chunker", "embedding", "vector_store"],
+        "note": "Documents and websites are parsed, chunked, embedded, and indexed with version bumps."
+      }
+    ]
+  },
+  "components": [
+    { "id": "ingest_api", "type": "backend", "label": "Ingestion Manager", "sublabel": "FastAPI & Worker", "pos": [40, 30], "size": [140, 56] },
+    { "id": "extractor", "type": "backend", "label": "Text & Web Extractor", "sublabel": "Doc & Web Extractor", "pos": [270, 30], "size": [140, 56] },
+    { "id": "chunker", "type": "backend", "label": "Recursive Chunker", "sublabel": "500-Token Chunker", "pos": [500, 30], "size": [140, 56] },
+    { "id": "embedding", "type": "external", "label": "Embedding Service", "sublabel": "Gemini / OpenRouter", "tag": "1536-d", "brand": "google-gemini", "pos": [730, 30], "size": [140, 56] },
+    { "id": "client", "type": "frontend", "label": "Chat Client", "sublabel": "SPA / Web Widget", "pos": [40, 200], "size": [140, 64] },
+    { "id": "router", "type": "security", "label": "Semantic Router", "sublabel": "3-Tier Intent Router", "tag": "3-Tier", "pos": [270, 185], "size": [140, 62] },
+    { "id": "rewriter", "type": "backend", "label": "Query Rewriter", "sublabel": "Context & History", "pos": [500, 185], "size": [140, 62] },
+    { "id": "semantic_cache", "type": "database", "label": "Semantic Cache", "sublabel": "Guardrails & Cosine", "tag": "Cosine 0.65", "pos": [730, 185], "size": [140, 62] },
+    { "id": "vector_store", "type": "database", "label": "PostgreSQL pgvector", "sublabel": "pgvector & tsvector", "brand": "postgresql", "tag": "HNSW + RRF", "pos": [940, 185], "size": [140, 72] },
+    { "id": "retriever", "type": "backend", "label": "Hybrid Retriever", "sublabel": "Dense + Sparse RRF", "pos": [730, 340], "size": [140, 66] },
+    { "id": "reranker", "type": "external", "label": "Cohere Reranker", "sublabel": "cohere/rerank-4-fast", "tag": "Cross-Attention", "pos": [500, 340], "size": [140, 62] },
+    { "id": "generator", "type": "external", "label": "LLM Generator", "sublabel": "LLM Streaming SSE", "brand": "openai", "pos": [270, 340], "size": [140, 66] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Knowledge Ingestion Pipeline", "wraps": ["ingest_api", "extractor", "chunker", "embedding"] }
+  ],
+  "connections": [
+    { "id": "ingest-to-extract", "from": "ingest_api", "to": "extractor", "label": "Docs & URLs", "fromSide": "right", "toSide": "left" },
+    { "id": "extract-to-chunk", "from": "extractor", "to": "chunker", "label": "Extracted Text", "fromSide": "right", "toSide": "left" },
+    { "id": "chunk-to-embed", "from": "chunker", "to": "embedding", "label": "500-Token Chunks", "fromSide": "right", "toSide": "left" },
+    { "id": "embed-to-store", "from": "embedding", "to": "vector_store", "label": "Store Vectors", "fromSide": "right", "toSide": "top" },
+    { "id": "client-to-router", "from": "client", "to": "router", "label": "User Query", "variant": "emphasis", "fromSide": "right", "toSide": "left" },
+    { "id": "router-to-rewrite", "from": "router", "to": "rewriter", "label": "RAG Lookup", "variant": "emphasis", "fromSide": "right", "toSide": "left" },
+    { "id": "rewrite-to-cache", "from": "rewriter", "to": "semantic_cache", "label": "Cache Check", "variant": "security", "fromSide": "right", "toSide": "left" },
+    { "id": "cache-to-retrieve", "from": "semantic_cache", "to": "retriever", "label": "Cache Miss", "fromSide": "bottom", "toSide": "top", "labelDy": 18 },
+    { "id": "retrieve-to-store", "from": "retriever", "to": "vector_store", "label": "Hybrid Search", "variant": "emphasis", "fromSide": "right", "toSide": "bottom" },
+    { "id": "retrieve-to-rerank", "from": "retriever", "to": "reranker", "label": "Top 4 Chunks", "fromSide": "left", "toSide": "right", "labelDy": -35 },
+    { "id": "rerank-to-gen", "from": "reranker", "to": "generator", "label": "Scored Chunks", "variant": "emphasis", "fromSide": "left", "toSide": "right", "labelDy": -34 },
+    { "id": "gen-to-client", "from": "generator", "to": "client", "label": "SSE Stream", "variant": "emphasis", "fromSide": "left", "toSide": "bottom" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Ingestion & Indexing Pipeline", "items": ["Multi-format extraction for PDF, DOCX, CSV, TXT, and Firecrawl web scraping", "Recursive chunking into 500-token blocks with 50-token semantic overlap", "Batched 1536-dimensional embeddings stored in PostgreSQL with HNSW and tsvector indexes"] },
+    { "dot": "emerald", "title": "Semantic Intent & Caching Guardrails", "items": ["3-tier semantic routing for conversational chitchat, human handoff, and RAG lookups", "Context-aware query rewriting resolving chat history and pronoun references", "Deterministic cache guardrails preventing polarity, negation, and action-antonym mismatches"] },
+    { "dot": "violet", "title": "Hybrid Retrieval & Rerank Pipeline", "items": ["Reciprocal Rank Fusion (RRF) combining dense vector similarity and sparse BM25 lexical search", "Multi-query retrieval interleaving and deduplicating original and rewritten search queries", "Cohere Rerank-4-fast cross-attention scoring filtering chunks below 0.3 relevance threshold"] }
+  ]
+}

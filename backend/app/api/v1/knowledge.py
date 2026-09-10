@@ -3,7 +3,9 @@ import logging
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
+
 
 from pydantic import BaseModel
 from app.api.deps import get_tenant_db, get_current_org_id
@@ -168,12 +170,15 @@ async def get_knowledge_source(
 ):
     try:
         result = await db.execute(
-            select(KnowledgeSource).where(
+            select(KnowledgeSource)
+            .options(selectinload(KnowledgeSource.chunks))
+            .where(
                 KnowledgeSource.id == source_id,
                 KnowledgeSource.org_id == org_id
             )
         )
         source = result.scalar_one_or_none()
+
         if not source:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Knowledge source not found")
         return source
