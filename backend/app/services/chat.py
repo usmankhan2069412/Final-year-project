@@ -1021,7 +1021,7 @@ class ChatService:
         cls, db: AsyncSession, org_id: uuid.UUID, chatbot_id: uuid.UUID, user_message: str, conversation_id: Optional[uuid.UUID] = None, deployment_id: Optional[uuid.UUID] = None, callbacks: Optional[List[Any]] = None, background_tasks: Optional[BackgroundTasks] = None, status_queue: Optional[Any] = None
     ) -> Dict[str, Any]:
 
-        # 1. Fetch resources
+        # 1. Fetch Chatbot
         result = await db.execute(
             select(Chatbot).filter(
                 Chatbot.id == chatbot_id,
@@ -1033,6 +1033,51 @@ class ChatService:
         if not chatbot:
             raise ValueError("Chatbot not found or inaccessible")
 
+        # 2. Resolve session & Fast-Path for Escalated Conversations
+        is_new_conv = False
+        if conversation_id:
+            result = await db.execute(
+                select(Conversation).filter(
+                    Conversation.id == conversation_id,
+                    Conversation.chatbot_id == chatbot_id,
+                    Conversation.deleted_at == None
+                )
+            )
+            conversation = result.scalar_one_or_none()
+            if not conversation:
+                raise ValueError("Conversation session not found")
+
+            logger.info(f"[ESCALATION DEBUG] Found conversation {conversation_id}, status={conversation.status}")
+
+            # FAST-PATH: If already escalated, bypass Persona, AI Model, and RAG initialization completely
+            if conversation.status == ConversationStatus.ESCALATED:
+                logger.info(f"[ESCALATION DEBUG] Conversation {conversation.id} is ESCALATED → FAST-PATH handle_escalated_message")
+                from app.services.escalation_router import EscalationRouter
+                return await EscalationRouter.ahandle_escalated_message(
+                    db=db,
+                    conversation=conversation,
+                    chatbot=chatbot,
+                    org_id=org_id,
+                    user_message=user_message,
+                    language=None,
+                    active_config_id=None,
+                    background_tasks=background_tasks
+                )
+
+            # If resolved, auto-resume bot
+            if conversation.status == ConversationStatus.RESOLVED:
+                conversation.status = ConversationStatus.ONGOING
+                conversation.assigned_agent_id = None
+                db.add(conversation)
+                await db.flush()
+        else:
+            logger.info("[ESCALATION DEBUG] No conversation_id provided, creating new conversation")
+            conversation = Conversation(chatbot_id=chatbot_id, status=ConversationStatus.ONGOING, deployment_id=deployment_id)
+            db.add(conversation)
+            await db.flush()
+            is_new_conv = True
+
+        # 3. Fetch Persona & AI Model configuration (Only needed for active RAG execution)
         from sqlalchemy.orm import selectinload
         result = await db.execute(
             select(Persona).options(selectinload(Persona.traits)).filter(
@@ -1046,7 +1091,7 @@ class ChatService:
 
         traits = [t.trait_name for t in persona.traits]
 
-        # 2. Resolve credentials safely
+        # 4. Resolve credentials safely
         api_key = None
         routing_rules_dict = {}
 
@@ -1079,51 +1124,7 @@ class ChatService:
             # If no provider is explicitly configured, use OpenRouter by default
             api_key = "managed-by-openrouter"
 
-        # 3. Resolve session
-        is_new_conv = False
-        if conversation_id:
-            result = await db.execute(
-                select(Conversation).filter(
-                    Conversation.id == conversation_id,
-                    Conversation.chatbot_id == chatbot_id,
-                    Conversation.deleted_at == None
-                )
-            )
-            conversation = result.scalar_one_or_none()
-            if not conversation:
-                raise ValueError("Conversation session not found")
-
-            logger.info(f"[ESCALATION DEBUG] Found conversation {conversation_id}, status={conversation.status}")
-
-            # If resolved, auto-resume bot
-            if conversation.status == ConversationStatus.RESOLVED:
-                conversation.status = ConversationStatus.ONGOING
-                conversation.assigned_agent_id = None
-                db.add(conversation)
-                await db.flush()
-        else:
-            logger.info("[ESCALATION DEBUG] No conversation_id provided, creating new conversation")
-            conversation = Conversation(chatbot_id=chatbot_id, status=ConversationStatus.ONGOING, deployment_id=deployment_id)
-            db.add(conversation)
-            await db.flush()
-            is_new_conv = True
-
-        # If already escalated, bypass RAG execution
-        if conversation.status == ConversationStatus.ESCALATED:
-            logger.info(f"[ESCALATION DEBUG] Conversation {conversation.id} is ESCALATED → calling handle_escalated_message")
-            from app.services.escalation_router import EscalationRouter
-            return await EscalationRouter.ahandle_escalated_message(
-                db=db,
-                conversation=conversation,
-                chatbot=chatbot,
-                org_id=org_id,
-                user_message=user_message,
-                language=persona.language,
-                active_config_id=active_config.id if active_config else None,
-                background_tasks=background_tasks
-            )
-        else:
-            logger.info(f"[ESCALATION DEBUG] Conversation {conversation.id} status={conversation.status} → proceeding with RAG")
+        logger.info(f"[ESCALATION DEBUG] Conversation {conversation.id} status={conversation.status} → proceeding with RAG")
 
         start_date = conversation.started_at
         end_date = datetime.now(timezone.utc)

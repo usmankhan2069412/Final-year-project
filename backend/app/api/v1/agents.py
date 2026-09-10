@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, joinedload
 
 from app.api.deps import get_tenant_db, get_current_org_id, get_current_user_or_api_key
 from app.models.user import User
@@ -97,20 +97,18 @@ async def reply_to_conversation(
     stmt = (
         select(Conversation)
         .options(
-            selectinload(Conversation.chatbot),
-            selectinload(Conversation.deployment)
+            joinedload(Conversation.chatbot),
+            joinedload(Conversation.deployment)
         )
-        .join(Chatbot, Chatbot.id == Conversation.chatbot_id)
         .where(
             Conversation.id == conversation_id,
-            Chatbot.org_id == org_id,
             Conversation.deleted_at == None
         )
     )
     result = await db.execute(stmt)
     conversation = result.scalar_one_or_none()
 
-    if not conversation:
+    if not conversation or (conversation.chatbot and conversation.chatbot.org_id != org_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Conversation not found or inaccessible"
@@ -122,11 +120,15 @@ async def reply_to_conversation(
             detail="Conversation is not in escalated state"
         )
 
+    msg_id = uuid.uuid4()
+    msg_created_at = datetime.now(timezone.utc)
     reply_msg = Message(
+        id=msg_id,
         conversation_id=conversation.id,
         role=MessageRole.BOT,
         content=payload.message,
-        config_id=None
+        config_id=None,
+        created_at=msg_created_at,
     )
     db.add(reply_msg)
 
@@ -151,20 +153,20 @@ async def reply_to_conversation(
         )
 
     await db.commit()
-    await db.refresh(reply_msg)
 
     agent_msg_data = {
         "conversation_id": str(conversation.id),
         "message": {
-            "id": str(reply_msg.id),
+            "id": str(msg_id),
             "role": "bot",
             "content": payload.message,
-            "created_at": reply_msg.created_at.isoformat()
+            "created_at": msg_created_at.isoformat()
         }
     }
 
-    background_tasks.add_task(sse_manager.broadcast, f"organization:{org_id}", "message", agent_msg_data)
-    background_tasks.add_task(sse_manager.broadcast, f"conversation:{conversation.id}", "message", agent_msg_data)
+    # Broadcast immediately to both channels without waiting for HTTP response completion:
+    asyncio.create_task(sse_manager.broadcast(f"organization:{org_id}", "message", agent_msg_data))
+    asyncio.create_task(sse_manager.broadcast(f"conversation:{conversation.id}", "message", agent_msg_data))
 
     return {"status": "success", "message": agent_msg_data["message"]}
 
@@ -203,8 +205,8 @@ async def resolve_conversation(
         "status": "resolved"
     }
 
-    background_tasks.add_task(sse_manager.broadcast, f"organization:{org_id}", "resolve", resolve_event)
-    background_tasks.add_task(sse_manager.broadcast, f"conversation:{conversation.id}", "resolve", resolve_event)
+    asyncio.create_task(sse_manager.broadcast(f"organization:{org_id}", "resolve", resolve_event))
+    asyncio.create_task(sse_manager.broadcast(f"conversation:{conversation.id}", "resolve", resolve_event))
 
     return {"status": "success", "conversation_id": conversation.id}
 

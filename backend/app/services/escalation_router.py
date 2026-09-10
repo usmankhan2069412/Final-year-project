@@ -266,12 +266,9 @@ class EscalationRouter:
         org_channel = f"organization:{org_id}"
         conv_channel = f"conversation:{conversation.id}"
 
-        if background_tasks:
-            background_tasks.add_task(sse_manager.broadcast, org_channel, "message", user_msg_data)
-            background_tasks.add_task(sse_manager.broadcast, conv_channel, "message", user_msg_data)
-        else:
-            asyncio.create_task(sse_manager.broadcast(org_channel, "message", user_msg_data))
-            asyncio.create_task(sse_manager.broadcast(conv_channel, "message", user_msg_data))
+        # Broadcast immediately to both channels without waiting for HTTP stream completion:
+        asyncio.create_task(sse_manager.broadcast(org_channel, "message", user_msg_data))
+        asyncio.create_task(sse_manager.broadcast(conv_channel, "message", user_msg_data))
 
         # Return no bot response — agent will reply from inbox
         return {

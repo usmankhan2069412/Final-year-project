@@ -11,8 +11,8 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 ASYNC_DATABASE_URL = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
 async_engine = create_async_engine(
     ASYNC_DATABASE_URL,
-    pool_size=50,
-    max_overflow=20,
+    pool_size=15,
+    max_overflow=5,
     pool_pre_ping=True,
     pool_recycle=1800,
     connect_args={"statement_cache_size": 0},
@@ -25,9 +25,12 @@ async def get_db():
     async with AsyncSessionLocal() as session:
         try:
             yield session
+            if session.in_transaction():
+                await session.rollback()
         except Exception:
             try:
-                await session.rollback()
+                if session.in_transaction():
+                    await session.rollback()
             except Exception:
                 pass
             raise
