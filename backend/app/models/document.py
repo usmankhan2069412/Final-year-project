@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import UUID, TSVECTOR, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.session import Base
-from pgvector.sqlalchemy import Vector
+from pgvector.sqlalchemy import Vector, HALFVEC
 from app.core.config import settings
 
 class SourceType(str, PyEnum):
@@ -120,7 +120,7 @@ class KnowledgeChunk(Base):
     chunk_text = Column(Text, nullable=False)
     chunk_index = Column(Integer, nullable=False)
     index_status = Column(Enum(ChunkStatus, name="enum_chunk_status"), nullable=False, default=ChunkStatus.QUEUED)
-    embedding = Column(Vector(settings.EMBEDDING_DIM), nullable=True)
+    embedding = Column(HALFVEC(settings.EMBEDDING_DIM), nullable=True)
     text_search_vector = Column(TSVECTOR, FetchedValue(), nullable=True)
     token_count = Column(Integer, nullable=True)
     content_hash = Column(String(64), nullable=True)
@@ -141,6 +141,13 @@ class KnowledgeChunk(Base):
         UniqueConstraint("source_id", "chunk_index", name="uq_knowledge_chunks_source_chunk"),
         Index("idx_chunks_chatbot_status", "chatbot_id", "index_status"),
         Index("idx_chunks_source_index", "source_id", "chunk_index"),
+        Index(
+            "idx_knowledge_chunks_embedding",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_with={"m": 16, "ef_construction": 64},
+            postgresql_ops={"embedding": "halfvec_cosine_ops"},
+        ),
     )
 
 

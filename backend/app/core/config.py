@@ -33,15 +33,16 @@ class Settings(BaseSettings):
 
     # Document Processing & Vector DB Settings
     UPLOAD_DIR: str = "data/uploads"
-    EMBEDDING_MODEL: str = "openai/text-embedding-3-small"
-    EMBEDDING_DIM: int = 1536            # openai/text-embedding-3-small output dimension
+    EMBEDDING_MODEL: str = "qwen/qwen3-embedding-8b"
+    EMBEDDING_DIM: int = 2048            # qwen/qwen3-embedding-8b MRL dimension (pgvector HNSW index limit is 4000)
+    EMBEDDING_QUERY_INSTRUCTION: str = "Given a user question, retrieve relevant documents that answer the question"
     GEMINI_API_KEY: str = ""
     OPENROUTER_API_KEY: str = ""
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     CHUNK_SIZE: int = 500                # Tokens per chunk
     CHUNK_OVERLAP: int = 50              # Overlap between chunks
     MAX_UPLOAD_SIZE_MB: int = 50
-    CACHE_SIMILARITY_THRESHOLD: float = 0.65
+    CACHE_SIMILARITY_THRESHOLD: float = 0.8
     RETRIEVAL_TOP_K_SINGLE: int = 4
     RETRIEVAL_TOP_K_MULTI: int = 3
     EMBEDDING_BATCH_DELAY: float = 0.0

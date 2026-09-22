@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Index, Text, Boolean, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
-from pgvector.sqlalchemy import Vector
+from pgvector.sqlalchemy import Vector, HALFVEC
 from app.db.session import Base
 from app.core.config import settings
 
@@ -16,7 +16,7 @@ class SemanticCache(Base):
     
     query_text = Column(Text, nullable=False)
     query_hash = Column(String(64), nullable=False)
-    query_embedding = Column(Vector(settings.EMBEDDING_DIM), nullable=False)
+    query_embedding = Column(HALFVEC(settings.EMBEDDING_DIM), nullable=False)
     embedding_model = Column(String(100), nullable=False)
     
     response_text = Column(Text, nullable=False)
@@ -40,6 +40,6 @@ class SemanticCache(Base):
     __table_args__ = (
         UniqueConstraint('org_id', 'chatbot_id', 'query_hash', 'knowledge_base_version', 'persona_version', name='uq_semantic_cache_query'),
         Index("idx_semantic_cache_active", "chatbot_id", "is_active", "expires_at"),
-        Index("idx_semantic_cache_embedding", text(f"(query_embedding::halfvec({settings.EMBEDDING_DIM}))"), postgresql_using="hnsw", postgresql_with={"m": 16, "ef_construction": 64}, postgresql_ops={"text": "halfvec_cosine_ops"}),
+        Index("idx_semantic_cache_embedding", "query_embedding", postgresql_using="hnsw", postgresql_with={"m": 16, "ef_construction": 64}, postgresql_ops={"query_embedding": "halfvec_cosine_ops"}),
     )
 

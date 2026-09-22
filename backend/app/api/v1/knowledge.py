@@ -120,14 +120,17 @@ async def list_knowledge_sources(
     org_id: uuid.UUID = Depends(get_current_org_id)
 ):
     try:
-        await KnowledgeService.ensure_chatbot_access(db=db, org_id=org_id, chatbot_id=chatbot_id)
         result = await db.execute(
             select(KnowledgeSource).where(
                 KnowledgeSource.chatbot_id == chatbot_id,
                 KnowledgeSource.org_id == org_id
             )
         )
-        return list(result.scalars().all())
+        sources = list(result.scalars().all())
+        if not sources:
+            # Only verify chatbot existence if no sources found to preserve 404 for non-existent chatbots
+            await KnowledgeService.ensure_chatbot_access(db=db, org_id=org_id, chatbot_id=chatbot_id)
+        return sources
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:

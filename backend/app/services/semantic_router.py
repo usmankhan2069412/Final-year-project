@@ -435,8 +435,8 @@ class SemanticRouter:
             return None, 0.0
 
         try:
-            # Encode user message
-            query_vectors = await embedding_service.aencode([message])
+            # Encode user message symmetrically as raw text (matching stored route prototype embeddings)
+            query_vectors = await embedding_service.aencode([message], is_query=False)
             if query_vectors.size == 0:
                 return None, 0.0
             query_vector = query_vectors[0]

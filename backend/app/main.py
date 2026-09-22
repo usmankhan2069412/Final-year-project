@@ -148,6 +148,7 @@ if settings.CORS_ORIGINS:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        max_age=86400,
     )
 else:
     app.add_middleware(
@@ -156,6 +157,7 @@ else:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        max_age=86400,
     )
 
 # 🛡️ Global Database Exception Handler & Diagnostic Classifier

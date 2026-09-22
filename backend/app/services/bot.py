@@ -5,7 +5,7 @@ import logging
 from typing import List, Optional
 from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, joinedload
 from cryptography.fernet import Fernet
 
 from app.core.config import settings
@@ -263,14 +263,14 @@ class BotService:
     async def get_chatbot(db: AsyncSession, org_id: uuid.UUID, chatbot_id: uuid.UUID) -> Optional[Chatbot]:
         result = await db.execute(
             select(Chatbot)
-            .options(selectinload(Chatbot.persona).selectinload(Persona.traits))
+            .options(joinedload(Chatbot.persona).joinedload(Persona.traits))
             .where(
                 Chatbot.id == chatbot_id,
                 Chatbot.org_id == org_id,
                 Chatbot.deleted_at == None
             )
         )
-        return result.scalar_one_or_none()
+        return result.unique().scalar_one_or_none()
 
     @staticmethod
     async def update_chatbot(

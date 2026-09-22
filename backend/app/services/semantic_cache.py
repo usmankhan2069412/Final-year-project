@@ -128,7 +128,7 @@ class SemanticCacheService:
         chatbot_id: str, 
         rewritten_query: str, 
         knowledge_base_version: int, 
-        persona_version: int,
+        persona_version: int = 1,
         threshold: Optional[float] = None,
         db: Optional[Session] = None
     ) -> Tuple[Optional[str], Optional[List[str]], Optional[float]]:
@@ -145,7 +145,7 @@ class SemanticCacheService:
             close_db = True
 
         try:
-            query_vector = embedding_service.encode([rewritten_query])[0]
+            query_vector = embedding_service.encode([rewritten_query], is_query=True)[0]
             query_list = query_vector.tolist() if hasattr(query_vector, "tolist") else list(query_vector)
             
             # Using pgvector cosine_distance (0 is identical, 2 is completely opposite)
@@ -164,7 +164,7 @@ class SemanticCacheService:
                 .filter(SemanticCache.expires_at > now)
                 .filter(SemanticCache.embedding_model == settings.EMBEDDING_MODEL)
                 .filter(SemanticCache.knowledge_base_version == knowledge_base_version)
-                .filter(SemanticCache.persona_version == persona_version)
+                # Decoupled from persona_version so cosmetic edits (tone, greeting, name) do not wipe factual Q&A cache
                 .filter(distance_col <= max_distance)
                 .order_by(distance_col)
                 .first()
@@ -226,7 +226,7 @@ class SemanticCacheService:
             
             # Embed the query if not already provided
             if query_vector is None:
-                query_vector_res = embedding_service.encode([rewritten_query])[0]
+                query_vector_res = embedding_service.encode([rewritten_query], is_query=True)[0]
                 query_list = query_vector_res.tolist() if hasattr(query_vector_res, "tolist") else list(query_vector_res)
             else:
                 query_list = query_vector
@@ -273,16 +273,22 @@ class SemanticCacheService:
         chatbot_id: str, 
         rewritten_query: str, 
         knowledge_base_version: int, 
-        persona_version: int,
-        db: AsyncSession,
+        persona_version: int = 1,
+        db: Optional[AsyncSession] = None,
         threshold: Optional[float] = None
     ) -> Tuple[Optional[str], Optional[List[str]], Optional[float]]:
         if threshold is None:
             threshold = settings.CACHE_SIMILARITY_THRESHOLD
             
+        close_db = False
+        if db is None:
+            from app.db.session import AsyncSessionLocal
+            db = AsyncSessionLocal()
+            close_db = True
+
         try:
             from sqlalchemy import select
-            query_vectors = await embedding_service.aencode([rewritten_query])
+            query_vectors = await embedding_service.aencode([rewritten_query], is_query=True)
             query_vector = query_vectors[0]
             query_list = query_vector.tolist() if hasattr(query_vector, "tolist") else list(query_vector)
             
@@ -298,7 +304,7 @@ class SemanticCacheService:
                 .filter(SemanticCache.expires_at > now)
                 .filter(SemanticCache.embedding_model == settings.EMBEDDING_MODEL)
                 .filter(SemanticCache.knowledge_base_version == knowledge_base_version)
-                .filter(SemanticCache.persona_version == persona_version)
+                # Decoupled from persona_version so cosmetic edits (tone, greeting, name) do not wipe factual Q&A cache
                 .filter(distance_col <= max_distance)
                 .order_by(distance_col)
                 .limit(1)
@@ -332,6 +338,9 @@ class SemanticCacheService:
         except Exception as e:
             logger.error(f"Failed to check semantic cache (async): {e}", exc_info=True)
             return None, None, None
+        finally:
+            if close_db and db is not None:
+                await db.close()
 
     @classmethod
     async def aadd_to_cache(
@@ -357,7 +366,7 @@ class SemanticCacheService:
             query_hash = cls.generate_query_hash(rewritten_query)
             
             if query_vector is None:
-                query_vectors = await embedding_service.aencode([rewritten_query])
+                query_vectors = await embedding_service.aencode([rewritten_query], is_query=True)
                 query_vector_res = query_vectors[0]
                 query_list = query_vector_res.tolist() if hasattr(query_vector_res, "tolist") else list(query_vector_res)
             else:

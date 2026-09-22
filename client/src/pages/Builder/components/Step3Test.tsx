@@ -30,6 +30,17 @@ export default function Step3Test({ persona, botName, chatbotId, onRequireDraft 
   const isMountedRef = useRef(true);
   const activeStreamAbortRef = useRef<AbortController | null>(null);
 
+  const prevChatbotIdRef = useRef(chatbotId);
+  useEffect(() => {
+    if (prevChatbotIdRef.current && prevChatbotIdRef.current !== chatbotId) {
+      setMessages([]);
+      setConversationId(null);
+      setTestError("");
+      setLastSources([]);
+    }
+    prevChatbotIdRef.current = chatbotId;
+  }, [chatbotId]);
+
   useEffect(() => {
     isMountedRef.current = true;
     return () => {

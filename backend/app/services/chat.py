@@ -80,11 +80,11 @@ class AgentGraphExecutor:
     Decoupled entirely from database models/transactions.
     """
     _graph = None  # Compiled graph singleton — safe to share (stateless)
-    _http_client: Optional[httpx.Client] = None  # Persistent connection pool for rerank API
+    _http_client: Optional[httpx.Client] = None  # Persistent sync connection pool
+    _async_http_client: Optional[httpx.AsyncClient] = None  # Persistent async connection pool
 
     @classmethod
     def get_http_client(cls) -> httpx.Client:
-        # TODO: Migrate to httpx.AsyncClient when graph execution becomes asynchronous
         if cls._http_client is None:
             cls._http_client = httpx.Client(
                 timeout=15.0,
@@ -93,10 +93,25 @@ class AgentGraphExecutor:
         return cls._http_client
 
     @classmethod
+    def get_async_http_client(cls) -> httpx.AsyncClient:
+        if cls._async_http_client is None or cls._async_http_client.is_closed:
+            cls._async_http_client = httpx.AsyncClient(
+                timeout=15.0,
+                limits=httpx.Limits(max_keepalive_connections=20, max_connections=50),
+            )
+        return cls._async_http_client
+
+    @classmethod
     def close_http_client(cls):
         if cls._http_client is not None:
             cls._http_client.close()
             cls._http_client = None
+
+    @classmethod
+    async def close_async_http_client(cls):
+        if cls._async_http_client is not None and not cls._async_http_client.is_closed:
+            await cls._async_http_client.aclose()
+            cls._async_http_client = None
 
     @classmethod
     def _get_graph(cls):
@@ -546,7 +561,7 @@ class AgentGraphExecutor:
         async with AsyncSessionLocal() as db:
             # If no rewrite or exactly the same, do a single search
             if not rewritten or rewritten.lower().strip() == original.lower().strip():
-                query_vectors = await embedding_service.aencode([original])
+                query_vectors = await embedding_service.aencode([original], is_query=True)
                 query_vector = query_vectors[0]
                 query_list = query_vector.tolist() if hasattr(query_vector, "tolist") else list(query_vector)
                 sources_list = await VectorStoreService.asearch_hybrid(chatbot_id, original, top_k=settings.RETRIEVAL_TOP_K_SINGLE, query_vector=query_list, db=db)
@@ -555,7 +570,7 @@ class AgentGraphExecutor:
             else:
                 # Multi-Query Retrieval: search both and merge
                 # Batch encode both queries to halve API calls
-                vectors = await embedding_service.aencode([rewritten, original])
+                vectors = await embedding_service.aencode([rewritten, original], is_query=True)
                 rewritten_vec = vectors[0].tolist() if hasattr(vectors[0], "tolist") else list(vectors[0])
                 original_vec = vectors[1].tolist() if hasattr(vectors[1], "tolist") else list(vectors[1])
 
@@ -604,6 +619,7 @@ class AgentGraphExecutor:
 
         query = state.get("rewritten_query") or state["user_message"]
 
+
         # Only use the system-level OpenRouter key for reranking
         rerank_api_key = getattr(settings, "OPENROUTER_API_KEY", None) or os.getenv("OPENROUTER_API_KEY")
 
@@ -632,15 +648,15 @@ class AgentGraphExecutor:
                 "Content-Type": "application/json"
             }
 
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    "https://openrouter.ai/api/v1/rerank",
-                    json=payload,
-                    headers=headers,
-                    timeout=15.0
-                )
-                response.raise_for_status()
-                result = response.json()
+            client = cls.get_async_http_client()
+            response = await client.post(
+                "https://openrouter.ai/api/v1/rerank",
+                json=payload,
+                headers=headers,
+                timeout=15.0
+            )
+            response.raise_for_status()
+            result = response.json()
 
             filtered_sources = []
 

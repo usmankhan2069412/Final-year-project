@@ -155,7 +155,7 @@ class VectorStoreService:
             try:
                 from app.services.embedding import embedding_service
                 if query_vector is None:
-                    query_vector = embedding_service.encode([query])[0]
+                    query_vector = embedding_service.encode([query], is_query=True)[0]
                     query_vector = query_vector.tolist() if hasattr(query_vector, "tolist") else list(query_vector)
                 
                 distance_expr = KnowledgeChunk.embedding.cosine_distance(query_vector)
@@ -341,7 +341,7 @@ class VectorStoreService:
             try:
                 from app.services.embedding import embedding_service
                 if query_vector is None:
-                    query_vectors = await embedding_service.aencode([query])
+                    query_vectors = await embedding_service.aencode([query], is_query=True)
                     query_vector = query_vectors[0].tolist() if hasattr(query_vectors[0], "tolist") else list(query_vectors[0])
                 
                 distance_expr = KnowledgeChunk.embedding.cosine_distance(query_vector)

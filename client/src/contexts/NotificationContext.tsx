@@ -71,16 +71,22 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       fetchNotifications().finally(() => setIsLoading(false));
 
       // Setup WebSocket connection for real-time notifications
-      const token = localStorage.getItem("token");
       let ws: WebSocket | null = null;
-      
-      if (token) {
-        ws = new WebSocket(`ws://localhost:8000/api/v1/notifications/ws?token=${token}`);
-        
+      let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+      let isCancelled = false;
+
+      const connectWs = () => {
+        if (isCancelled) return;
+        const token = localStorage.getItem("token");
+        if (!token) return;
+
+        const base = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000").replace(/^http/, "ws");
+        ws = new WebSocket(`${base}/api/v1/notifications/ws?token=${token}`);
+
         ws.onmessage = (event) => {
           try {
             const parsed = JSON.parse(event.data);
-            
+
             // Intercept custom events that are not standard user notifications
             if (parsed.type === "knowledge_update") {
               window.dispatchEvent(new CustomEvent("knowledge_update", { detail: { chatbotId: parsed.chatbot_id } }));
@@ -104,12 +110,27 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           }
         };
 
+        ws.onclose = () => {
+          if (!isCancelled) {
+            reconnectTimer = setTimeout(connectWs, 3000);
+          }
+        };
+
         ws.onerror = (error) => {
           console.error("Notification WebSocket error:", error);
+          if (ws) {
+            ws.close();
+          }
         };
-      }
+      };
+
+      connectWs();
 
       return () => {
+        isCancelled = true;
+        if (reconnectTimer) {
+          clearTimeout(reconnectTimer);
+        }
         if (ws) {
           ws.close();
         }
