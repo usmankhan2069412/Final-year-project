@@ -64,28 +64,28 @@
   },
   {
     "id": "rt_10",
-    "message": "Bohot shukriya aap ka",
+    "message": "Boht shukriya aap ka",
     "expected_intent": "CONVERSATIONAL",
     "language": "roman_urdu",
     "category": "gratitude"
   },
   {
     "id": "rt_11",
-    "message": "Allah hafiz, see you later",
+    "message": "Kya haal chaal hain?",
     "expected_intent": "CONVERSATIONAL",
     "language": "roman_urdu",
-    "category": "farewell"
+    "category": "smalltalk"
   },
   {
     "id": "rt_12",
-    "message": "I want to talk to a human support agent",
+    "message": "I need to speak with an agent right now",
     "expected_intent": "AGENT_HANDOFF",
     "language": "en",
     "category": "human_escalation"
   },
   {
     "id": "rt_13",
-    "message": "Mujhe kisi human agent se connect karo",
+    "message": "Mujhe kisi human se connect karo",
     "expected_intent": "AGENT_HANDOFF",
     "language": "roman_urdu",
     "category": "human_escalation"
@@ -173,5 +173,218 @@
     "expected_intent": "RAG_LOOKUP",
     "language": "en",
     "category": "technical_query"
+  },
+  {
+    "id": "rt_26",
+    "message": "Hi, refund policy kya hai?",
+    "expected_intent": "RAG_LOOKUP",
+    "language": "roman_urdu",
+    "category": "compound_greeting_rag"
+  },
+  {
+    "id": "rt_27",
+    "message": "Salam bhai, admission criteria kya hai?",
+    "expected_intent": "RAG_LOOKUP",
+    "language": "roman_urdu",
+    "category": "compound_greeting_rag"
+  },
+  {
+    "id": "rt_28",
+    "message": "Hey there, how can I change my email address?",
+    "expected_intent": "RAG_LOOKUP",
+    "language": "en",
+    "category": "compound_greeting_rag"
+  },
+  {
+    "id": "rt_29",
+    "message": "AOA, what are the office timings for support?",
+    "expected_intent": "RAG_LOOKUP",
+    "language": "en",
+    "category": "compound_greeting_rag"
+  },
+  {
+    "id": "rt_30",
+    "message": "Hi, isko short kar do",
+    "expected_intent": "HISTORY_TRANSFORM",
+    "language": "roman_urdu",
+    "category": "compound_greeting_transform"
+  },
+  {
+    "id": "rt_31",
+    "message": "Salam, bullet points mein samjha do",
+    "expected_intent": "HISTORY_TRANSFORM",
+    "language": "roman_urdu",
+    "category": "compound_greeting_transform"
+  },
+  {
+    "id": "rt_32",
+    "message": "Hello, can you rewrite this in Urdu script?",
+    "expected_intent": "HISTORY_TRANSFORM",
+    "language": "en",
+    "category": "compound_greeting_transform"
+  },
+  {
+    "id": "rt_33",
+    "message": "refnd polcy kya ha",
+    "expected_intent": "RAG_LOOKUP",
+    "language": "roman_urdu",
+    "category": "typo_informal"
+  },
+  {
+    "id": "rt_34",
+    "message": "admisn kse mile ga",
+    "expected_intent": "RAG_LOOKUP",
+    "language": "roman_urdu",
+    "category": "typo_informal"
+  },
+  {
+    "id": "rt_35",
+    "message": "paswrd reset kse krn",
+    "expected_intent": "RAG_LOOKUP",
+    "language": "roman_urdu",
+    "category": "typo_informal"
+  },
+  {
+    "id": "rt_36",
+    "message": "shrt krdo isko",
+    "expected_intent": "HISTORY_TRANSFORM",
+    "language": "roman_urdu",
+    "category": "typo_informal"
+  },
+  {
+    "id": "rt_37",
+    "message": "Wah, kya zabardast bot hai bilkul jawab nahi diya",
+    "expected_intent": "FRUSTRATION",
+    "language": "roman_urdu",
+    "category": "sarcasm_frustration"
+  },
+  {
+    "id": "rt_38",
+    "message": "Great job, you completely failed to answer!",
+    "expected_intent": "FRUSTRATION",
+    "language": "en",
+    "category": "sarcasm_frustration"
+  },
+  {
+    "id": "rt_39",
+    "message": "Tumhari wajah se mera sara time waste ho gaya",
+    "expected_intent": "FRUSTRATION",
+    "language": "roman_urdu",
+    "category": "user_frustration"
+  },
+  {
+    "id": "rt_40",
+    "message": "Stop giving me automated useless bot answers",
+    "expected_intent": "FRUSTRATION",
+    "language": "en",
+    "category": "user_frustration"
+  },
+  {
+    "id": "rt_41",
+    "message": "Mujhe insan se baat karni hai, tumse nahi",
+    "expected_intent": "AGENT_HANDOFF",
+    "language": "roman_urdu",
+    "category": "persona_priority_handoff",
+    "persona": {
+      "name": "Sara",
+      "description": "Friendly Sales Representative who provides emotional support and builds rapport"
+    }
+  },
+  {
+    "id": "rt_42",
+    "message": "I want to speak with a real supervisor right now",
+    "expected_intent": "AGENT_HANDOFF",
+    "language": "en",
+    "category": "persona_priority_handoff",
+    "persona": {
+      "name": "Sara",
+      "description": "Friendly Sales Representative who provides emotional support and builds rapport"
+    }
+  },
+  {
+    "id": "rt_43",
+    "message": "Ye theek nahi laga mujhe",
+    "expected_intent": "CONVERSATIONAL",
+    "language": "roman_urdu",
+    "category": "persona_mild_distress_sales",
+    "persona": {
+      "name": "Sara",
+      "description": "Friendly Sales Representative who provides emotional support and builds rapport"
+    }
+  },
+  {
+    "id": "rt_44",
+    "message": "Ye theek nahi laga mujhe",
+    "expected_intent": "AGENT_HANDOFF",
+    "language": "roman_urdu",
+    "category": "persona_mild_distress_support",
+    "persona": {
+      "name": "Support Bot",
+      "description": "Technical Support Agent who escalates angry and distressed customers to human representatives"
+    }
+  },
+  {
+    "id": "rt_45",
+    "message": "I am feeling quite confused and stressed about this",
+    "expected_intent": "CONVERSATIONAL",
+    "language": "en",
+    "category": "persona_mild_distress_sales",
+    "persona": {
+      "name": "Sales Advisor",
+      "description": "Friendly Sales Advisor who consoles customers and addresses questions empathetically"
+    }
+  },
+  {
+    "id": "rt_46",
+    "message": "I am feeling quite confused and stressed about this",
+    "expected_intent": "AGENT_HANDOFF",
+    "language": "en",
+    "category": "persona_mild_distress_support",
+    "persona": {
+      "name": "Escalation Desk",
+      "description": "Strict Technical Escalation Desk that immediately routes confused or distressed clients to human engineers"
+    }
+  },
+  {
+    "id": "rt_47",
+    "message": "👍",
+    "expected_intent": "CONVERSATIONAL",
+    "language": "en",
+    "category": "emoji_reaction"
+  },
+  {
+    "id": "rt_48",
+    "message": "ok thanks",
+    "expected_intent": "CONVERSATIONAL",
+    "language": "en",
+    "category": "short_acknowledgment"
+  },
+  {
+    "id": "rt_49",
+    "message": "shukriya bhai",
+    "expected_intent": "CONVERSATIONAL",
+    "language": "roman_urdu",
+    "category": "short_acknowledgment"
+  },
+  {
+    "id": "rt_50",
+    "message": "Connect me to customer support manager immediately",
+    "expected_intent": "AGENT_HANDOFF",
+    "language": "en",
+    "category": "human_escalation"
+  },
+  {
+    "id": "rt_51",
+    "message": "Admin se baat karao",
+    "expected_intent": "AGENT_HANDOFF",
+    "language": "roman_urdu",
+    "category": "human_escalation"
+  },
+  {
+    "id": "rt_52",
+    "message": "Can I speak with a real person right now?",
+    "expected_intent": "AGENT_HANDOFF",
+    "language": "en",
+    "category": "human_escalation"
   }
 ]

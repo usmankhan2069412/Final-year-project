@@ -267,8 +267,8 @@ class AgentGraphExecutor:
         if status_queue:
             await status_queue.put({"type": "status", "message": "🔍 Understanding your question..."})
 
-        # Persona-aware, context-aware intent classification
-        intent = await SemanticRouter.classify(
+        # Persona-aware, context-aware intent classification via TypeSafe Jev
+        intent, confidence, probabilities, method = await SemanticRouter.classify_with_details(
             message=state["user_message"],
             persona=state.get("persona"),
             traits=state.get("traits"),
@@ -289,8 +289,21 @@ class AgentGraphExecutor:
         elif "General Inquiries" in rules:
             model_name = rules["General Inquiries"]
 
-        logger.info("intent_routed", intent=final_intent, chatbot_id=chatbot_id, mapped_model=model_name)
-        return {"intent": final_intent, "model_name": model_name}
+        logger.info(
+            "intent_routed",
+            intent=final_intent,
+            confidence=confidence,
+            method=method,
+            chatbot_id=chatbot_id,
+            mapped_model=model_name
+        )
+        return {
+            "intent": final_intent,
+            "intent_confidence": confidence,
+            "intent_probabilities": probabilities,
+            "intent_method": method,
+            "model_name": model_name
+        }
 
     @staticmethod
     async def agent_handoff_node(state: AgentState) -> AgentState:

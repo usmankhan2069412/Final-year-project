@@ -70,12 +70,20 @@ class Settings(BaseSettings):
     REDIS_URL: str = ""
     PUB_SUB_BACKEND: str = "in_memory"
 
+    # TypeSafe Jev Model Settings
+    TYPESAFE_API_KEY: str = ""
+    TYPESAFE_TIMEOUT_SECS: float = 5.0
+    TYPESAFE_CONFIDENCE_THRESHOLD: float = 0.70
+
     # Async executor configuration for RAG pipeline
     EXECUTOR_MAX_WORKERS: int = 200       # Max threads for blocking LLM/embedding calls
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
 
 settings = Settings()
+
+if settings.TYPESAFE_API_KEY and not os.environ.get("TYPESAFE_API_KEY"):
+    os.environ["TYPESAFE_API_KEY"] = settings.TYPESAFE_API_KEY
 
 
 def resolve_openrouter_key(api_key: Optional[str]) -> Tuple[Optional[str], Optional[str]]:

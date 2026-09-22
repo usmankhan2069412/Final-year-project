@@ -80,6 +80,20 @@ class SemanticRouter:
     _initialized = False
     _init_lock = threading.Lock()
 
+    _typesafe_classifier = None
+    _typesafe_lock = threading.Lock()
+
+    EXACT_GREETINGS = {
+        "hi", "hello", "hey", "salam", "assalam o alaikum", "assalam-o-alaikum",
+        "aoa", "good morning", "good evening", "good afternoon", "kya haal hai",
+        "kya hal hai", "kaise ho", "kaise hain", "bye", "goodbye", "allah hafiz",
+        "shukriya", "thanks", "thank you", "ok", "okay"
+    }
+
+    GREETING_PREFIXES = (
+        "hi ", "hello ", "salam", "assalam", "hey ", "shukriya", "thanks", "thank you"
+    )
+
     HISTORY_TRANSFORM_CONTEXT_MARKERS = {
         "it", "this", "that", "them", "these", "those", "above", "previous", "last",
         "answer", "response", "reply", "message", "content", "text",
@@ -217,7 +231,82 @@ class SemanticRouter:
                 cls._initialized = True
 
     @classmethod
-    async def classify(
+    def _get_typesafe_classifier(cls):
+        """Get or initialize the TypeSafeClassifier singleton instance."""
+        if cls._typesafe_classifier is None:
+            with cls._typesafe_lock:
+                if cls._typesafe_classifier is None:
+                    from app.core.config import settings
+                    api_key = getattr(settings, "TYPESAFE_API_KEY", "") or os.getenv("TYPESAFE_API_KEY", "")
+                    if not api_key:
+                        return None
+                    try:
+                        from langchain_typesafe import TypeSafeClassifier
+                        timeout = getattr(settings, "TYPESAFE_TIMEOUT_SECS", 5.0)
+                        cls._typesafe_classifier = TypeSafeClassifier(
+                            api_key=api_key,
+                            timeout=timeout,
+                        )
+                        logger.info("TypeSafeClassifier initialized successfully with Jev model.")
+                    except Exception as e:
+                        logger.warning(f"Failed to initialize TypeSafeClassifier: {e}")
+                        return None
+        return cls._typesafe_classifier
+
+    @classmethod
+    def _get_jev_questions(cls) -> dict:
+        """Construct typed questions for Jev System One model with layered priority rules."""
+        from langchain_typesafe import Choice, Noul
+
+        instructions = (
+            "Classify the user's latest message into exactly ONE intent using these PRIORITY RULES:\n"
+            "1. EXPLICIT HUMAN REQUEST: If the user explicitly asks to speak with a human agent, representative, "
+            "or person (e.g., 'mujhe insan se baat karni hai', 'talk to human'), ALWAYS classify as AGENT_HANDOFF, "
+            "regardless of bot persona.\n"
+            "2. COMPOUND MESSAGES: If a message begins with a greeting but contains an underlying request "
+            "(e.g., 'Hi, refund policy kya hai?'), the substantive intent (RAG_LOOKUP or HISTORY_TRANSFORM) "
+            "takes precedence over CONVERSATIONAL.\n"
+            "3. PERSONA-SENSITIVE DISTRESS / COMPLAINTS: When user expresses sadness, distress, or mild dissatisfaction "
+            "without explicitly demanding a human:\n"
+            "   - If the bot persona is Technical Support or Escalation, route to AGENT_HANDOFF.\n"
+            "   - If the bot persona is Sales or Friendly/Empathetic, route to CONVERSATIONAL.\n"
+            "4. BOT HOSTILITY / ABUSE: If the user insults or expresses anger toward the bot itself "
+            "(e.g., 'tum bakwas ho', 'stupid bot'), classify as FRUSTRATION."
+        )
+
+        return {
+            "intent": Choice(
+                instructions=instructions,
+                criteria={
+                    "CONVERSATIONAL": (
+                        "Greetings, small talk, rapport building, thanks, social chitchat, or emotional distress "
+                        "when interacting with a sales/friendly persona. Does NOT apply if user asks for factual info, "
+                        "history transformation, or a human agent."
+                    ),
+                    "RAG_LOOKUP": (
+                        "Questions or requests seeking factual information from the knowledge base — policies, products, "
+                        "fees, admission, how-to, troubleshooting details. Takes precedence over greetings in mixed queries."
+                    ),
+                    "HISTORY_TRANSFORM": (
+                        "Requests to transform prior conversation text or previous assistant answers — summarize, translate, "
+                        "shorten, rewrite in bullets, explain again, convert to Roman Urdu. Takes precedence over greetings in mixed queries."
+                    ),
+                    "AGENT_HANDOFF": (
+                        "User explicitly asks for a human/agent/representative, OR expresses distress/unresolved issue when "
+                        "interacting with an Escalation or Support persona."
+                    ),
+                    "FRUSTRATION": (
+                        "User expresses strong anger, insults, sarcasm, or hostility directed at the bot itself (e.g., 'tum bakwas ho', 'useless bot')."
+                    ),
+                },
+            ),
+            "is_frustrated": Noul(
+                instructions="Does the user express strong anger, insults, or hostility toward the bot itself?"
+            ),
+        }
+
+    @classmethod
+    async def classify_with_details(
         cls,
         message: str,
         persona: Any = None,
@@ -226,55 +315,97 @@ class SemanticRouter:
         conversation_memory: Optional[dict] = None,
         api_key: Optional[str] = None,
         threshold: float = 0.65,
-    ) -> Optional[str]:
+    ) -> Tuple[str, float, Dict[str, float], str]:
         """
-        Multi-tier intent classification:
-        1. Keyword short-circuit (AGENT_HANDOFF, HISTORY_TRANSFORM, exact greetings)
-        2. Embedding Fast-Path (high confidence vector match)
-        3. LLM classification (persona-aware, context-aware)
-        4. Embedding fallback
+        Classifies intent with full metadata (intent, confidence, probabilities, method).
+        1. Exact greeting gate (<1ms)
+        2. Jev Model (TypeSafeClassifier) with persona + context + Noul frustration
+        3. Graceful fallback on timeout/error
         """
         from app.core.metrics import intent_classification_method, intent_classification_latency
+        from app.core.config import settings
 
         t0 = time.monotonic()
         msg_lower = message.lower().strip()
+        normalized_msg = msg_lower.strip(" .!?,")
 
-        # --- Tier 1: Fast keyword short-circuit for Agent Handoff / History Transform ---
-        handoff_keywords = [
-            "talk to human", "talk to a human", "speak with an agent", "connect to a person",
-            "human support", "representative", "agent se connect karo",
-            "human se baat karao", "mujhe insan se baat karni hai",
-            "customer care se baat karni hai", "real human", "human agent", "real person"
-        ]
-        if any(kw in msg_lower for kw in handoff_keywords):
+        # 1. Exact Greetings & Short Prefix Gate (prevents latency regression for simple small talk)
+        if (
+            normalized_msg in cls.EXACT_GREETINGS
+            or (any(msg_lower.startswith(p) for p in cls.GREETING_PREFIXES) and len(message.split()) <= 4)
+        ):
             latency = time.monotonic() - t0
             intent_classification_latency.observe(latency)
-            intent_classification_method.labels(method="keyword_shortcircuit").inc()
-            return "AGENT_HANDOFF"
+            intent_classification_method.labels(method="keyword_exact").inc()
+            logger.info("intent_classified", extra={"intent": "CONVERSATIONAL", "method": "keyword_exact", "latency_ms": round(latency * 1000, 2)})
+            return "CONVERSATIONAL", 1.0, {"CONVERSATIONAL": 1.0}, "keyword_exact"
 
-        normalized_msg = msg_lower.strip(" .!?")
-        if normalized_msg in cls.ROUTES.get("CONVERSATIONAL", []):
-            latency = time.monotonic() - t0
-            intent_classification_latency.observe(latency)
-            intent_classification_method.labels(method="keyword_shortcircuit").inc()
-            return "CONVERSATIONAL"
+        # 2. TypeSafe Jev Model
+        classifier = cls._get_typesafe_classifier()
+        if classifier:
+            try:
+                context = cls._build_classifier_context(history or [], conversation_memory)
+                persona_name = getattr(persona, "name", "Assistant") or "Assistant"
+                persona_desc = getattr(persona, "description", "") or ""
+                traits_str = ", ".join(traits) if traits else "General purpose"
 
-        if cls._matches_history_transform(message):
-            latency = time.monotonic() - t0
-            intent_classification_latency.observe(latency)
-            intent_classification_method.labels(method="keyword_shortcircuit").inc()
-            return "HISTORY_TRANSFORM"
+                jev_state = {
+                    "message": message,
+                    "persona_name": persona_name,
+                    "persona_role": persona_desc,
+                    "traits": traits_str,
+                    "conversation_context": context,
+                }
 
-        # --- Tier 2: Embedding Fast-Path (First LLM Avoidance) ---
-        # Prioritize embedding search for high-confidence intents to save LLM costs.
-        emb_intent, emb_score = await cls._classify_with_embeddings(message, 0.0) # get best regardless of threshold
-        if emb_score >= 0.72 and emb_intent:
-            latency = time.monotonic() - t0
-            intent_classification_latency.observe(latency)
-            intent_classification_method.labels(method="embedding_fastpath").inc()
-            return emb_intent
+                response = await classifier.ainvoke({
+                    "state": jev_state,
+                    "questions": cls._get_jev_questions(),
+                })
 
-        # --- Tier 3: LLM-based classification (persona + context aware) ---
+                intent_answer = response.choices.get("intent")
+                is_frustrated_answer = response.nouls.get("is_frustrated")
+
+                frustrated_prob = is_frustrated_answer.noul if is_frustrated_answer else 0.0
+                confidence = intent_answer.confidence if intent_answer else 0.0
+                raw_intent = intent_answer.choice if intent_answer else "RAG_LOOKUP"
+                probabilities = intent_answer.probabilities if intent_answer else {}
+
+                confidence_threshold = getattr(settings, "TYPESAFE_CONFIDENCE_THRESHOLD", 0.70)
+
+                # If frustration detected via Noul or Choice
+                if raw_intent == "FRUSTRATION":
+                    final_intent = "FRUSTRATION"
+                elif frustrated_prob >= 0.80:
+                    final_intent = "FRUSTRATION"
+                elif confidence < confidence_threshold:
+                    final_intent = "RAG_LOOKUP"
+                else:
+                    final_intent = raw_intent
+
+                latency = time.monotonic() - t0
+                intent_classification_latency.observe(latency)
+                intent_classification_method.labels(method="jev").inc()
+
+                logger.info("jev_intent_classified", extra={
+                    "intent": final_intent,
+                    "raw_choice": raw_intent,
+                    "confidence": confidence,
+                    "probabilities": probabilities,
+                    "frustration_prob": frustrated_prob,
+                    "latency_ms": round(latency * 1000, 2),
+                    "user_message": message[:100],
+                })
+
+                return final_intent, confidence, probabilities, "jev"
+
+            except Exception as e:
+                latency = time.monotonic() - t0
+                intent_classification_latency.observe(latency)
+                intent_classification_method.labels(method="error_fallback").inc()
+                logger.warning(f"TypeSafe Jev classification failed or timed out: {e}. Falling back to RAG_LOOKUP.")
+                return "RAG_LOOKUP", 0.0, {}, "error_fallback"
+
+        # 3. Fallback if TypeSafe API Key is not configured: use LLM / embedding
         if api_key:
             llm_result = await cls._classify_with_llm(
                 message=message,
@@ -288,16 +419,42 @@ class SemanticRouter:
                 latency = time.monotonic() - t0
                 intent_classification_latency.observe(latency)
                 intent_classification_method.labels(method="llm").inc()
-                return llm_result
+                return llm_result, 0.85, {llm_result: 0.85}, "llm"
 
-        # --- Tier 4: Embedding fallback ---
+        emb_intent, emb_score = await cls._classify_with_embeddings(message, threshold)
         if emb_score >= threshold and emb_intent:
             latency = time.monotonic() - t0
             intent_classification_latency.observe(latency)
             intent_classification_method.labels(method="embedding_fallback").inc()
-            return emb_intent
+            return emb_intent, emb_score, {emb_intent: emb_score}, "embedding_fallback"
 
-        return None
+        return "RAG_LOOKUP", 0.0, {}, "default"
+
+    @classmethod
+    async def classify(
+        cls,
+        message: str,
+        persona: Any = None,
+        traits: Optional[List[str]] = None,
+        history: Optional[List[Any]] = None,
+        conversation_memory: Optional[dict] = None,
+        api_key: Optional[str] = None,
+        threshold: float = 0.65,
+    ) -> Optional[str]:
+        """
+        Public classification method returning intent label.
+        Maintains backward compatibility with all existing pipeline callers.
+        """
+        intent, _, _, _ = await cls.classify_with_details(
+            message=message,
+            persona=persona,
+            traits=traits,
+            history=history,
+            conversation_memory=conversation_memory,
+            api_key=api_key,
+            threshold=threshold,
+        )
+        return intent
 
     @classmethod
     async def _classify_with_llm(
