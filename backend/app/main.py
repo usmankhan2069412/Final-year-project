@@ -128,8 +128,8 @@ async def lifespan(app: FastAPI):
     scheduler.shutdown()
 
     # Close shared HTTP connection pool used by reranker
-    from app.services.chat import AgentGraphExecutor
-    AgentGraphExecutor.close_http_client()
+    from app.services.rag.helpers import close_async_http_client
+    await close_async_http_client()
 
 # 🗄️ Auto-create database tables on startup if they don't exist
 app = FastAPI(

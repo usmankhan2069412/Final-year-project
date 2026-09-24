@@ -75,3 +75,9 @@ validated_chunks_count = Histogram(
     "Number of chunks that survived relevance validation",
     buckets=(0, 1, 2, 3, 4, 5, 10, float("inf"))
 )
+
+rerank_fallback_total = Counter(
+    "aina_rerank_fallback_total",
+    "Total times reranking fell back to hybrid scoring",
+    ["reason"]  # "timeout", "api_error"
+)

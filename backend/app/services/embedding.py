@@ -28,6 +28,7 @@ class EmbeddingService:
         self._client = None
         self._openrouter_client = None
         self._async_http_client = None
+        self._sync_http_client = None
 
     @staticmethod
     def _format_input(text: str, is_query: bool = False, instruction: Optional[str] = None) -> str:
@@ -36,12 +37,27 @@ class EmbeddingService:
             return f"Instruct: {task_inst}\nQuery: {text}"
         return text
 
+    def get_sync_http_client(self):
+        import httpx
+        if self._sync_http_client is None or self._sync_http_client.is_closed:
+            self._sync_http_client = httpx.Client(
+                timeout=30.0,
+                limits=httpx.Limits(
+                    max_keepalive_connections=settings.EMBEDDING_MAX_KEEPALIVE,
+                    max_connections=settings.EMBEDDING_MAX_CONNECTIONS,
+                ),
+            )
+        return self._sync_http_client
+
     def get_async_http_client(self):
         import httpx
         if self._async_http_client is None or self._async_http_client.is_closed:
             self._async_http_client = httpx.AsyncClient(
                 timeout=30.0,
-                limits=httpx.Limits(max_keepalive_connections=20, max_connections=50),
+                limits=httpx.Limits(
+                    max_keepalive_connections=settings.EMBEDDING_MAX_KEEPALIVE,
+                    max_connections=settings.EMBEDDING_MAX_CONNECTIONS,
+                ),
             )
         return self._async_http_client
 
@@ -49,6 +65,9 @@ class EmbeddingService:
         if self._async_http_client is not None and not self._async_http_client.is_closed:
             await self._async_http_client.aclose()
             self._async_http_client = None
+        if self._sync_http_client is not None and not self._sync_http_client.is_closed:
+            self._sync_http_client.close()
+            self._sync_http_client = None
 
     def get_client(self):
         if settings.OPENROUTER_API_KEY:
@@ -90,13 +109,13 @@ class EmbeddingService:
             len(texts), settings.EMBEDDING_MODEL, is_query, EMBEDDING_BATCH_SIZE
         )
 
+        http_client = self.get_sync_http_client() if settings.OPENROUTER_API_KEY else None
         for batch_start in range(0, len(formatted_texts), EMBEDDING_BATCH_SIZE):
             batch = formatted_texts[batch_start:batch_start + EMBEDDING_BATCH_SIZE]
             retries = 3
             while retries > 0:
                 try:
                     if settings.OPENROUTER_API_KEY:
-                        import httpx
                         payload = {
                             "model": settings.EMBEDDING_MODEL,
                             "input": batch,
@@ -106,22 +125,21 @@ class EmbeddingService:
                             "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
                             "Content-Type": "application/json"
                         }
-                        with httpx.Client() as http_client:
-                            resp = http_client.post("https://openrouter.ai/api/v1/embeddings", json=payload, headers=headers, timeout=30.0)
+                        resp = http_client.post("https://openrouter.ai/api/v1/embeddings", json=payload, headers=headers, timeout=30.0)
+                        
+                        if resp.status_code != 200:
+                            raise ValueError(f"OpenRouter HTTP {resp.status_code}: {resp.text}")
                             
-                            if resp.status_code != 200:
-                                raise ValueError(f"OpenRouter HTTP {resp.status_code}: {resp.text}")
-                                
-                            result = resp.json()
+                        result = resp.json()
+                        
+                        if "error" in result:
+                            raise ValueError(f"OpenRouter API Error: {result['error']}")
                             
-                            if "error" in result:
-                                raise ValueError(f"OpenRouter API Error: {result['error']}")
-                                
-                            if "data" not in result or result["data"] is None:
-                                raise ValueError(f"No data in OpenRouter response. Raw: {result}")
-                                
-                            for item in result["data"]:
-                                all_embeddings.append(item["embedding"])
+                        if "data" not in result or result["data"] is None:
+                            raise ValueError(f"No data in OpenRouter response. Raw: {result}")
+                            
+                        for item in result["data"]:
+                            all_embeddings.append(item["embedding"])
                     else:
                         result = client.models.embed_content(
                             model=settings.EMBEDDING_MODEL,
@@ -209,12 +227,18 @@ class EmbeddingService:
                         for item in result["data"]:
                             all_embeddings.append(item["embedding"])
                     else:
-                        # Use asyncio.to_thread for Gemini SDK as a safe fallback
-                        result = await asyncio.to_thread(
-                            client.models.embed_content,
-                            model=settings.EMBEDDING_MODEL,
-                            contents=batch
-                        )
+                        # Native non-blocking async Gemini SDK call; falls back to thread pool if client is synchronous mock
+                        if hasattr(client, "aio") and hasattr(client.aio, "models"):
+                            result = await client.aio.models.embed_content(
+                                model=settings.EMBEDDING_MODEL,
+                                contents=batch
+                            )
+                        else:
+                            result = await asyncio.to_thread(
+                                client.models.embed_content,
+                                model=settings.EMBEDDING_MODEL,
+                                contents=batch
+                            )
                         for emb in result.embeddings:
                             all_embeddings.append(emb.values)
                     gemini_breaker.record_success()

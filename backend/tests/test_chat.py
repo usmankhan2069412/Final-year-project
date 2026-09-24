@@ -9,7 +9,7 @@ from app.models.conversation import ConversationStatus
 
 client = TestClient(app)
 
-@patch("app.api.v1.messaging.ChatService.get_rag_response")
+@patch("app.api.v1.messaging.ChatService.async_get_rag_response", new_callable=AsyncMock)
 def test_send_message_endpoint(mock_get_rag_response):
     """
     Test the Chat endpoint successfully returns the RAG response.
@@ -55,26 +55,27 @@ def test_send_message_endpoint(mock_get_rag_response):
     app.dependency_overrides.clear()
 
 
-def test_agent_intent_routing():
+@pytest.mark.anyio
+async def test_agent_intent_routing():
     """
     Unit test for the intent router classification heuristics without LLM.
     """
     # 1. Handoff keyword
     state = {"user_message": "talk to human", "api_key": None}
-    res = ChatService.route_intent(state)
+    res = await ChatService.route_intent(state)
     assert res["intent"] == "AGENT_HANDOFF"
     
     # 2. Conversational keyword
     state = {"user_message": "hello", "api_key": None}
-    res = ChatService.route_intent(state)
+    res = await ChatService.route_intent(state)
     assert res["intent"] == "CONVERSATIONAL"
     
     # 3. RAG Lookup (no keywords match)
     state = {"user_message": "what is your pricing?", "api_key": None}
-    res = ChatService.route_intent(state)
+    res = await ChatService.route_intent(state)
     assert res["intent"] == "RAG_LOOKUP"
 
     # 4. History-dependent transform should not become a fresh RAG lookup
     state = {"user_message": "translate them into roman urdu", "api_key": None}
-    res = ChatService.route_intent(state)
+    res = await ChatService.route_intent(state)
     assert res["intent"] == "HISTORY_TRANSFORM"

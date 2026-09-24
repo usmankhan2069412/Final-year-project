@@ -28,7 +28,8 @@ def test_chunker_rejects_invalid_overlap():
         TextChunker.split_text("hello world", chunk_size=10, overlap=10)
 
 
-def test_no_llm_relevance_validation_rejects_unrelated_context():
+@pytest.mark.anyio
+async def test_no_llm_relevance_validation_rejects_unrelated_context():
     state = {
         "api_key": None,
         "user_message": "What are the pricing plans?",
@@ -44,10 +45,12 @@ def test_no_llm_relevance_validation_rejects_unrelated_context():
         ],
     }
 
-    assert AgentGraphExecutor.validate_node(state)["is_relevant"] is False
+    res = await AgentGraphExecutor.validate_node(state)
+    assert res["is_relevant"] is False
 
 
-def test_no_llm_relevance_validation_accepts_related_context():
+@pytest.mark.anyio
+async def test_no_llm_relevance_validation_accepts_related_context():
     state = {
         "api_key": None,
         "user_message": "What are the pricing plans?",
@@ -63,10 +66,12 @@ def test_no_llm_relevance_validation_accepts_related_context():
         ],
     }
 
-    assert AgentGraphExecutor.validate_node(state)["is_relevant"] is True
+    res = await AgentGraphExecutor.validate_node(state)
+    assert res["is_relevant"] is True
 
 
-def test_no_llm_relevance_validation_drops_only_unrelated_chunks():
+@pytest.mark.anyio
+async def test_no_llm_relevance_validation_drops_only_unrelated_chunks():
     state = {
         "api_key": None,
         "user_message": "What are the refund rules?",
@@ -91,7 +96,7 @@ def test_no_llm_relevance_validation_drops_only_unrelated_chunks():
         ],
     }
 
-    result = AgentGraphExecutor.validate_node(state)
+    result = await AgentGraphExecutor.validate_node(state)
 
     assert result["is_relevant"] is True
     assert [source["chunk_id"] for source in result["sources"]] == ["refund"]
@@ -113,7 +118,8 @@ def test_history_transform_fast_path_detects_follow_up_requests():
     assert SemanticRouter._matches_history_transform("tell me about pricing") is False
 
 
-def test_history_transform_node_uses_full_last_bot_answer(monkeypatch):
+@pytest.mark.anyio
+async def test_history_transform_node_uses_full_last_bot_answer(monkeypatch):
     roadmap = (
         "Python Mastery\n"
         "System Design Basics\n"
@@ -125,14 +131,13 @@ def test_history_transform_node_uses_full_last_bot_answer(monkeypatch):
     captured = {}
 
     class FakeLLM:
-        def invoke(self, messages):
+        async def ainvoke(self, messages):
             captured["prompt"] = messages[-1].content
             return SimpleNamespace(content="Roman Urdu roadmap")
 
     monkeypatch.setattr(
-        AgentGraphExecutor,
-        "_get_llm",
-        staticmethod(lambda state, temperature=0.3: FakeLLM()),
+        "app.services.rag.nodes.transform.get_llm",
+        lambda state, temperature=0.2: FakeLLM(),
     )
 
     state = {
@@ -146,7 +151,7 @@ def test_history_transform_node_uses_full_last_bot_answer(monkeypatch):
         "api_key": "test-key",
     }
 
-    result = AgentGraphExecutor.history_transform_node(state)
+    result = await AgentGraphExecutor.history_transform_node(state)
 
     assert result["response"] == "Roman Urdu roadmap"
     assert result["response_source"] == "history_transform"
@@ -155,7 +160,8 @@ def test_history_transform_node_uses_full_last_bot_answer(monkeypatch):
     assert "AI Evaluation Systems" in captured["prompt"]
 
 
-def test_history_transform_node_asks_for_text_when_history_missing():
+@pytest.mark.anyio
+async def test_history_transform_node_asks_for_text_when_history_missing():
     state = {
         "user_message": "translate them into roman urdu",
         "history": [],
@@ -164,7 +170,7 @@ def test_history_transform_node_asks_for_text_when_history_missing():
         "api_key": None,
     }
 
-    result = AgentGraphExecutor.history_transform_node(state)
+    result = await AgentGraphExecutor.history_transform_node(state)
 
     assert result["response_source"] == "history_transform"
     assert result["sources"] == []

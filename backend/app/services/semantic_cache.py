@@ -1,6 +1,6 @@
 import hashlib
 import logging
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Dict, Any
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
@@ -275,7 +275,9 @@ class SemanticCacheService:
         knowledge_base_version: int, 
         persona_version: int = 1,
         db: Optional[AsyncSession] = None,
-        threshold: Optional[float] = None
+        threshold: Optional[float] = None,
+        query_vector: Optional[List[float]] = None,
+        out_query_vector: Optional[Dict[str, Any]] = None,
     ) -> Tuple[Optional[str], Optional[List[str]], Optional[float]]:
         if threshold is None:
             threshold = settings.CACHE_SIMILARITY_THRESHOLD
@@ -288,9 +290,15 @@ class SemanticCacheService:
 
         try:
             from sqlalchemy import select
-            query_vectors = await embedding_service.aencode([rewritten_query], is_query=True)
-            query_vector = query_vectors[0]
-            query_list = query_vector.tolist() if hasattr(query_vector, "tolist") else list(query_vector)
+            if query_vector is not None:
+                query_list = query_vector.tolist() if hasattr(query_vector, "tolist") else list(query_vector)
+            else:
+                query_vectors = await embedding_service.aencode([rewritten_query], is_query=True)
+                query_vector_obj = query_vectors[0]
+                query_list = query_vector_obj.tolist() if hasattr(query_vector_obj, "tolist") else list(query_vector_obj)
+
+            if out_query_vector is not None:
+                out_query_vector["vector"] = query_list
             
             max_distance = 1.0 - threshold
             now = datetime.now(timezone.utc)

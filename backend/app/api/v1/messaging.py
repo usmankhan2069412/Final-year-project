@@ -96,12 +96,15 @@ async def get_chat_history(
     start_date = conversation.started_at
     end_date = datetime.now(timezone.utc)
 
+    filters = [
+        Message.conversation_id == conversation_id,
+        Message.created_at <= end_date,
+    ]
+    if start_date is not None:
+        filters.append(Message.created_at >= start_date)
+
     result = await db.execute(
-        select(Message).where(
-            Message.conversation_id == conversation_id,
-            Message.created_at >= start_date,
-            Message.created_at <= end_date
-        ).order_by(Message.created_at.asc())
+        select(Message).filter(*filters).order_by(Message.created_at.asc())
     )
     history = list(result.scalars().all())
     return history

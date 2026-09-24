@@ -37,12 +37,15 @@ class AsyncStreamingCallbackHandler(AsyncCallbackHandler):
     def __init__(self, q: asyncio.Queue):
         self.q = q
         self.is_done = False
+        self._has_emitted_generating = False
 
     async def on_llm_start(
         self, serialized: Dict[str, Any], prompts: List[str], **kwargs: Any
     ) -> None:
         """Run when LLM starts running."""
-        pass
+        if not self._has_emitted_generating:
+            self._has_emitted_generating = True
+            await self.q.put({"type": "status", "message": "✨ Generating your answer..."})
 
     async def on_llm_new_token(self, token: str, **kwargs: Any) -> None:
         """Run on new LLM token."""

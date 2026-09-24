@@ -9,6 +9,7 @@ from typing import Optional, Dict, List, Any, Tuple
 from app.services.embedding import embedding_service
 from app.core.config import resolve_openrouter_key
 from app.models.conversation import MessageRole
+from app.services.rag.prompts import PromptCatalog
 import logging
 
 logger = logging.getLogger(__name__)
@@ -494,30 +495,11 @@ class SemanticRouter:
             persona_desc = getattr(persona, "description", "") or ""
             traits_str = ", ".join(traits) if traits else "General purpose"
 
-            sys_prompt = (
-                "You are an intent classifier for a chatbot.\n\n"
-                f"PERSONA: {persona_name}\n"
-                f"ROLE: {persona_desc}\n"
-                f"TRAITS: {traits_str}\n"
-                f"CONVERSATION CONTEXT: {context}\n\n"
-                "Classify the user's latest message into exactly ONE intent:\n\n"
-                "- CONVERSATIONAL: Greetings, small talk, rapport building, thanks, compliments, "
-                "farewells, acknowledgments, social chitchat, emotional expressions, or any "
-                "message where the user is relating socially rather than seeking factual "
-                "information. Consider the persona's role â€” some personas should handle "
-                "emotional messages conversationally rather than escalating.\n"
-                "- RAG_LOOKUP: Questions or requests that need factual information from the "
-                "knowledge base â€” topics, policies, products, services, how-to, explanations.\n"
-                "- HISTORY_TRANSFORM: The user wants to transform prior chat content, especially "
-                "the previous assistant answer. Examples: translate this/them, make it shorter, "
-                "summarize above, rewrite this, make bullet points, explain again, or convert to "
-                "Roman Urdu. Do not classify these as RAG_LOOKUP unless the user asks for new "
-                "facts from the knowledge base.\n"
-                "- AGENT_HANDOFF: User explicitly and directly asks to speak with a human agent, "
-                "representative, or real person.\n"
-                "- FRUSTRATION: User expresses strong anger, dissatisfaction, or hostility "
-                "toward the bot itself (not general life frustration).\n\n"
-                "Reply with ONLY the intent label. No explanation."
+            sys_prompt = PromptCatalog.build_intent_classification_prompt(
+                persona_name=persona_name,
+                persona_desc=persona_desc,
+                traits_str=traits_str,
+                context=context,
             )
 
             result_msg = await llm.ainvoke([
@@ -584,7 +566,7 @@ class SemanticRouter:
 
     @classmethod
     async def _classify_with_embeddings(cls, message: str, threshold: float = 0.82) -> Tuple[Optional[str], float]:
-        """Original embedding-based classification â€” used as fallback when LLM is unavailable."""
+        """Original embedding-based classification — used as fallback when LLM is unavailable."""
         if not cls._initialized:
             cls._initialize()
 

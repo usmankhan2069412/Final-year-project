@@ -75,8 +75,13 @@ class Settings(BaseSettings):
     TYPESAFE_TIMEOUT_SECS: float = 5.0
     TYPESAFE_CONFIDENCE_THRESHOLD: float = 0.70
 
-    # Async executor configuration for RAG pipeline
-    EXECUTOR_MAX_WORKERS: int = 200       # Max threads for blocking LLM/embedding calls
+    # RAG execution timeout
+    RAG_GRAPH_TIMEOUT: float = 30.0
+    RERANK_TIMEOUT_SECS: float = 8.0     # Max seconds before falling back to local hybrid validation
+
+    # HTTP & embedding connection pool settings
+    EMBEDDING_MAX_CONNECTIONS: int = 150  # Max connections for HTTP/embedding client pool
+    EMBEDDING_MAX_KEEPALIVE: int = 30     # Max idle keepalive connections
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
 
