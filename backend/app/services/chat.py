@@ -129,8 +129,19 @@ class ChatService(metaclass=_ChatServiceMeta):
             retriever=PostgresRetriever(db=db),
         )
         t0 = time.monotonic()
-        final_state = await AgentGraphExecutor.aexecute(initial_state)
+        try:
+            final_state = await AgentGraphExecutor.aexecute(initial_state)
+        except Exception:
+            await db.rollback()
+            raise
         chat_latency_seconds.observe(time.monotonic() - t0)
+
+        # If the graph fell back or timed out, ensure any aborted transaction is rolled back
+        if final_state.get("response_source") == "fallback":
+            try:
+                await db.rollback()
+            except Exception:
+                pass
 
         # 3. Observability & metrics
         val_chunks = final_state.get("validated_chunks_count", 0)

@@ -1,94 +1,780 @@
 {
   "corpus": [
     {
-      "chunk_id": "chunk_01",
-      "text": "Aina AI Refund Policy: Customers can request a full refund within 14 days of purchase if their API usage is under 100 requests. Enterprise contracts have custom refund terms specified in their SLA."
+      "chunk_id": "iac_001",
+      "text": "Institute for Art and Culture (IAC) is a federally chartered and HEC recognized institute in Pakistan, established under Act No. XXXI of 2018. Since 2018, its programs have been defining creative education in Pakistan. IAC describes itself as a community of makers, thinkers, pioneers and storytellers redesigning the future, with a global network influencing learning, culture, industry and society.",
+      "difficulty": "medium"
     },
     {
-      "chunk_id": "chunk_02",
-      "text": "Pricing Plans & Tiers: The Starter plan costs $15 per month and allows up to 3 chatbots, 500 uploaded documents, and 2 team members. The Professional plan costs $49 per month with 10 chatbots and unlimited team members."
+      "chunk_id": "iac_002",
+      "text": "IAC's mission is to encourage excellence in teaching and research by offering academic programs and diverse approaches that prepare students to intellectually interact and explore innovation in performance and creative work. IAC promotes multidisciplinary integration of arts, culture, and technology through creativity, critical thinking, and technological innovation.",
+      "difficulty": "medium"
     },
     {
-      "chunk_id": "chunk_03",
-      "text": "WhatsApp Integration: Connect your chatbot to WhatsApp using the Meta Cloud API v21.0. You must provide your WhatsApp Verify Token, Access Token, and Phone Number ID in the Channel Deployments tab."
+      "chunk_id": "iac_003",
+      "text": "IAC's vision is to engage and incorporate a diverse group of students, community members, faculty, and staff to maintain a firm ground for achieving excellence in diversified and multidisciplinary fields of arts, culture, and technology, fostering an artistic, creative, critical, and effective thought process.",
+      "difficulty": "medium"
     },
     {
-      "chunk_id": "chunk_04",
-      "text": "Document Ingestion & File Formats: Aina AI supports PDF (via PyMuPDF), Word Documents (.docx via python-docx), CSV files, and Website URLs (crawled via Firecrawl). Maximum single file upload size is 50MB."
+      "chunk_id": "iac_004",
+      "text": "IAC operates under the structure '5 Schools, 1 University': 1) School of Architecture, Design & Urbanism (SADU), 2) School of Art (SOA), 3) School of Informatics and Robotics (SIR), 4) School of Digital & Cinematic Art (SDCA), 5) School of Culture and Languages.",
+      "difficulty": "simple"
     },
     {
-      "chunk_id": "chunk_05",
-      "text": "Vector Database & Embeddings: We use Google Gemini 3072-dimensional embeddings (gemini-embedding-2-preview) stored in PostgreSQL with the pgvector extension. Hybrid search combines dense vector distance with TSVECTOR keyword ranking."
+      "chunk_id": "iac_005",
+      "text": "IAC contact details: Phone (042) 111 111 822; Email info@iac.edu.pk; Address: 7.5 KM from Thokar Niaz Baig, Main Raiwind Road, Bhobtian, Lahore, Punjab, Pakistan (next to Govt. Technical College). Social media: Instagram @iacofficials, Facebook facebook.com/iacofficials, X/Twitter @iacofficials, LinkedIn linkedin.com/school/iacofficials, YouTube @instituteforartandculture8336.",
+      "difficulty": "medium"
     },
     {
-      "chunk_id": "chunk_06",
-      "text": "Persona Configuration: Each chatbot can have a custom Persona with name, greeting message, fallback message, and personality traits (e.g., Professional, Empathetic, Concise)."
+      "chunk_id": "iac_006",
+      "text": "IAC educational and global partnerships include: IAC & HUM TV (media collaboration), CEE - Ozyegin University Istanbul, Turkey, Alliance with RUBIKA (France, for animation/game design), IU Germany, and membership/association with the Association of Commonwealth Universities (ACU).",
+      "difficulty": "medium"
     },
     {
-      "chunk_id": "chunk_07",
-      "text": "Multi-Tenancy & Security: All documents, vectors, and conversations are isolated by organization ID (org_id) using PostgreSQL Row-Level Security (RLS). No data leaks across tenant organizations."
+      "chunk_id": "iac_007",
+      "text": "Sports at IAC include eSports, Cricket, Football, Table Tennis, Badminton, and Gym. IAC also hosts an annual Art & Cultural Week featuring sports competitions (Cricket, Football, Badminton, Table Tennis, Spoon Race, Tug of War, Musical Chair), E-Games (Tekken, FIFA, Call of Duty, Valorant), and cultural events (Theater/Mime, Urdu/English Debates, Mushaira, Music Performance, Fashion Show, Social Night).",
+      "difficulty": "medium"
     },
     {
-      "chunk_id": "chunk_08",
-      "text": "Human Escalation & Live Handoff: When users express frustration or ask to speak with a human agent, the conversation is marked ESCALATED and routed to the least-busy administrator via Server-Sent Events (SSE)."
+      "chunk_id": "iac_008",
+      "text": "Students can apply to IAC through the online Admission Portal at eduboard.iac.edu.pk/AdmissionPortal/Login. IAC also has a Student Portal for currently enrolled students at eduboard.iac.edu.pk/StudentPortal/Login. Prospective students can browse programs, download the prospectus, and review the fee structure before applying. Admissions staff include Hina Naseem (Assistant Manager Admissions) and Alisha Nawaz (Admission Associate).",
+      "difficulty": "medium"
+    },
+    {
+      "chunk_id": "iac_009",
+      "text": "IAC offers multiple levels of academic programs: Undergraduate (Bachelor's) programs, Postgraduate (Master's) programs, Associate Degree Programs (ADP), Post-Associate Degree Programs (Post-ADP), one-year Professional Diplomas, and 3-6 month Short Courses/Certificates.",
+      "difficulty": "simple"
+    },
+    {
+      "chunk_id": "iac_010",
+      "text": "IAC provides student facilities: Accommodation, Fees and Funding (Financial Aid), Transport services, a Day Care Center, the Center for Well Being & Positive Psychology (CW&PS), and a Cafeteria. Additional resources include a Library, a downloadable Prospectus, an Academic Calendar, and Scholarships & Financial Aid.",
+      "difficulty": "medium"
+    },
+    {
+      "chunk_id": "iac_011",
+      "text": "The School of Architecture, Design and Urbanism (SADU) at IAC is led by Dean Dr. Muhammad Yusuf Awan. SADU blends creativity, technology, and practical experience, offering architecture, design, and urban studies programs that combine theory and practice. The school uses an innovative curriculum incorporating Artificial Intelligence, practical studios, and real-world internships.",
+      "difficulty": "medium"
+    },
+    {
+      "chunk_id": "iac_012",
+      "text": "SADU offers Bachelor's programs: Bachelor of Architecture, Bachelor of Interior Design, Bachelor of Construction Management, and Bachelor of Tourism, Hospitality and Culinary Arts.",
+      "difficulty": "simple"
+    },
+    {
+      "chunk_id": "iac_013",
+      "text": "SADU Associate Degree Programs: Associate Degree in Interior Design, and Associate Degree in Construction Management. SADU Graduate (Master's) Programs: Master in Interior Design, and Master of Architecture (M.Arch).",
+      "difficulty": "medium"
+    },
+    {
+      "chunk_id": "iac_014",
+      "text": "SADU professional diplomas and short courses: Certificate in Culinary Arts / Professional Chef (3 months), Certificate in Bakery & Patisserie Making (3 months), Diploma in Professional Cooking & Baking (1 year), Certificate in Restaurant Manager (6 months), Certificate in Tourism & Hospitality Management (6 months).",
+      "difficulty": "hard"
+    },
+    {
+      "chunk_id": "iac_015",
+      "text": "The School of Art at IAC is led by Dean Prof. Dr. Shahida Manzoor. It offers programs in Graphic Design, Textile Design, Fashion Design, and Interdisciplinary Art & Design, combining theory and practical experience with foreign-qualified faculty and modern studios.",
+      "difficulty": "medium"
+    },
+    {
+      "chunk_id": "iac_016",
+      "text": "School of Art Bachelor's programs: Bachelor of Graphic Design, Bachelor of Interdisciplinary Art and Design, Bachelor of Textile Design, Bachelor of Fashion Design. Associate Degree Programs: Associate Degree in Graphic Design, Associate Degree in Fashion Design, Associate Degree in Textile Design.",
+      "difficulty": "medium"
+    },
+    {
+      "chunk_id": "iac_017",
+      "text": "School of Art short courses include: Fashion Design, Graphic Design, Fine Arts, Traditional Arts, Textile Design, and Drawing.",
+      "difficulty": "simple"
+    },
+    {
+      "chunk_id": "iac_018",
+      "text": "The School of Informatics and Robotics (SIR) at IAC is led by Dean Prof. Dr. Shazia Saqib. SIR offers BS Computer Science, ADP Computer Science, Post-ADP Computer Science, and MS Computer Science programs focused on Programming, AI, Robotics, and Data-Driven Innovation, with modern labs, project-based learning, and industry linkages.",
+      "difficulty": "medium"
+    },
+    {
+      "chunk_id": "iac_019",
+      "text": "SIR undergraduate program: Bachelor of Computer Science. Associate Degree: Associate Degree in Computer Science. Master's program: Master in Computer Science. Short courses: Programming for AI (Artificial Intelligence), and MERN Stack Full-Stack Web Development.",
+      "difficulty": "medium"
+    },
+    {
+      "chunk_id": "iac_020",
+      "text": "The School of Digital & Cinematic Art (SDCA) at IAC is led by Acting Associate Dean Dr. Asim Manzoor. SDCA offers Bachelor's programs in Film & TV, Game Design, and Animation Design, with international collaboration with Rubika (France), expert faculty, on-campus studios, and industry workshops. Students use tools like Maya, Blender, and Adobe Suite.",
+      "difficulty": "medium"
+    },
+    {
+      "chunk_id": "iac_021",
+      "text": "SDCA Bachelor's programs: Bachelor of Game Design, Bachelor of Film and Television, Bachelor of Animation Design. Associate Degree Program: Associate Degree in Film & TV.",
+      "difficulty": "simple"
+    },
+    {
+      "chunk_id": "iac_022",
+      "text": "SDCA short courses include: 60 Second Film Production, Vlogging, Photography, Mobile Game Marketing, Game Design for Mobile, Character Design for Animation, Visual Communication, Sound Mastery, Podcast Production, Fundamentals of Game Design, 3D Modeling (Fundamentals of Games), Designing Mobile Game UI/UX, Fundamentals of Unreal Engine, Learn to Illustrate (Drawing Fundamentals), and AR/VR Techniques.",
+      "difficulty": "hard"
+    },
+    {
+      "chunk_id": "iac_023",
+      "text": "The School of Culture and Languages at IAC is led by Dr. Shabbir Ahmad Rana (Professor/Head, Center for Wellbeing and Positive Psychology). Its BS in Psychology program, with a specialization in Positive Psychology, is among the first of its kind in the region, focusing on well-being, resilience, and human flourishing.",
+      "difficulty": "hard"
+    },
+    {
+      "chunk_id": "iac_024",
+      "text": "School of Culture and Languages Bachelor's programs: Bachelor in Psychology (with specialization in Positive Psychology), Bachelor in English Language and Literature, and Bachelor in Popular Culture.",
+      "difficulty": "simple"
+    },
+    {
+      "chunk_id": "iac_025",
+      "text": "IAC's Bachelor's degree programs across all schools: Bachelor of Architecture; Bachelor of Interior Design; Bachelor of Construction Management; Bachelor of Tourism, Hospitality and Culinary Arts (SADU) | Bachelor of Graphic Design; Bachelor of Interdisciplinary Art and Design; Bachelor of Textile Design; Bachelor of Fashion Design (School of Art) | Bachelor of Computer Science (SIR) | Bachelor of Game Design; Bachelor of Film and Television; Bachelor of Animation Design (SDCA) | Bachelor in Psychology; Bachelor in English Language and Literature; Bachelor in Popular Culture (School of Culture and Languages).",
+      "difficulty": "hard"
+    },
+    {
+      "chunk_id": "iac_026",
+      "text": "IAC's Master's (graduate) programs: Master in Interior Design; Master of Architecture (M.Arch) (SADU) | Master in Computer Science (SIR).",
+      "difficulty": "simple"
+    },
+    {
+      "chunk_id": "iac_027",
+      "text": "IAC's Associate Degree Programs (ADP): Associate Degree in Interior Design; Associate Degree in Construction Management (SADU) | Associate Degree in Graphic Design; Associate Degree in Fashion Design; Associate Degree in Textile Design (School of Art) | Associate Degree in Computer Science (SIR) | Associate Degree in Film & TV (SDCA).",
+      "difficulty": "hard"
+    },
+    {
+      "chunk_id": "iac_028",
+      "text": "Notable IAC events: 'Voices, Vision, and Leadership: Women Transforming Creative Arts, Architecture, Film, and Technology' conference under Chancellor Prof. Dr. Najma Najam at IAC Auditorium; IAC x JS Bank MoU for Fee Digitalization; ART & CULTURAL WEEK; Fall 2025 Thesis Display Inauguration; Final Thesis Exhibitions for Bachelor of Interior Design and Bachelor of Architecture; and the 2nd Convocation 2026.",
+      "difficulty": "hard"
+    },
+    {
+      "chunk_id": "iac_029",
+      "text": "IAC's Chancellor is Prof. Dr. Najma Najam. The website references a Pro-Vice Chancellor Message page, an IAC Charter (established under Act No. XXXI of 2018), a Quality Enhancement Cell (QEC), Student Affairs office, Registrar Office, Controller Examination Office, HR Department, Office of the Treasurer, and IT Department.",
+      "difficulty": "hard"
+    },
+    {
+      "chunk_id": "iac_030",
+      "text": "IAC's campus is located 7.5 KM from Thokar Niaz Baig, on Main Raiwind Road, in Bhobtian, Lahore, Punjab, Pakistan - next to the Government Technical College.",
+      "difficulty": "simple"
+    },
+    {
+      "chunk_id": "iac_031",
+      "text": "All fee figures are for the Spring 2026 admission cycle at IAC, quoted in Pakistani Rupees (PKR). Every program requires a one-time, non-refundable Admission Fee of PKR 20,000 and a refundable Security Deposit of PKR 20,000, paid at admission, in addition to total tuition fee. Withholding Tax was omitted by the Finance Act 2022, but may be reinstated. Fee amounts from the 2nd semester onward are subject to change based on enrollment, selected subjects, and practical courses.",
+      "difficulty": "hard"
+    },
+    {
+      "chunk_id": "iac_032",
+      "text": "Overall fee summary - SADU: Bachelor of Architecture total PKR 2,032,000; Bachelor of Interior Design PKR 1,468,000; BS in Construction Management PKR 1,420,000; Bachelor of Tourism, Hospitality & Culinary Arts PKR 1,190,000.",
+      "difficulty": "hard"
+    },
+    {
+      "chunk_id": "iac_033",
+      "text": "Overall fee summary - SDCA: Bachelor of Film & TV total PKR 1,291,500; Bachelor of Animation Design PKR 1,295,500; Bachelor of Game Design PKR 1,265,500.",
+      "difficulty": "medium"
+    },
+    {
+      "chunk_id": "iac_034",
+      "text": "Overall fee summary - School of Art: Bachelor of Interdisciplinary Arts & Design PKR 1,332,500; Bachelor of Fine Art PKR 1,358,500; Bachelor of Graphic Design PKR 1,378,500; Bachelor of Textile Design PKR 1,326,500; Bachelor of Fashion Design PKR 1,346,500.",
+      "difficulty": "hard"
+    },
+    {
+      "chunk_id": "iac_035",
+      "text": "Overall fee summary - SIR: BS in Computer Science PKR 969,000; BS in Interaction Design PKR 960,000.",
+      "difficulty": "medium"
+    },
+    {
+      "chunk_id": "iac_036",
+      "text": "Overall fee summary - Graduate Studies: Master of Architecture PKR 485,000; Master in Interior Design PKR 459,000.",
+      "difficulty": "medium"
+    },
+    {
+      "chunk_id": "iac_037",
+      "text": "Overall fee summary - Associate Degree Programmes: ADP Computer Science PKR 530,000; ADP Fashion Design PKR 675,000; ADP Graphic Design PKR 693,000; ADP Interior Design PKR 673,000; ADP Textile Design PKR 637,000; ADP Construction Management PKR 750,000; ADP Film & TV PKR 620,500.",
+      "difficulty": "hard"
+    },
+    {
+      "chunk_id": "iac_038",
+      "text": "Detailed fee breakdown - Bachelor of Architecture: 52 courses, 180 credits, total tuition PKR 1,892,000, misc charges PKR 100,000, admission PKR 20,000, security PKR 20,000, grand total PKR 2,032,000.",
+      "difficulty": "hard"
+    },
+    {
+      "chunk_id": "iac_039",
+      "text": "Detailed fee breakdown - Bachelor of Interior Design: 47 courses, 134 credits, total tuition PKR 1,148,000, misc charges PKR 80,000, admission PKR 20,000, security PKR 20,000, grand total PKR 1,268,000.",
+      "difficulty": "hard"
+    },
+    {
+      "chunk_id": "iac_040",
+      "text": "Detailed fee breakdown - BS in Computer Science: 48 courses, 141 credits, total tuition PKR 849,000, misc charges PKR 80,000, admission PKR 20,000, security PKR 20,000, grand total PKR 969,000.",
+      "difficulty": "hard"
+    },
+    {
+      "chunk_id": "iac_041",
+      "text": "Bachelor of Architecture (B.Arch) at IAC: Duration 5 Years / 10 Semesters; Total Credit Hours: 180.",
+      "difficulty": "simple"
+    },
+    {
+      "chunk_id": "iac_042",
+      "text": "Bachelor of Architecture Semester 1 courses: GED-101 Functional English 3(3+0); GED-102 Quantitative Reasoning I 3(3+0); GED-103 Islamic/Religious Studies/Ethics 2(2+0); GED-104 Applications of ICT 3(2+1); ARC-101 Foundation Studio I 6(0+6); SOC-101 Introduction to Soft Skills 3(2+1); GED-100 Nazara-e-Quran 0(0+0).",
+      "difficulty": "hard"
+    },
+    {
+      "chunk_id": "iac_043",
+      "text": "Bachelor of Interior Design (B.ID) at IAC: Duration 4 Years / 8 Semesters; Total Credit Hours: 134.",
+      "difficulty": "simple"
+    },
+    {
+      "chunk_id": "iac_044",
+      "text": "BS in Construction Management (CMT) at IAC: Duration 4 Years / 8 Semesters; Total Credit Hours: 134.",
+      "difficulty": "medium"
+    },
+    {
+      "chunk_id": "iac_045",
+      "text": "Bachelor of Studies in Tourism, Hospitality & Culinary Arts (BS-THCA) at IAC: Duration 4 Years / 8 Semesters; Total Credit Hours: 136.",
+      "difficulty": "medium"
+    },
+    {
+      "chunk_id": "iac_046",
+      "text": "Bachelor of Graphic Design at IAC: Duration 4 Years / 8 Semesters; Total Credit Hours: 139.",
+      "difficulty": "hard"
+    },
+    {
+      "chunk_id": "iac_047",
+      "text": "Bachelor of Fashion Design at IAC: Duration 4 Years / 8 Semesters; Total Credit Hours: 139.",
+      "difficulty": "hard"
+    },
+    {
+      "chunk_id": "iac_048",
+      "text": "Bachelor of Game Design (Game Design & Development) at IAC: Duration 4 Years / 8 Semesters; Total Credit Hours: 137.",
+      "difficulty": "hard"
+    },
+    {
+      "chunk_id": "iac_049",
+      "text": "Bachelor of Film and Television (FTV) at IAC: Duration 4 Years / 8 Semesters; Total Credit Hours: 137.",
+      "difficulty": "hard"
+    },
+    {
+      "chunk_id": "iac_050",
+      "text": "Bachelor of Animation Design at IAC: Duration 4 Years / 8 Semesters; Total Credit Hours: 137.",
+      "difficulty": "hard"
+    },
+    {
+      "chunk_id": "iac_051",
+      "text": "The School of Informatics and Robotics (SIR) at IAC is led by Dean Prof. Dr. Shazia Saqib. SIR offers BS Computer Science, ADP Computer Science, Post-ADP Computer Science, and MS Computer Science programs focused on Programming, AI, Robotics, and Data-Driven Innovation, with modern labs, project-based learning, and industry linkages including internships and industry projects.",
+      "difficulty": "hard"
     }
   ],
   "queries": [
     {
-      "id": "ret_01",
-      "query": "How many days do I have to request a refund?",
-      "relevant_chunk_ids": ["chunk_01"],
-      "query_type": "semantic_dense",
-      "language": "en"
-    },
-    {
-      "id": "ret_02",
-      "query": "Meta Cloud API v21.0 Verify Token Access Token",
-      "relevant_chunk_ids": ["chunk_03"],
+      "id": "ret_iac_001",
+      "query": "What is IAC's phone number?",
+      "relevant_chunk_ids": [
+        "iac_005"
+      ],
       "query_type": "sparse_keyword",
-      "language": "en"
+      "language": "en",
+      "difficulty": "simple"
     },
     {
-      "id": "ret_03",
-      "query": "What is the monthly price and limits of the Starter plan?",
-      "relevant_chunk_ids": ["chunk_02"],
+      "id": "ret_iac_002",
+      "query": "What is the total credit hours for Bachelor of Architecture?",
+      "relevant_chunk_ids": [
+        "iac_041"
+      ],
+      "query_type": "sparse_keyword",
+      "language": "en",
+      "difficulty": "simple"
+    },
+    {
+      "id": "ret_iac_003",
+      "query": "How many schools does IAC have?",
+      "relevant_chunk_ids": [
+        "iac_004"
+      ],
+      "query_type": "semantic_dense",
+      "language": "en",
+      "difficulty": "simple"
+    },
+    {
+      "id": "ret_iac_004",
+      "query": "What is the email address for IAC?",
+      "relevant_chunk_ids": [
+        "iac_005"
+      ],
+      "query_type": "sparse_keyword",
+      "language": "en",
+      "difficulty": "simple"
+    },
+    {
+      "id": "ret_iac_005",
+      "query": "What is the duration of Bachelor of Interior Design?",
+      "relevant_chunk_ids": [
+        "iac_043"
+      ],
+      "query_type": "semantic_dense",
+      "language": "en",
+      "difficulty": "simple"
+    },
+    {
+      "id": "ret_iac_006",
+      "query": "What is the address of IAC campus?",
+      "relevant_chunk_ids": [
+        "iac_030"
+      ],
+      "query_type": "sparse_keyword",
+      "language": "en",
+      "difficulty": "simple"
+    },
+    {
+      "id": "ret_iac_007",
+      "query": "List Master's programs at IAC.",
+      "relevant_chunk_ids": [
+        "iac_026"
+      ],
+      "query_type": "semantic_dense",
+      "language": "en",
+      "difficulty": "simple"
+    },
+    {
+      "id": "ret_iac_008",
+      "query": "What short courses does School of Art offer?",
+      "relevant_chunk_ids": [
+        "iac_017"
+      ],
+      "query_type": "sparse_keyword",
+      "language": "en",
+      "difficulty": "simple"
+    },
+    {
+      "id": "ret_iac_009",
+      "query": "What are SADU Bachelor's programs?",
+      "relevant_chunk_ids": [
+        "iac_012"
+      ],
+      "query_type": "semantic_dense",
+      "language": "en",
+      "difficulty": "simple"
+    },
+    {
+      "id": "ret_iac_010",
+      "query": "What is the total credit hours for Bachelor of Film and Television?",
+      "relevant_chunk_ids": [
+        "iac_049"
+      ],
+      "query_type": "sparse_keyword",
+      "language": "en",
+      "difficulty": "simple"
+    },
+    {
+      "id": "ret_iac_011",
+      "query": "Who is the Dean of SADU?",
+      "relevant_chunk_ids": [
+        "iac_011"
+      ],
+      "query_type": "semantic_dense",
+      "language": "en",
+      "difficulty": "medium"
+    },
+    {
+      "id": "ret_iac_012",
+      "query": "What is IAC's mission?",
+      "relevant_chunk_ids": [
+        "iac_002"
+      ],
+      "query_type": "semantic_dense",
+      "language": "en",
+      "difficulty": "medium"
+    },
+    {
+      "id": "ret_iac_013",
+      "query": "What partnerships does IAC have?",
+      "relevant_chunk_ids": [
+        "iac_006"
+      ],
       "query_type": "hybrid",
-      "language": "en"
+      "language": "en",
+      "difficulty": "medium"
     },
     {
-      "id": "ret_04",
-      "query": "PDF aur Word files upload karne ki limit kya hai?",
-      "relevant_chunk_ids": ["chunk_04"],
-      "query_type": "roman_urdu_hybrid",
-      "language": "roman_urdu"
-    },
-    {
-      "id": "ret_05",
-      "query": "How are embeddings stored and searched in PostgreSQL?",
-      "relevant_chunk_ids": ["chunk_05"],
+      "id": "ret_iac_014",
+      "query": "How can prospective students apply to IAC?",
+      "relevant_chunk_ids": [
+        "iac_008"
+      ],
       "query_type": "semantic_dense",
-      "language": "en"
+      "language": "en",
+      "difficulty": "medium"
     },
     {
-      "id": "ret_06",
-      "query": "What happens when a user wants to talk to a real human agent?",
-      "relevant_chunk_ids": ["chunk_08"],
+      "id": "ret_iac_015",
+      "query": "What sports and cultural events are offered at IAC?",
+      "relevant_chunk_ids": [
+        "iac_007"
+      ],
+      "query_type": "hybrid",
+      "language": "en",
+      "difficulty": "medium"
+    },
+    {
+      "id": "ret_iac_016",
+      "query": "What facilities are available for IAC students?",
+      "relevant_chunk_ids": [
+        "iac_010"
+      ],
       "query_type": "semantic_dense",
-      "language": "en"
+      "language": "en",
+      "difficulty": "medium"
     },
     {
-      "id": "ret_07",
-      "query": "PostgreSQL Row-Level Security RLS tenant org_id",
-      "relevant_chunk_ids": ["chunk_07"],
+      "id": "ret_iac_017",
+      "query": "What programs are offered by School of Informatics and Robotics?",
+      "relevant_chunk_ids": [
+        "iac_019"
+      ],
+      "query_type": "semantic_dense",
+      "language": "en",
+      "difficulty": "medium"
+    },
+    {
+      "id": "ret_iac_018",
+      "query": "What is the fee for Bachelor of Architecture?",
+      "relevant_chunk_ids": [
+        "iac_032"
+      ],
+      "query_type": "hybrid",
+      "language": "en",
+      "difficulty": "medium"
+    },
+    {
+      "id": "ret_iac_019",
+      "query": "What is the total fee for BS Computer Science?",
+      "relevant_chunk_ids": [
+        "iac_035"
+      ],
+      "query_type": "hybrid",
+      "language": "en",
+      "difficulty": "medium"
+    },
+    {
+      "id": "ret_iac_020",
+      "query": "What is the fee for Master of Architecture?",
+      "relevant_chunk_ids": [
+        "iac_036"
+      ],
       "query_type": "sparse_keyword",
-      "language": "en"
+      "language": "en",
+      "difficulty": "medium"
     },
     {
-      "id": "ret_08",
-      "query": "How can I customize the bot's tone and greeting message?",
-      "relevant_chunk_ids": ["chunk_06"],
+      "id": "ret_iac_021",
+      "query": "What are the short courses at SDCA?",
+      "relevant_chunk_ids": [
+        "iac_022"
+      ],
       "query_type": "semantic_dense",
-      "language": "en"
+      "language": "en",
+      "difficulty": "medium"
+    },
+    {
+      "id": "ret_iac_022",
+      "query": "Who leads the School of Art?",
+      "relevant_chunk_ids": [
+        "iac_015"
+      ],
+      "query_type": "semantic_dense",
+      "language": "en",
+      "difficulty": "medium"
+    },
+    {
+      "id": "ret_iac_023",
+      "query": "What are the Bachelor's programs in School of Culture and Languages?",
+      "relevant_chunk_ids": [
+        "iac_024"
+      ],
+      "query_type": "semantic_dense",
+      "language": "en",
+      "difficulty": "medium"
+    },
+    {
+      "id": "ret_iac_024",
+      "query": "What is the duration and credits for BS Tourism, Hospitality & Culinary Arts?",
+      "relevant_chunk_ids": [
+        "iac_045"
+      ],
+      "query_type": "hybrid",
+      "language": "en",
+      "difficulty": "medium"
+    },
+    {
+      "id": "ret_iac_025",
+      "query": "What is the fee for ADP Construction Management?",
+      "relevant_chunk_ids": [
+        "iac_037"
+      ],
+      "query_type": "sparse_keyword",
+      "language": "en",
+      "difficulty": "medium"
+    },
+    {
+      "id": "ret_iac_026",
+      "query": "What is the mission of IAC regarding arts and technology?",
+      "relevant_chunk_ids": [
+        "iac_002"
+      ],
+      "query_type": "semantic_dense",
+      "language": "en",
+      "difficulty": "medium"
+    },
+    {
+      "id": "ret_iac_027",
+      "query": "What are the admission portal URLs for IAC?",
+      "relevant_chunk_ids": [
+        "iac_008"
+      ],
+      "query_type": "sparse_keyword",
+      "language": "en",
+      "difficulty": "medium"
+    },
+    {
+      "id": "ret_iac_028",
+      "query": "What is the total tuition fee for Bachelor of Interior Design?",
+      "relevant_chunk_ids": [
+        "iac_039"
+      ],
+      "query_type": "hybrid",
+      "language": "en",
+      "difficulty": "medium"
+    },
+    {
+      "id": "ret_iac_029",
+      "query": "What are the graduate programs at SADU?",
+      "relevant_chunk_ids": [
+        "iac_013"
+      ],
+      "query_type": "semantic_dense",
+      "language": "en",
+      "difficulty": "medium"
+    },
+    {
+      "id": "ret_iac_030",
+      "query": "What is the fee for Bachelor of Graphic Design?",
+      "relevant_chunk_ids": [
+        "iac_034"
+      ],
+      "query_type": "sparse_keyword",
+      "language": "en",
+      "difficulty": "medium"
+    },
+    {
+      "id": "ret_iac_031",
+      "query": "IAC mein kitne schools hain aur unke naam kya hain?",
+      "relevant_chunk_ids": [
+        "iac_004"
+      ],
+      "query_type": "roman_urdu_hybrid",
+      "language": "roman_urdu",
+      "difficulty": "hard"
+    },
+    {
+      "id": "ret_iac_032",
+      "query": "What is the total fee for Bachelor of Fashion Design and ADP Fashion Design?",
+      "relevant_chunk_ids": [
+        "iac_034",
+        "iac_037"
+      ],
+      "query_type": "hybrid",
+      "language": "en",
+      "difficulty": "hard"
+    },
+    {
+      "id": "ret_iac_033",
+      "query": "Where is IAC located and what is the phone number?",
+      "relevant_chunk_ids": [
+        "iac_030",
+        "iac_005"
+      ],
+      "query_type": "hybrid",
+      "language": "en",
+      "difficulty": "hard"
+    },
+    {
+      "id": "ret_iac_034",
+      "query": "How many credits does B.Arch have and what are the Semester 1 courses?",
+      "relevant_chunk_ids": [
+        "iac_041",
+        "iac_042"
+      ],
+      "query_type": "hybrid",
+      "language": "en",
+      "difficulty": "hard"
+    },
+    {
+      "id": "ret_iac_035",
+      "query": "What is the fee difference between BS Computer Science and BS Interaction Design?",
+      "relevant_chunk_ids": [
+        "iac_035"
+      ],
+      "query_type": "hybrid",
+      "language": "en",
+      "difficulty": "hard"
+    },
+    {
+      "id": "ret_iac_036",
+      "query": "IAC ka chancellor kaun hai aur Act number kya hai?",
+      "relevant_chunk_ids": [
+        "iac_029"
+      ],
+      "query_type": "roman_urdu_hybrid",
+      "language": "roman_urdu",
+      "difficulty": "hard"
+    },
+    {
+      "id": "ret_iac_037",
+      "query": "What are the SADU diploma courses and their durations?",
+      "relevant_chunk_ids": [
+        "iac_014"
+      ],
+      "query_type": "hybrid",
+      "language": "en",
+      "difficulty": "hard"
+    },
+    {
+      "id": "ret_iac_038",
+      "query": "List all Associate Degree Programs across IAC.",
+      "relevant_chunk_ids": [
+        "iac_027"
+      ],
+      "query_type": "semantic_dense",
+      "language": "en",
+      "difficulty": "hard"
+    },
+    {
+      "id": "ret_iac_039",
+      "query": "What is the total fee for Bachelor of Game Design and Bachelor of Animation Design?",
+      "relevant_chunk_ids": [
+        "iac_033"
+      ],
+      "query_type": "hybrid",
+      "language": "en",
+      "difficulty": "hard"
+    },
+    {
+      "id": "ret_iac_040",
+      "query": "What events are organized by IAC and who is the Chancellor?",
+      "relevant_chunk_ids": [
+        "iac_028",
+        "iac_029"
+      ],
+      "query_type": "hybrid",
+      "language": "en",
+      "difficulty": "hard"
+    },
+    {
+      "id": "ret_iac_041",
+      "query": "What is the fee structure for all SADU Bachelor's programs?",
+      "relevant_chunk_ids": [
+        "iac_032"
+      ],
+      "query_type": "hybrid",
+      "language": "en",
+      "difficulty": "hard"
+    },
+    {
+      "id": "ret_iac_042",
+      "query": "What are the short courses offered by School of Art and SDCA?",
+      "relevant_chunk_ids": [
+        "iac_017",
+        "iac_022"
+      ],
+      "query_type": "hybrid",
+      "language": "en",
+      "difficulty": "hard"
+    },
+    {
+      "id": "ret_iac_043",
+      "query": "What is the total credit hours for B.Arch, B.ID, and BS Construction Management?",
+      "relevant_chunk_ids": [
+        "iac_041",
+        "iac_043",
+        "iac_044"
+      ],
+      "query_type": "hybrid",
+      "language": "en",
+      "difficulty": "hard"
+    },
+    {
+      "id": "ret_iac_044",
+      "query": "IAC mein PhD program hai? Agar nahi to kaunse levels offered hain?",
+      "relevant_chunk_ids": [
+        "iac_009"
+      ],
+      "query_type": "roman_urdu_hybrid",
+      "language": "roman_urdu",
+      "difficulty": "hard"
+    },
+    {
+      "id": "ret_iac_045",
+      "query": "What is the fee for Bachelor of Film & TV and ADP Film & TV?",
+      "relevant_chunk_ids": [
+        "iac_033",
+        "iac_037"
+      ],
+      "query_type": "hybrid",
+      "language": "en",
+      "difficulty": "hard"
+    },
+    {
+      "id": "ret_iac_046",
+      "query": "What is the total fee for Master in Interior Design and Master of Architecture?",
+      "relevant_chunk_ids": [
+        "iac_036"
+      ],
+      "query_type": "hybrid",
+      "language": "en",
+      "difficulty": "hard"
+    },
+    {
+      "id": "ret_iac_047",
+      "query": "What is the difference between SADU and SOA programs?",
+      "relevant_chunk_ids": [
+        "iac_012",
+        "iac_016"
+      ],
+      "query_type": "hybrid",
+      "language": "en",
+      "difficulty": "hard"
+    },
+    {
+      "id": "ret_iac_048",
+      "query": "IAC ki website par kaunse social media links hain?",
+      "relevant_chunk_ids": [
+        "iac_005"
+      ],
+      "query_type": "roman_urdu_hybrid",
+      "language": "roman_urdu",
+      "difficulty": "hard"
+    },
+    {
+      "id": "ret_iac_049",
+      "query": "What is the total fee for Bachelor of Architecture including admission and security?",
+      "relevant_chunk_ids": [
+        "iac_038"
+      ],
+      "query_type": "hybrid",
+      "language": "en",
+      "difficulty": "hard"
+    },
+    {
+      "id": "ret_iac_050",
+      "query": "What are the course codes for B.Arch Semester 1?",
+      "relevant_chunk_ids": [
+        "iac_042"
+      ],
+      "query_type": "sparse_keyword",
+      "language": "en",
+      "difficulty": "hard"
+    },
+    {
+      "id": "ret_iac_051",
+      "query": "What is Dr Shazia Saqib's designation at IAC?",
+      "relevant_chunk_ids": [
+        "iac_051"
+      ],
+      "query_type": "sparse_keyword",
+      "language": "en",
+      "difficulty": "hard"
     }
   ]
 }

@@ -26,8 +26,13 @@ async def validate_node(state: AgentState) -> Dict[str, Any]:
 
     query = state.get("rewritten_query") or state.get("user_message", "")
 
-    # Only use the system-level OpenRouter key for reranking
-    rerank_api_key = getattr(settings, "OPENROUTER_API_KEY", None) or os.getenv("OPENROUTER_API_KEY")
+    # Use OpenRouter API key for Cohere reranking via OpenRouter
+    rerank_api_key = (
+        getattr(settings, "OPENROUTER_API_KEY", None)
+        or os.getenv("OPENROUTER_API_KEY")
+        or getattr(settings, "COHERE_API_KEY", None)
+        or os.getenv("COHERE_API_KEY")
+    )
 
     if not rerank_api_key:
         filtered_sources = filter_hybrid_relevant_sources(query, sources)
@@ -38,7 +43,7 @@ async def validate_node(state: AgentState) -> Dict[str, Any]:
             is_relevant=is_rel,
             chunks_before=len(sources),
             chunks_after=len(filtered_sources),
-            no_api_key=True,
+            method="hybrid_local",
         )
         return {
             "is_relevant": is_rel,
@@ -50,7 +55,7 @@ async def validate_node(state: AgentState) -> Dict[str, Any]:
     try:
         documents = [src["text"] for src in sources]
         payload = {
-            "model": "cohere/rerank-4-fast",
+            "model": "cohere/rerank-v3.5",
             "query": query,
             "documents": documents,
             "top_n": len(documents),
@@ -58,10 +63,12 @@ async def validate_node(state: AgentState) -> Dict[str, Any]:
         headers = {
             "Authorization": f"Bearer {rerank_api_key}",
             "Content-Type": "application/json",
+            "HTTP-Referer": "https://aina.ai",
+            "X-Title": "Aina AI",
         }
 
         client = get_async_http_client()
-        rerank_timeout = getattr(settings, "RERANK_TIMEOUT_SECS", 8.0)
+        rerank_timeout = getattr(settings, "RERANK_TIMEOUT_SECS", 6.0)
         response = await client.post(
             "https://openrouter.ai/api/v1/rerank",
             json=payload,

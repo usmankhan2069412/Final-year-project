@@ -11,8 +11,8 @@ async def route_intent_node(state: AgentState) -> AgentState:
     rules = state.get("routing_rules", {})
 
     try:
-        # Persona-aware, context-aware intent classification via TypeSafe Jev / SemanticRouter
-        intent, confidence, probabilities, method = await SemanticRouter.classify_with_details(
+        # Persona-aware, context-aware intent classification and decision gates via TypeSafe Jev / SemanticRouter
+        intent, confidence, probabilities, method, gates = await SemanticRouter.classify_intent_and_gates(
             message=state.get("user_message", ""),
             persona=state.get("persona"),
             traits=state.get("traits"),
@@ -27,6 +27,7 @@ async def route_intent_node(state: AgentState) -> AgentState:
         confidence = 0.0
         probabilities = {}
         method = "fallback"
+        gates = {"needs_rewrite": None, "needs_rewrite_p": 0.5}
 
     # Match intent to configured model, fallback to default OpenRouter model
     if final_intent in rules:
@@ -40,12 +41,15 @@ async def route_intent_node(state: AgentState) -> AgentState:
         confidence=confidence,
         method=method,
         chatbot_id=chatbot_id,
-        mapped_model=model_name
+        mapped_model=model_name,
+        needs_rewrite=gates.get("needs_rewrite"),
     )
     return {
         "intent": final_intent,
         "intent_confidence": confidence,
         "intent_probabilities": probabilities,
         "intent_method": method,
-        "model_name": model_name
+        "model_name": model_name,
+        "needs_rewrite": gates.get("needs_rewrite"),
+        "needs_rewrite_confidence": gates.get("needs_rewrite_p"),
     }

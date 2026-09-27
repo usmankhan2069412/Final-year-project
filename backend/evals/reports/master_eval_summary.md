@@ -1,9 +1,9 @@
 # Master RAG Component-Level Evaluation Summary
 
-* **Execution Date:** 2026-09-04 16:06:06
+* **Execution Date:** 2026-09-26 15:57:35
 * **Evaluation Target:** Aina AI Full RAG Pipeline Components
 
 ## Components Benchmark Results
 | # | Component | Primary Benchmark Performance | Average Latency | Report Link |
 | :- | :--- | :--- | :--- | :--- |
-| 🎯 | **3. Semantic Cache & Threshold** | `88.9% Accuracy @ 0.6 Threshold` | < 1.0 ms | [View Details](eval_semantic_cache_and_threshold_report.md) |
+| 🎯 | **5. Hallucination Reranker Guardrail** | `Rejection: 44.44% | Fallback Acc: 96.67%` | 502.9 ms | [View Details](eval_hallucination_reranker_guardrail_report.md) |

@@ -40,7 +40,7 @@ class Deployment(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
-    chatbot = relationship("Chatbot")
+    chatbot = relationship("Chatbot", lazy="selectin")
 
 
 class Conversation(Base):

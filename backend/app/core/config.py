@@ -76,8 +76,9 @@ class Settings(BaseSettings):
     TYPESAFE_CONFIDENCE_THRESHOLD: float = 0.70
 
     # RAG execution timeout
-    RAG_GRAPH_TIMEOUT: float = 30.0
+    RAG_GRAPH_TIMEOUT: float = 45.0
     RERANK_TIMEOUT_SECS: float = 8.0     # Max seconds before falling back to local hybrid validation
+    COHERE_API_KEY: str = ""
 
     # HTTP & embedding connection pool settings
     EMBEDDING_MAX_CONNECTIONS: int = 150  # Max connections for HTTP/embedding client pool

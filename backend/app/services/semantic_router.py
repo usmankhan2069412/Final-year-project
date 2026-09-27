@@ -9,7 +9,6 @@ from typing import Optional, Dict, List, Any, Tuple
 from app.services.embedding import embedding_service
 from app.core.config import resolve_openrouter_key
 from app.models.conversation import MessageRole
-from app.services.rag.prompts import PromptCatalog
 import logging
 
 logger = logging.getLogger(__name__)
@@ -304,10 +303,17 @@ class SemanticRouter:
             "is_frustrated": Noul(
                 instructions="Does the user express strong anger, insults, or hostility toward the bot itself?"
             ),
+            "needs_rewrite": Noul(
+                instructions=(
+                    "Does the latest message rely on prior conversation to be a standalone search query? "
+                    "True if pronouns (it/this/that), missing subject, or follow-up reference. "
+                    "False if fully self-contained (e.g. 'What is refund policy?')."
+                )
+            ),
         }
 
     @classmethod
-    async def classify_with_details(
+    async def classify_intent_and_gates(
         cls,
         message: str,
         persona: Any = None,
@@ -316,11 +322,12 @@ class SemanticRouter:
         conversation_memory: Optional[dict] = None,
         api_key: Optional[str] = None,
         threshold: float = 0.65,
-    ) -> Tuple[str, float, Dict[str, float], str]:
+    ) -> Tuple[str, float, Dict[str, float], str, Dict[str, Any]]:
         """
-        Classifies intent with full metadata (intent, confidence, probabilities, method).
+        Classifies intent and gates with full metadata (intent, confidence, probabilities, method, gates_dict).
+        Batches intent routing and downstream decision gates (such as needs_rewrite) in a single Jev call.
         1. Exact greeting gate (<1ms)
-        2. Jev Model (TypeSafeClassifier) with persona + context + Noul frustration
+        2. Jev Model (TypeSafeClassifier) with persona + context + Noul frustration + Noul needs_rewrite
         3. Graceful fallback on timeout/error
         """
         from app.core.metrics import intent_classification_method, intent_classification_latency
@@ -339,7 +346,8 @@ class SemanticRouter:
             intent_classification_latency.observe(latency)
             intent_classification_method.labels(method="keyword_exact").inc()
             logger.info("intent_classified", extra={"intent": "CONVERSATIONAL", "method": "keyword_exact", "latency_ms": round(latency * 1000, 2)})
-            return "CONVERSATIONAL", 1.0, {"CONVERSATIONAL": 1.0}, "keyword_exact"
+            gates = {"needs_rewrite": False, "needs_rewrite_p": 0.0}
+            return "CONVERSATIONAL", 1.0, {"CONVERSATIONAL": 1.0}, "keyword_exact", gates
 
         # 2. TypeSafe Jev Model
         classifier = cls._get_typesafe_classifier()
@@ -365,11 +373,22 @@ class SemanticRouter:
 
                 intent_answer = response.choices.get("intent")
                 is_frustrated_answer = response.nouls.get("is_frustrated")
+                needs_rewrite_answer = response.nouls.get("needs_rewrite")
 
                 frustrated_prob = is_frustrated_answer.noul if is_frustrated_answer else 0.0
                 confidence = intent_answer.confidence if intent_answer else 0.0
                 raw_intent = intent_answer.choice if intent_answer else "RAG_LOOKUP"
                 probabilities = intent_answer.probabilities if intent_answer else {}
+
+                # Calibrated gates: uncertainty band
+                needs_rewrite_p = needs_rewrite_answer.noul if needs_rewrite_answer else 0.5
+                if needs_rewrite_p >= 0.75:
+                    needs_rewrite = True
+                elif needs_rewrite_p <= 0.35:
+                    needs_rewrite = False
+                else:
+                    needs_rewrite = None  # Uncertain band: safe rewrite fallback
+                gates = {"needs_rewrite": needs_rewrite, "needs_rewrite_p": needs_rewrite_p}
 
                 confidence_threshold = getattr(settings, "TYPESAFE_CONFIDENCE_THRESHOLD", 0.70)
 
@@ -393,20 +412,24 @@ class SemanticRouter:
                     "confidence": confidence,
                     "probabilities": probabilities,
                     "frustration_prob": frustrated_prob,
+                    "needs_rewrite": needs_rewrite,
+                    "needs_rewrite_p": needs_rewrite_p,
                     "latency_ms": round(latency * 1000, 2),
                     "user_message": message[:100],
                 })
 
-                return final_intent, confidence, probabilities, "jev"
+                return final_intent, confidence, probabilities, "jev", gates
 
             except Exception as e:
                 latency = time.monotonic() - t0
                 intent_classification_latency.observe(latency)
                 intent_classification_method.labels(method="error_fallback").inc()
                 logger.warning(f"TypeSafe Jev classification failed or timed out: {e}. Falling back to RAG_LOOKUP.")
-                return "RAG_LOOKUP", 0.0, {}, "error_fallback"
+                gates = {"needs_rewrite": None, "needs_rewrite_p": 0.5}
+                return "RAG_LOOKUP", 0.0, {}, "error_fallback", gates
 
         # 3. Fallback if TypeSafe API Key is not configured: use LLM / embedding
+        gates = {"needs_rewrite": None, "needs_rewrite_p": 0.5}
         if api_key:
             llm_result = await cls._classify_with_llm(
                 message=message,
@@ -420,16 +443,41 @@ class SemanticRouter:
                 latency = time.monotonic() - t0
                 intent_classification_latency.observe(latency)
                 intent_classification_method.labels(method="llm").inc()
-                return llm_result, 0.85, {llm_result: 0.85}, "llm"
+                return llm_result, 0.85, {llm_result: 0.85}, "llm", gates
 
         emb_intent, emb_score = await cls._classify_with_embeddings(message, threshold)
         if emb_score >= threshold and emb_intent:
             latency = time.monotonic() - t0
             intent_classification_latency.observe(latency)
             intent_classification_method.labels(method="embedding_fallback").inc()
-            return emb_intent, emb_score, {emb_intent: emb_score}, "embedding_fallback"
+            return emb_intent, emb_score, {emb_intent: emb_score}, "embedding_fallback", gates
 
-        return "RAG_LOOKUP", 0.0, {}, "default"
+        return "RAG_LOOKUP", 0.0, {}, "default", gates
+
+    @classmethod
+    async def classify_with_details(
+        cls,
+        message: str,
+        persona: Any = None,
+        traits: Optional[List[str]] = None,
+        history: Optional[List[Any]] = None,
+        conversation_memory: Optional[dict] = None,
+        api_key: Optional[str] = None,
+        threshold: float = 0.65,
+    ) -> Tuple[str, float, Dict[str, float], str]:
+        """
+        Backward-compatible wrapper preserving 4-tuple unpacking for evaluators and external callers.
+        """
+        intent, conf, probs, method, _ = await cls.classify_intent_and_gates(
+            message=message,
+            persona=persona,
+            traits=traits,
+            history=history,
+            conversation_memory=conversation_memory,
+            api_key=api_key,
+            threshold=threshold,
+        )
+        return intent, conf, probs, method
 
     @classmethod
     async def classify(
@@ -495,6 +543,7 @@ class SemanticRouter:
             persona_desc = getattr(persona, "description", "") or ""
             traits_str = ", ".join(traits) if traits else "General purpose"
 
+            from app.services.rag.prompts import PromptCatalog
             sys_prompt = PromptCatalog.build_intent_classification_prompt(
                 persona_name=persona_name,
                 persona_desc=persona_desc,

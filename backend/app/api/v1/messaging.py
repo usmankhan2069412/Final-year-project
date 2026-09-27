@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 import json
 from app.services.sse_manager import sse_manager
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, get_tenant_db, get_current_org_id
@@ -120,6 +121,7 @@ async def send_public_deployment_message(
 ):
     stmt = (
         select(Deployment)
+        .options(selectinload(Deployment.chatbot))
         .join(Chatbot, Deployment.chatbot_id == Chatbot.id)
         .where(
             Deployment.id == deployment_id,
@@ -221,6 +223,7 @@ async def public_sse_stream(
 ):
     stmt = (
         select(Deployment)
+        .options(selectinload(Deployment.chatbot))
         .join(Chatbot, Deployment.chatbot_id == Chatbot.id)
         .where(
             Deployment.id == deployment_id,

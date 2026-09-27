@@ -362,116 +362,229 @@ def metrics():
 def widget_script():
     script = """
 (function () {
-  var config = window.AinaConfig || {};
-  if (!config.deploymentId || document.getElementById("aina-widget-root")) return;
-
-  var apiBaseUrl = config.apiBaseUrl || "";
-  var root = document.createElement("div");
-  root.id = "aina-widget-root";
-  root.style.cssText = "position:fixed;right:20px;bottom:20px;z-index:2147483647;font-family:Inter,system-ui,sans-serif";
-
-  var panel = document.createElement("div");
-  panel.style.cssText = "display:none;width:320px;max-width:calc(100vw - 40px);height:420px;margin-bottom:12px;border:1px solid #ddd;border-radius:16px;background:#fff;box-shadow:0 16px 48px rgba(0,0,0,.18);overflow:hidden";
-
-  var header = document.createElement("div");
-  header.textContent = config.name || "Aina Bot";
-  header.style.cssText = "padding:14px 16px;background:" + (config.primaryColor || "#1c1c1e") + ";color:#fff;font-weight:700";
-
-  var messages = document.createElement("div");
-  messages.style.cssText = "height:295px;overflow:auto;padding:14px;font-size:13px;line-height:1.45;background:#f7f7f8";
-
-  var form = document.createElement("form");
-  form.style.cssText = "display:flex;gap:8px;padding:10px;border-top:1px solid #eee";
-  var input = document.createElement("input");
-  input.placeholder = "Type a message...";
-  input.style.cssText = "flex:1;border:1px solid #ddd;border-radius:10px;padding:10px;outline:none";
-  var send = document.createElement("button");
-  send.textContent = "Send";
-  send.type = "submit";
-  send.style.cssText = "border:0;border-radius:10px;padding:0 12px;background:" + (config.primaryColor || "#1c1c1e") + ";color:#fff;font-weight:700";
-  form.appendChild(input);
-  form.appendChild(send);
-
-  var launcher = document.createElement("button");
-  launcher.textContent = "Chat";
-  launcher.style.cssText = "float:right;border:0;border-radius:999px;padding:14px 18px;background:" + (config.primaryColor || "#1c1c1e") + ";color:#fff;font-weight:700;box-shadow:0 10px 30px rgba(0,0,0,.2);cursor:pointer";
-
-  function addMessage(role, text) {
-    var node = document.createElement("div");
-    node.textContent = text;
-    node.style.cssText = "margin:8px 0;padding:10px 12px;border-radius:12px;white-space:pre-wrap;" + (role === "user" ? "background:#1c1c1e;color:#fff;margin-left:40px" : "background:#fff;color:#1c1c1e;margin-right:40px");
-    messages.appendChild(node);
-    messages.scrollTop = messages.scrollHeight;
+  function getContrastYIQ(hex) {
+    if (!hex || hex.charAt(0) !== '#') return '#ffffff';
+    var clean = hex.substring(1);
+    if (clean.length === 3) clean = clean[0]+clean[0]+clean[1]+clean[1]+clean[2]+clean[2];
+    var r = parseInt(clean.substring(0, 2), 16) || 0;
+    var g = parseInt(clean.substring(2, 4), 16) || 0;
+    var b = parseInt(clean.substring(4, 6), 16) || 0;
+    var yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+    return (yiq >= 160) ? '#18181b' : '#ffffff';
   }
 
-  var conversationId = null;
-  var eventSource = null;
-  var seenMsgIds = {};
+  function init() {
+    var config = window.AinaConfig;
+    if (!config || !config.deploymentId) return false;
+    if (document.getElementById("aina-widget-root")) return true;
+    if (!document.body) return false;
 
-  function connectSSE(convId) {
-    if (eventSource) return;
-    var streamUrl = apiBaseUrl + "/api/v1/chat/public/deployments/" + config.deploymentId + "/conversations/" + convId + "/stream";
-    eventSource = new EventSource(streamUrl);
+    var apiBaseUrl = config.apiBaseUrl || "";
+    var primaryColor = config.primaryColor || "#6366f1";
+    var iconColor = getContrastYIQ(primaryColor);
+    var isDark = config.theme === "dark";
 
-    eventSource.addEventListener("message", function(e) {
-      try {
-        var payload = JSON.parse(e.data);
-        if (payload.message && payload.message.content) {
-          var mid = payload.message.id;
-          if (mid && seenMsgIds[mid]) return;
-          if (mid) seenMsgIds[mid] = true;
-          addMessage(payload.message.role, payload.message.content);
+    var root = document.createElement("div");
+    root.id = "aina-widget-root";
+    root.style.cssText = "position:fixed;right:20px;bottom:20px;z-index:2147483647;font-family:Inter,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;";
+
+    // Panel
+    var panel = document.createElement("div");
+    var panelBg = isDark ? "#18181b" : "#ffffff";
+    var panelBorder = isDark ? "#27272a" : "#e4e4e7";
+    var textPrimary = isDark ? "#f4f4f5" : "#18181b";
+    var msgBg = isDark ? "#09090b" : "#f4f4f5";
+    var inputBg = isDark ? "#27272a" : "#ffffff";
+    var inputBorder = isDark ? "#3f3f46" : "#e4e4e7";
+    var botBubbleBg = isDark ? "#27272a" : "#ffffff";
+    var botBubbleColor = isDark ? "#f4f4f5" : "#18181b";
+    var botBubbleBorder = isDark ? "1px solid #3f3f46" : "1px solid #e4e4e7";
+
+    panel.style.cssText = "display:none;width:360px;max-width:calc(100vw - 40px);height:500px;max-height:calc(100vh - 100px);margin-bottom:14px;border:1px solid " + panelBorder + ";border-radius:20px;background:" + panelBg + ";box-shadow:0 20px 40px rgba(0,0,0,.25);overflow:hidden;flex-direction:column;";
+
+    // Header
+    var header = document.createElement("div");
+    header.style.cssText = "padding:14px 18px;background:" + primaryColor + ";color:" + iconColor + ";display:flex;align-items:center;justify-content:space-between;border-top-left-radius:19px;border-top-right-radius:19px;";
+
+    var headerInfo = document.createElement("div");
+    headerInfo.style.cssText = "display:flex;align-items:center;gap:10px;";
+
+    var headerAvatar = document.createElement("div");
+    headerAvatar.style.cssText = "width:34px;height:34px;border-radius:50%;background:rgba(0,0,0,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;";
+    headerAvatar.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>';
+
+    var headerTextWrap = document.createElement("div");
+    var headerTitle = document.createElement("div");
+    headerTitle.textContent = config.name || "Aina Bot";
+    headerTitle.style.cssText = "font-weight:700;font-size:15px;line-height:1.2;";
+    var headerStatus = document.createElement("div");
+    headerStatus.style.cssText = "font-size:11px;opacity:0.85;display:flex;align-items:center;gap:5px;margin-top:2px;";
+    headerStatus.innerHTML = '<span style="width:7px;height:7px;background:#22c55e;border-radius:50%;display:inline-block;"></span> Online';
+
+    headerTextWrap.appendChild(headerTitle);
+    headerTextWrap.appendChild(headerStatus);
+    headerInfo.appendChild(headerAvatar);
+    headerInfo.appendChild(headerTextWrap);
+
+    var headerClose = document.createElement("button");
+    headerClose.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+    headerClose.style.cssText = "background:transparent;border:none;color:" + iconColor + ";cursor:pointer;padding:6px;border-radius:6px;display:flex;align-items:center;justify-content:center;opacity:0.85;";
+    headerClose.onclick = function() { togglePanel(false); };
+
+    header.appendChild(headerInfo);
+    header.appendChild(headerClose);
+
+    // Messages Area
+    var messages = document.createElement("div");
+    messages.style.cssText = "flex:1;height:340px;overflow-y:auto;padding:16px;font-size:13px;line-height:1.5;background:" + msgBg + ";display:flex;flex-direction:column;gap:10px;";
+
+    // Form
+    var form = document.createElement("form");
+    form.style.cssText = "display:flex;gap:8px;padding:12px;border-top:1px solid " + panelBorder + ";background:" + panelBg + ";align-items:center;";
+    var input = document.createElement("input");
+    input.placeholder = "Type your message...";
+    input.style.cssText = "flex:1;border:1px solid " + inputBorder + ";border-radius:12px;padding:10px 14px;background:" + inputBg + ";color:" + textPrimary + ";font-size:13px;outline:none;";
+    var send = document.createElement("button");
+    send.type = "submit";
+    send.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>';
+    send.style.cssText = "border:none;border-radius:12px;width:38px;height:38px;background:" + primaryColor + ";color:" + iconColor + ";display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;";
+    form.appendChild(input);
+    form.appendChild(send);
+
+    // Launcher Floating Action Button with SVG Icon
+    var launcher = document.createElement("button");
+    launcher.id = "aina-widget-launcher";
+    launcher.style.cssText = "float:right;width:56px;height:56px;border-radius:50%;border:none;background:" + primaryColor + ";color:" + iconColor + ";box-shadow:0 8px 24px rgba(0,0,0,.25);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;";
+    launcher.setAttribute("aria-label", "Open chat");
+
+    var chatIcon = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>';
+    var closeIcon = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+    launcher.innerHTML = chatIcon;
+
+    launcher.onmouseenter = function() { launcher.style.transform = "scale(1.08)"; };
+    launcher.onmouseleave = function() { launcher.style.transform = "scale(1)"; };
+
+    var isOpen = false;
+    function togglePanel(open) {
+      isOpen = (open !== undefined) ? open : !isOpen;
+      panel.style.display = isOpen ? "flex" : "none";
+      launcher.innerHTML = isOpen ? closeIcon : chatIcon;
+      if (isOpen) {
+        setTimeout(function() { input.focus(); }, 100);
+      }
+    }
+    launcher.onclick = function() { togglePanel(); };
+
+    function addMessage(role, text) {
+      var node = document.createElement("div");
+      node.textContent = text;
+      var isUser = (role === "user");
+      node.style.cssText = "padding:10px 14px;border-radius:14px;white-space:pre-wrap;max-width:85%;word-break:break-word;font-size:13px;line-height:1.45;" + 
+        (isUser 
+          ? "background:" + primaryColor + ";color:" + iconColor + ";align-self:flex-end;border-bottom-right-radius:4px;" 
+          : "background:" + botBubbleBg + ";color:" + botBubbleColor + ";border:" + botBubbleBorder + ";align-self:flex-start;border-bottom-left-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,0.05);");
+      messages.appendChild(node);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    var conversationId = null;
+    var eventSource = null;
+    var seenMsgIds = {};
+
+    function connectSSE(convId) {
+      if (eventSource) return;
+      var streamUrl = apiBaseUrl + "/api/v1/chat/public/deployments/" + config.deploymentId + "/conversations/" + convId + "/stream";
+      eventSource = new EventSource(streamUrl);
+
+      eventSource.addEventListener("message", function(e) {
+        try {
+          var payload = JSON.parse(e.data);
+          if (payload.message && payload.message.content) {
+            var mid = payload.message.id;
+            if (mid && seenMsgIds[mid]) return;
+            if (mid) seenMsgIds[mid] = true;
+            addMessage(payload.message.role, payload.message.content);
+          }
+        } catch (err) {}
+      });
+
+      eventSource.addEventListener("resolve", function(e) {
+        addMessage("bot", "This conversation has been resolved by the agent.");
+        if (eventSource) {
+          eventSource.close();
+          eventSource = null;
         }
-      } catch (err) {}
-    });
+        conversationId = null;
+      });
+    }
 
-    eventSource.addEventListener("resolve", function(e) {
-      addMessage("bot", "This conversation has been resolved by the agent.");
-      if (eventSource) {
-        eventSource.close();
-        eventSource = null;
-      }
-      conversationId = null;
-    });
+    form.onsubmit = function (event) {
+      event.preventDefault();
+      var text = input.value.trim();
+      if (!text) return;
+      input.value = "";
+      addMessage("user", text);
+      fetch(apiBaseUrl + "/api/v1/chat/public/deployments/" + config.deploymentId + "/message", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({message: text, conversation_id: conversationId})
+      }).then(function (res) {
+        if (!res.ok) throw new Error("Chat request failed");
+        return res.json();
+      }).then(function (data) {
+        if (!conversationId) {
+          conversationId = data.conversation_id;
+          connectSSE(conversationId);
+        }
+        if (data.response) {
+          addMessage("bot", data.response);
+        }
+      }).catch(function () {
+        addMessage("bot", "Sorry, the chatbot is unavailable right now.");
+      });
+    };
+
+    panel.appendChild(header);
+    panel.appendChild(messages);
+    panel.appendChild(form);
+    root.appendChild(panel);
+    root.appendChild(launcher);
+    document.body.appendChild(root);
+    addMessage("bot", "Hi! How can I help you today?");
+
+    window.AinaWidget = {
+      open: function() { togglePanel(true); },
+      close: function() { togglePanel(false); },
+      toggle: function() { togglePanel(); }
+    };
+
+    return true;
   }
 
-  launcher.onclick = function () {
-    panel.style.display = panel.style.display === "none" ? "block" : "none";
-  };
-  form.onsubmit = function (event) {
-    event.preventDefault();
-    var text = input.value.trim();
-    if (!text) return;
-    input.value = "";
-    addMessage("user", text);
-    fetch(apiBaseUrl + "/api/v1/chat/public/deployments/" + config.deploymentId + "/message", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({message: text, conversation_id: conversationId})
-    }).then(function (res) {
-      if (!res.ok) throw new Error("Chat request failed");
-      return res.json();
-    }).then(function (data) {
-      if (!conversationId) {
-        conversationId = data.conversation_id;
-        connectSSE(conversationId);
+  function start() {
+    if (init()) return;
+    var attempts = 0;
+    var timer = setInterval(function() {
+      attempts++;
+      if (init() || attempts >= 40) {
+        clearInterval(timer);
       }
-      // During live agent chat (escalated), response is null — skip bot bubble
-      if (data.response) {
-        addMessage("bot", data.response);
-      }
-    }).catch(function () {
-      addMessage("bot", "Sorry, the chatbot is unavailable right now.");
-    });
-  };
+    }, 150);
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", function() {
+        if (init()) clearInterval(timer);
+      });
+    }
+  }
 
-  panel.appendChild(header);
-  panel.appendChild(messages);
-  panel.appendChild(form);
-  root.appendChild(panel);
-  root.appendChild(launcher);
-  document.body.appendChild(root);
-  addMessage("bot", "Hi! How can I help you today?");
+  start();
 })();
 """
-    return Response(content=script, media_type="application/javascript")
+    return Response(
+        content=script,
+        media_type="application/javascript",
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": "no-cache",
+        }
+    )

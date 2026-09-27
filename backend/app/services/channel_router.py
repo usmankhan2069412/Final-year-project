@@ -5,6 +5,7 @@ from typing import Optional
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 
 from app.models.conversation import Conversation, ConversationStatus, Deployment, ProcessedEvent, Channel, Message as DBMessage
 from app.models.chatbot import Chatbot
@@ -27,12 +28,16 @@ class ChannelRouter:
         Handles event deduplication, session management, and database state updates.
         Returns the response text to be sent back, or None if skipped.
         """
-        # 1. Idempotency Check
-        result = await db.execute(
-            select(ProcessedEvent).filter(ProcessedEvent.event_id == event.event_id)
-        )
-        if result.scalar_one_or_none():
-            logger.info("Event %s already processed. Skipping.", event.event_id)
+        # 1. Atomic Idempotency Check & Claim
+        try:
+            db.add(ProcessedEvent(
+                event_id=event.event_id,
+                event_type=f"{event.channel.value}_message"
+            ))
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()
+            logger.info("Event %s already processed or being processed concurrently. Skipping duplicate.", event.event_id)
             return None
 
         # 2. Find Active Deployment
@@ -69,13 +74,6 @@ class ChannelRouter:
             deployment_id=deployment.id
         )
         ai_response = result_data.get("response")
-
-        # 6. Save Processed Event & Commit Transaction
-        db.add(ProcessedEvent(
-            event_id=event.event_id,
-            event_type=f"{event.channel.value}_message"
-        ))
-        await db.commit()
 
         return ai_response
 

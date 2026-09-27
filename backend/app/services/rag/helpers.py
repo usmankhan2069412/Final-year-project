@@ -34,20 +34,67 @@ def get_llm(state: AgentState, temperature: float = 0.3, stream: bool = True) ->
 
 
 
+STOP_WORDS = {
+    # English auxiliary & conversational fillers
+    "the", "and", "for", "are", "you", "your", "with", "that", "this", "what", "when", "where",
+    "how", "why", "can", "could", "would", "should", "about", "from", "into", "have", "has", "had",
+    "does", "did", "tell", "give", "show", "know", "want", "need", "please", "help", "much", "many",
+    "any", "some", "which", "there", "their", "they", "them", "been", "being", "will", "shall",
+    # Roman Urdu auxiliaries & conversational fillers
+    "hai", "hain", "kya", "aur", "mein", "mujhe", "aap", "ap", "ke", "ki", "ka", "ko", "se", "ho",
+    "hoon", "hun", "bhi", "tou", "to", "kr", "kar", "karna", "karein", "karta", "karte", "raha",
+    "rahi", "rha", "rhi", "kab", "sab", "hum", "tum", "kese", "kaise", "batao", "bataen", "batae",
+    "chahiye", "chaheye", "hoga", "hogi", "theek", "thik", "acha", "achha", "karo", "pata", "kuch"
+}
+
+
 def content_terms(text: str) -> set[str]:
-    stop_words = {
-        "the", "and", "for", "are", "you", "your", "with", "that", "this", "what", "when", "where",
-        "how", "why", "can", "could", "would", "should", "about", "from", "into", "have", "has",
-        "hai", "hain", "kya", "aur", "mein", "mujhe", "aap", "ap", "ke", "ki", "ka", "ko", "se",
-    }
+    """Extracts lowercase substantive content words from text, excluding conversational stop words."""
+    if not text:
+        return set()
     return {
         word
-        for word in re.findall(r"\w+", text.lower())
-        if len(word) > 2 and word not in stop_words
+        for word in re.findall(r"\b\w+\b", text.lower())
+        if len(word) > 2 and word not in STOP_WORDS
     }
+
+
+def extract_key_anchors(text: str) -> set[str]:
+    """
+    Extracts high-specificity entity anchors from a query:
+    1. Numeric tokens or tokens containing digits (e.g. 2024, 50000, CS101, 10th)
+    2. Uppercase acronyms / codes in original text (e.g. BSCS, AI, MBA, MBBS, FAST, NUST)
+    3. Capitalized terms (len >= 4) that are not sentence-initial common words
+    """
+    if not text:
+        return set()
+
+    anchors = set()
+    raw_tokens = re.findall(r"\b[\w\-]+\b", text)
+    for i, token in enumerate(raw_tokens):
+        # 1. Alphanumerics with digits
+        if any(c.isdigit() for c in token):
+            anchors.add(token.lower())
+            continue
+
+        # 2. Acronyms (e.g. BSCS, CS, AI, MBA, NUST, FAST)
+        if len(token) >= 2 and token.isupper() and token.lower() not in STOP_WORDS:
+            anchors.add(token.lower())
+            continue
+
+        # 3. Capitalized proper entities (skip first token of sentence to avoid capitalizing generic question starters)
+        if i > 0 and len(token) >= 4 and token[0].isupper() and token[1:].islower() and token.lower() not in STOP_WORDS:
+            anchors.add(token.lower())
+
+    return anchors
 
 
 def has_lexical_relevance(query: str, context: str) -> bool:
+    """
+    Verifies that context is lexically relevant to the query with key entity anchor enforcement:
+    1. If query contains specific entity anchors (e.g. BSCS, 2024, FAST), at least one MUST appear in context.
+    2. General substantive content terms must meet minimum overlap ratios.
+    """
     query_terms = content_terms(query)
     if not query_terms or not context.strip():
         return False
@@ -57,10 +104,17 @@ def has_lexical_relevance(query: str, context: str) -> bool:
     if not overlap:
         return False
 
+    # Anchor Constraint: High-specificity anchors must be grounded in context
+    anchors = extract_key_anchors(query)
+    if anchors:
+        context_raw_lower = context.lower()
+        if not any(anchor in context_raw_lower for anchor in anchors):
+            return False
+
     overlap_ratio = len(overlap) / max(len(query_terms), 1)
     if len(query_terms) <= 2:
-        return len(overlap) == len(query_terms)
-    return len(overlap) >= 3 or overlap_ratio >= 0.6
+        return len(overlap) == len(query_terms) or (anchors and bool(anchors & overlap))
+    return len(overlap) >= 2 and (overlap_ratio >= 0.4 or bool(anchors & overlap))
 
 
 def filter_lexically_relevant_sources(query: str, sources: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -72,16 +126,38 @@ def filter_lexically_relevant_sources(query: str, sources: List[Dict[str, Any]])
 
 
 def filter_hybrid_relevant_sources(query: str, sources: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Semantic-first fallback: use dense_distance when available, else lexical overlap."""
+    """
+    Semantic-first fallback with strengthened lexical anchor verification:
+    - Distance <= 0.30: High-confidence semantic match (retained directly).
+    - Distance between 0.30 and 0.55: Retained ONLY if key entity anchors or content terms are grounded in chunk.
+    - Missing distance: Strictly requires has_lexical_relevance.
+    """
     filtered = []
+    query_terms = content_terms(query)
+    anchors = extract_key_anchors(query)
+
     for src in sources:
+        text = src.get("text", "")
         dist = src.get("dense_distance")
-        # Semantic check — handles stemming, tense, and multilingual variation
-        if dist is not None and dist <= settings.RERANK_FALLBACK_SIMILARITY_THRESHOLD:
+        context_terms_set = content_terms(text)
+
+        # Entity Anchor Check: If query contains explicit anchors, chunk must ground at least one
+        if anchors:
+            text_lower = text.lower()
+            if not any(anchor in text_lower for anchor in anchors):
+                continue
+
+        # 1. High-confidence semantic match
+        if dist is not None and dist <= 0.30:
             filtered.append(src)
-        # Lexical fallback — for cache hits or sparse-only results lacking dense distance
-        elif has_lexical_relevance(query, src.get("text", "")):
+        # 2. Borderline semantic match (0.30 < dist <= 0.55): require lexical grounding
+        elif dist is not None and dist <= settings.RERANK_FALLBACK_SIMILARITY_THRESHOLD:
+            if not query_terms or bool(query_terms & context_terms_set):
+                filtered.append(src)
+        # 3. Lexical fallback (for sparse-only or rerank API timeouts)
+        elif has_lexical_relevance(query, text):
             filtered.append(src)
+
     return filtered
 
 

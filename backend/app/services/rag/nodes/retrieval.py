@@ -24,7 +24,11 @@ async def retrieve_node(state: AgentState) -> Dict[str, Any]:
 
     # If no rewrite or exactly the same, do a single search
     if not rewritten or rewritten.lower().strip() == original.lower().strip():
-        query_list = state.get("original_query_vector") or state.get("rewritten_query_vector")
+        query_list = (
+            state.get("rewritten_query_vector")
+            or state.get("original_query_vector")
+            or state.get("query_vector")
+        )
         if not query_list:
             try:
                 query_vectors = await embedding_service.aencode([original], is_query=True)
@@ -33,6 +37,9 @@ async def retrieve_node(state: AgentState) -> Dict[str, Any]:
             except Exception as e:
                 logger.warning("retrieve_node_embedding_failed", error=str(e), query=original)
                 query_list = None
+        else:
+            logger.info("retrieve_node_reusing_cached_vector", source="semantic_cache_precheck")
+
         sources_list = await retriever.asearch(
             chatbot_id, original, top_k=settings.RETRIEVAL_TOP_K_SINGLE, query_vector=query_list
         )
@@ -41,7 +48,7 @@ async def retrieve_node(state: AgentState) -> Dict[str, Any]:
     else:
         # Multi-Query Retrieval: search both and merge
         rewritten_vec = state.get("rewritten_query_vector")
-        original_vec = state.get("original_query_vector")
+        original_vec = state.get("original_query_vector") or state.get("query_vector")
 
         missing_texts = []
         if not rewritten_vec:
@@ -60,6 +67,8 @@ async def retrieve_node(state: AgentState) -> Dict[str, Any]:
                     original_vec = vectors[idx].tolist() if hasattr(vectors[idx], "tolist") else list(vectors[idx])
             except Exception as e:
                 logger.warning("retrieve_node_embedding_failed", error=str(e), missing_texts=missing_texts)
+        else:
+            logger.info("retrieve_node_reusing_all_cached_vectors")
 
         # Save rewritten vector to state for caching
         state["query_vector"] = rewritten_vec
@@ -96,4 +105,8 @@ async def retrieve_node(state: AgentState) -> Dict[str, Any]:
         chunks=len(sources),
         used_multi_query=bool(rewritten and rewritten.lower().strip() != original.lower().strip()),
     )
-    return {"sources": sources, "context_text": ctx_text}
+    return {
+        "sources": sources,
+        "context_text": ctx_text,
+        "query_vector": state.get("query_vector"),
+    }

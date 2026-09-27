@@ -1,6 +1,7 @@
 import uuid
 from typing import List, Optional
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timezone
 
@@ -42,10 +43,9 @@ class DeploymentService:
 
     @staticmethod
     async def get_deployments(db: AsyncSession, org_id: uuid.UUID, chatbot_id: uuid.UUID) -> List[Deployment]:
-        from sqlalchemy.orm import joinedload
         stmt = (
             select(Deployment)
-            .options(joinedload(Deployment.chatbot))
+            .options(selectinload(Deployment.chatbot))
             .join(Chatbot, Deployment.chatbot_id == Chatbot.id)
             .where(
                 Deployment.chatbot_id == chatbot_id,
@@ -60,6 +60,7 @@ class DeploymentService:
     async def get_deployment(db: AsyncSession, org_id: uuid.UUID, deployment_id: uuid.UUID) -> Optional[Deployment]:
         stmt = (
             select(Deployment)
+            .options(selectinload(Deployment.chatbot))
             .join(Chatbot, Deployment.chatbot_id == Chatbot.id)
             .where(
                 Deployment.id == deployment_id,

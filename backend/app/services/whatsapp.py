@@ -6,6 +6,8 @@ from typing import Optional, Dict, Any
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text, select
+from sqlalchemy.orm import selectinload
+from sqlalchemy.exc import IntegrityError
 
 from app.core.config import settings
 from app.models.conversation import Conversation, ConversationStatus, Deployment, ProcessedEvent
@@ -136,28 +138,38 @@ class WhatsAppService:
 
         async with AsyncSessionLocal() as db:
             try:
-                entry = payload.get("entry", [])[0]
-                change = entry.get("changes", [])[0]
-                value = change.get("value", {})
-                phone_number_id = value.get("metadata", {}).get("phone_number_id")
-
-                if not phone_number_id:
-                    logger.warning("Incoming payload is missing phone_number_id metadata. Skipping.")
-                    return
-
                 message = cls.parse_incoming_message(payload)
                 if not message:
                     return
 
-                stmt_proc = select(ProcessedEvent).filter(ProcessedEvent.event_id == message.message_id)
-                res_proc = await db.execute(stmt_proc)
-                processed = res_proc.scalars().first()
-                if processed:
-                    logger.info("Event %s already processed. Skipping.", message.message_id)
+                entries = payload.get("entry", [])
+                if not entries or not entries[0].get("changes"):
+                    return
+                value = entries[0]["changes"][0].get("value", {})
+                phone_number_id = value.get("metadata", {}).get("phone_number_id")
+
+                if not phone_number_id or not message.message_id:
+                    logger.warning("Incoming payload is missing phone_number_id or message_id metadata. Skipping.")
+                    return
+
+                # Atomic deduplication claim:
+                # Insert and commit ProcessedEvent immediately before starting RAG to prevent race conditions
+                # when Meta sends concurrent webhook deliveries for the same incoming message.
+                try:
+                    event = ProcessedEvent(
+                        event_id=message.message_id,
+                        event_type="whatsapp_message"
+                    )
+                    db.add(event)
+                    await db.commit()
+                except IntegrityError:
+                    await db.rollback()
+                    logger.info("Event %s already processed or being processed concurrently. Skipping duplicate.", message.message_id)
                     return
 
                 stmt_dep = (
                     select(Deployment)
+                    .options(selectinload(Deployment.chatbot))
                     .join(Chatbot, Deployment.chatbot_id == Chatbot.id)
                     .filter(
                         Deployment.whatsapp_phone_number_id == phone_number_id,
@@ -209,13 +221,7 @@ class WhatsAppService:
                             "phone_number_id": phone_number_id,
                         },
                     )
-
-                event = ProcessedEvent(
-                    event_id=message.message_id,
-                    event_type="whatsapp_message"
-                )
-                db.add(event)
-                await db.commit()
+                    await db.commit()
 
             except Exception as e:
                 logger.exception("Error processing WhatsApp message: %s", str(e))
@@ -223,16 +229,21 @@ class WhatsAppService:
 
     @classmethod
     def send_whatsapp_message(cls, phone_number: str, text: str, phone_number_id: str) -> dict:
-        if not settings.WHATSAPP_ACCESS_TOKEN:
+        raw_token = settings.WHATSAPP_ACCESS_TOKEN or ""
+        token = raw_token.strip().strip('"').strip("'")
+        if not token:
             logger.warning(
                 "WHATSAPP_ACCESS_TOKEN not configured. Message would have been: '%s' to %s",
                 text, phone_number
             )
             return {"mock": True}
 
-        url = f"https://graph.facebook.com/{settings.WHATSAPP_API_VERSION}/{phone_number_id}/messages"
+        version = settings.WHATSAPP_API_VERSION or "v21.0"
+        if version.lower() in ("v25.0", "v25", ""):
+            version = "v21.0"
+        url = f"https://graph.facebook.com/{version}/{phone_number_id}/messages"
         headers = {
-            "Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}",
+            "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
         body = {

@@ -4,22 +4,23 @@
     "query": "How many days do I have to request a refund?",
     "chunks": [
       {
-        "chunk_id": "c1",
-        "text": "Customers can request a refund within 14 days of purchase if usage is under 100 API calls.",
+        "chunk_id": "c001",
+        "text": "Customers can request a full refund within 14 days of purchase if their API usage is under 100 requests.",
         "expected_keep": true
       },
       {
-        "chunk_id": "c2",
+        "chunk_id": "c002",
         "text": "Office hours are Monday to Friday from 9 AM to 5 PM Eastern Time.",
         "expected_keep": false
       },
       {
-        "chunk_id": "c3",
+        "chunk_id": "c003",
         "text": "We support credit cards, JazzCash, and bank wire transfers for subscription payments.",
         "expected_keep": false
       }
     ],
     "expected_is_relevant": true,
+    "difficulty": "easy",
     "description": "Single relevant chunk mixed with 2 distractors"
   },
   {
@@ -27,17 +28,18 @@
     "query": "What are the limitations of the Starter tier?",
     "chunks": [
       {
-        "chunk_id": "c4",
-        "text": "The Starter tier allows up to 3 chatbots, 500 documents, and 2 team members maximum.",
+        "chunk_id": "c004",
+        "text": "The Starter plan costs $15 per month and allows up to 3 chatbots, 500 uploaded documents, and 2 team members.",
         "expected_keep": true
       },
       {
-        "chunk_id": "c5",
+        "chunk_id": "c005",
         "text": "Enterprise users get dedicated account managers and 99.9% uptime SLA.",
         "expected_keep": false
       }
     ],
     "expected_is_relevant": true,
+    "difficulty": "easy",
     "description": "Starter query with Enterprise distractor"
   },
   {
@@ -45,17 +47,18 @@
     "query": "What is the capital city of France?",
     "chunks": [
       {
-        "chunk_id": "c6",
+        "chunk_id": "c006",
         "text": "Aina AI is a multi-tenant AI chatbot platform built on PostgreSQL pgvector.",
         "expected_keep": false
       },
       {
-        "chunk_id": "c7",
+        "chunk_id": "c007",
         "text": "You can connect your custom chatbot to WhatsApp Cloud API in Phase 5.",
         "expected_keep": false
       }
     ],
     "expected_is_relevant": false,
+    "difficulty": "easy",
     "description": "Out-of-scope question: 100% distractors, must trigger safe fallback"
   },
   {
@@ -63,17 +66,18 @@
     "query": "Aina platform mein PDF file kaise upload hoti hai?",
     "chunks": [
       {
-        "chunk_id": "c8",
+        "chunk_id": "c008",
         "text": "PDF files are uploaded via the Builder Knowledge Base tab and extracted using PyMuPDF.",
         "expected_keep": true
       },
       {
-        "chunk_id": "c9",
+        "chunk_id": "c009",
         "text": "SMTP emails are sent using Resend API on port 587.",
         "expected_keep": false
       }
     ],
     "expected_is_relevant": true,
+    "difficulty": "medium",
     "description": "Roman Urdu upload query with unrelated SMTP distractor"
   },
   {
@@ -81,12 +85,503 @@
     "query": "Who won the cricket world cup in 1992?",
     "chunks": [
       {
-        "chunk_id": "c10",
+        "chunk_id": "c010",
         "text": "We store embeddings using 3072 dimensions in PostgreSQL.",
         "expected_keep": false
       }
     ],
     "expected_is_relevant": false,
+    "difficulty": "easy",
     "description": "Irrelevant general knowledge query: must trigger safe fallback"
+  },
+  {
+    "id": "rr_06",
+    "query": "What tokens are required to connect WhatsApp using Meta Cloud API v21.0?",
+    "chunks": [
+      {
+        "chunk_id": "c011",
+        "text": "You must provide your WhatsApp Verify Token, Access Token, and Phone Number ID in the Channel Deployments tab.",
+        "expected_keep": true
+      },
+      {
+        "chunk_id": "c012",
+        "text": "Telegram bot integration requires a bot token and chat ID.",
+        "expected_keep": false
+      }
+    ],
+    "expected_is_relevant": true,
+    "difficulty": "medium",
+    "description": "WhatsApp token query with Telegram distractor"
+  },
+  {
+    "id": "rr_07",
+    "query": "What is the maximum single file upload size?",
+    "chunks": [
+      {
+        "chunk_id": "c013",
+        "text": "Maximum single file upload size is 50MB.",
+        "expected_keep": true
+      },
+      {
+        "chunk_id": "c014",
+        "text": "The system supports files up to 10MB only.",
+        "expected_keep": false
+      },
+      {
+        "chunk_id": "c015",
+        "text": "Large files over 100MB must be split manually.",
+        "expected_keep": false
+      }
+    ],
+    "expected_is_relevant": true,
+    "difficulty": "medium",
+    "description": "Numeric limit query with near-miss distractors"
+  },
+  {
+    "id": "rr_08",
+    "query": "Which embedding model and dimensions does Aina AI use?",
+    "chunks": [
+      {
+        "chunk_id": "c016",
+        "text": "We use Google Gemini 3072-dimensional embeddings (gemini-embedding-2-preview) stored in PostgreSQL with pgvector.",
+        "expected_keep": true
+      },
+      {
+        "chunk_id": "c017",
+        "text": "OpenAI text-embedding-ada-002 with 1536 dimensions is used for embeddings.",
+        "expected_keep": false
+      }
+    ],
+    "expected_is_relevant": true,
+    "difficulty": "medium",
+    "description": "Embedding model query with OpenAI distractor"
+  },
+  {
+    "id": "rr_09",
+    "query": "How can I customize the bot's tone and greeting message?",
+    "chunks": [
+      {
+        "chunk_id": "c018",
+        "text": "Each chatbot can have a custom Persona with name, greeting message, fallback message, and personality traits (e.g., Professional, Empathetic, Concise).",
+        "expected_keep": true
+      },
+      {
+        "chunk_id": "c019",
+        "text": "You can change the dashboard theme colors in Settings > Appearance.",
+        "expected_keep": false
+      }
+    ],
+    "expected_is_relevant": true,
+    "difficulty": "medium",
+    "description": "Persona query with UI theme distractor"
+  },
+  {
+    "id": "rr_10",
+    "query": "How does Aina AI isolate data between different organizations?",
+    "chunks": [
+      {
+        "chunk_id": "c020",
+        "text": "All documents, vectors, and conversations are isolated by organization ID (org_id) using PostgreSQL Row-Level Security (RLS). No data leaks across tenant organizations.",
+        "expected_keep": true
+      },
+      {
+        "chunk_id": "c021",
+        "text": "All tenants share a single database schema without row-level isolation.",
+        "expected_keep": false
+      }
+    ],
+    "expected_is_relevant": true,
+    "difficulty": "medium",
+    "description": "Multi-tenancy security query with contradicting distractor"
+  },
+  {
+    "id": "rr_11",
+    "query": "What happens when a user asks to speak with a human agent?",
+    "chunks": [
+      {
+        "chunk_id": "c022",
+        "text": "When users express frustration or ask to speak with a human agent, the conversation is marked ESCALATED and routed to the least-busy administrator via Server-Sent Events (SSE).",
+        "expected_keep": true
+      },
+      {
+        "chunk_id": "c023",
+        "text": "Escalated conversations are sent as email notifications to all admins.",
+        "expected_keep": false
+      }
+    ],
+    "expected_is_relevant": true,
+    "difficulty": "medium",
+    "description": "Human escalation query with wrong routing distractor"
+  },
+  {
+    "id": "rr_12",
+    "query": "What is the refund policy for Enterprise contracts?",
+    "chunks": [
+      {
+        "chunk_id": "c024",
+        "text": "Enterprise contracts have custom refund terms specified in their SLA.",
+        "expected_keep": true
+      },
+      {
+        "chunk_id": "c025",
+        "text": "All customers get a full refund within 14 days regardless of plan.",
+        "expected_keep": false
+      }
+    ],
+    "expected_is_relevant": true,
+    "difficulty": "medium",
+    "description": "Enterprise refund query with generic refund distractor"
+  },
+  {
+    "id": "rr_13",
+    "query": "What is the price and chatbot limit of the Professional plan?",
+    "chunks": [
+      {
+        "chunk_id": "c026",
+        "text": "The Professional plan costs $49 per month with 10 chatbots and unlimited team members.",
+        "expected_keep": true
+      },
+      {
+        "chunk_id": "c027",
+        "text": "The Starter plan costs $15 per month and allows up to 3 chatbots.",
+        "expected_keep": false
+      }
+    ],
+    "expected_is_relevant": true,
+    "difficulty": "medium",
+    "description": "Professional plan query with Starter distractor"
+  },
+  {
+    "id": "rr_14",
+    "query": "How does hybrid search work in the vector database?",
+    "chunks": [
+      {
+        "chunk_id": "c028",
+        "text": "Hybrid search combines dense vector distance with TSVECTOR keyword ranking.",
+        "expected_keep": true
+      },
+      {
+        "chunk_id": "c029",
+        "text": "Search only uses dense vector distance and ignores keywords.",
+        "expected_keep": false
+      }
+    ],
+    "expected_is_relevant": true,
+    "difficulty": "hard",
+    "description": "Hybrid search query with contradicting distractor"
+  },
+  {
+    "id": "rr_15",
+    "query": "Which file formats does Aina AI support for document ingestion?",
+    "chunks": [
+      {
+        "chunk_id": "c030",
+        "text": "Aina AI supports PDF (via PyMuPDF), Word Documents (.docx via python-docx), CSV files, and Website URLs (crawled via Firecrawl).",
+        "expected_keep": true
+      },
+      {
+        "chunk_id": "c031",
+        "text": "Only PDF files are supported for ingestion.",
+        "expected_keep": false
+      }
+    ],
+    "expected_is_relevant": true,
+    "difficulty": "medium",
+    "description": "Supported formats query with restrictive distractor"
+  },
+  {
+    "id": "rr_16",
+    "query": "Refund ke liye kitne din hain?",
+    "chunks": [
+      {
+        "chunk_id": "c032",
+        "text": "Customers can request a full refund within 14 days of purchase if their API usage is under 100 requests.",
+        "expected_keep": true
+      },
+      {
+        "chunk_id": "c033",
+        "text": "Refunds are only allowed within 30 days of purchase.",
+        "expected_keep": false
+      }
+    ],
+    "expected_is_relevant": true,
+    "difficulty": "medium",
+    "description": "Roman Urdu refund query with wrong number distractor"
+  },
+  {
+    "id": "rr_17",
+    "query": "What is the weather in Lahore today?",
+    "chunks": [
+      {
+        "chunk_id": "c034",
+        "text": "Aina AI provides chatbot analytics and conversation logs.",
+        "expected_keep": false
+      },
+      {
+        "chunk_id": "c035",
+        "text": "The system supports multi-language chatbots.",
+        "expected_keep": false
+      }
+    ],
+    "expected_is_relevant": false,
+    "difficulty": "easy",
+    "description": "Out-of-scope weather query: must trigger safe fallback"
+  },
+  {
+    "id": "rr_18",
+    "query": "Compare the limits of Starter and Professional plans.",
+    "chunks": [
+      {
+        "chunk_id": "c036",
+        "text": "The Starter plan allows up to 3 chatbots, 500 uploaded documents, and 2 team members.",
+        "expected_keep": true
+      },
+      {
+        "chunk_id": "c037",
+        "text": "The Professional plan costs $49 per month with 10 chatbots and unlimited team members.",
+        "expected_keep": true
+      },
+      {
+        "chunk_id": "c038",
+        "text": "Enterprise users get dedicated account managers.",
+        "expected_keep": false
+      }
+    ],
+    "expected_is_relevant": true,
+    "difficulty": "hard",
+    "description": "Multi-relevant comparison query with Enterprise distractor"
+  },
+  {
+    "id": "rr_19",
+    "query": "How many API requests are allowed for a full refund?",
+    "chunks": [
+      {
+        "chunk_id": "c039",
+        "text": "Customers can request a full refund within 14 days of purchase if their API usage is under 100 requests.",
+        "expected_keep": true
+      },
+      {
+        "chunk_id": "c040",
+        "text": "Refunds are available regardless of API usage volume.",
+        "expected_keep": false
+      }
+    ],
+    "expected_is_relevant": true,
+    "difficulty": "medium",
+    "description": "API request limit query with contradicting distractor"
+  },
+  {
+    "id": "rr_20",
+    "query": "WhatsApp connect karne ke liye kaunse tokens chahiye?",
+    "chunks": [
+      {
+        "chunk_id": "c041",
+        "text": "You must provide your WhatsApp Verify Token, Access Token, and Phone Number ID in the Channel Deployments tab.",
+        "expected_keep": true
+      },
+      {
+        "chunk_id": "c042",
+        "text": "You only need an API key to connect WhatsApp.",
+        "expected_keep": false
+      }
+    ],
+    "expected_is_relevant": true,
+    "difficulty": "hard",
+    "description": "Roman Urdu WhatsApp token query with incomplete distractor"
+  },
+  {
+    "id": "rr_21",
+    "query": "Who is the CEO of Aina AI?",
+    "chunks": [
+      {
+        "chunk_id": "c043",
+        "text": "Aina AI was founded in 2024.",
+        "expected_keep": false
+      },
+      {
+        "chunk_id": "c044",
+        "text": "The company focuses on AI chatbots for customer support.",
+        "expected_keep": false
+      }
+    ],
+    "expected_is_relevant": false,
+    "difficulty": "easy",
+    "description": "Out-of-scope leadership query: must trigger safe fallback"
+  },
+  {
+    "id": "rr_22",
+    "query": "Which library is used to extract PDF text?",
+    "chunks": [
+      {
+        "chunk_id": "c045",
+        "text": "PDF files are extracted using PyMuPDF.",
+        "expected_keep": true
+      },
+      {
+        "chunk_id": "c046",
+        "text": "PDF text is extracted using OCR and Tesseract.",
+        "expected_keep": false
+      }
+    ],
+    "expected_is_relevant": true,
+    "difficulty": "medium",
+    "description": "PDF extraction library query with OCR distractor"
+  },
+  {
+    "id": "rr_23",
+    "query": "What is a fallback message in Persona configuration?",
+    "chunks": [
+      {
+        "chunk_id": "c047",
+        "text": "Each chatbot can have a custom Persona with name, greeting message, fallback message, and personality traits.",
+        "expected_keep": true
+      },
+      {
+        "chunk_id": "c048",
+        "text": "Fallback messages are logged in the error console.",
+        "expected_keep": false
+      }
+    ],
+    "expected_is_relevant": true,
+    "difficulty": "medium",
+    "description": "Persona fallback query with error log distractor"
+  },
+  {
+    "id": "rr_24",
+    "query": "How does Aina AI prevent data leaks across tenants?",
+    "chunks": [
+      {
+        "chunk_id": "c049",
+        "text": "All documents, vectors, and conversations are isolated by organization ID (org_id) using PostgreSQL Row-Level Security (RLS). No data leaks across tenant organizations.",
+        "expected_keep": true
+      },
+      {
+        "chunk_id": "c050",
+        "text": "Tenant data is stored in a shared table without RLS.",
+        "expected_keep": false
+      }
+    ],
+    "expected_is_relevant": true,
+    "difficulty": "medium",
+    "description": "Data leak prevention query with contradicting distractor"
+  },
+  {
+    "id": "rr_25",
+    "query": "What technology is used for live handoff to administrators?",
+    "chunks": [
+      {
+        "chunk_id": "c051",
+        "text": "Escalated conversations are routed to the least-busy administrator via Server-Sent Events (SSE).",
+        "expected_keep": true
+      },
+      {
+        "chunk_id": "c052",
+        "text": "Live handoff uses WebSockets for real-time communication.",
+        "expected_keep": false
+      }
+    ],
+    "expected_is_relevant": true,
+    "difficulty": "hard",
+    "description": "Live handoff technology query with WebSocket distractor"
+  },
+  {
+    "id": "rr_26",
+    "query": "Starter plan ki price kya hai?",
+    "chunks": [
+      {
+        "chunk_id": "c053",
+        "text": "The Starter plan costs $15 per month.",
+        "expected_keep": true
+      },
+      {
+        "chunk_id": "c054",
+        "text": "The Professional plan costs $49 per month.",
+        "expected_keep": false
+      }
+    ],
+    "expected_is_relevant": true,
+    "difficulty": "medium",
+    "description": "Roman Urdu Starter price query with Professional distractor"
+  },
+  {
+    "id": "rr_27",
+    "query": "What is the best restaurant in Lahore?",
+    "chunks": [
+      {
+        "chunk_id": "c055",
+        "text": "Aina AI supports CSV files for document ingestion.",
+        "expected_keep": false
+      },
+      {
+        "chunk_id": "c056",
+        "text": "You can customize chatbot personality traits.",
+        "expected_keep": false
+      }
+    ],
+    "expected_is_relevant": false,
+    "difficulty": "easy",
+    "description": "Out-of-scope local recommendation query: must trigger safe fallback"
+  },
+  {
+    "id": "rr_28",
+    "query": "What is the refund window and Starter plan price?",
+    "chunks": [
+      {
+        "chunk_id": "c057",
+        "text": "Customers can request a full refund within 14 days of purchase if their API usage is under 100 requests.",
+        "expected_keep": true
+      },
+      {
+        "chunk_id": "c058",
+        "text": "The Starter plan costs $15 per month and allows up to 3 chatbots.",
+        "expected_keep": true
+      },
+      {
+        "chunk_id": "c059",
+        "text": "Office hours are Monday to Friday from 9 AM to 5 PM Eastern Time.",
+        "expected_keep": false
+      }
+    ],
+    "expected_is_relevant": true,
+    "difficulty": "hard",
+    "description": "Multi-relevant refund + pricing query with office hours distractor"
+  },
+  {
+    "id": "rr_29",
+    "query": "Which PostgreSQL extension is used for vector storage?",
+    "chunks": [
+      {
+        "chunk_id": "c060",
+        "text": "Embeddings are stored in PostgreSQL with the pgvector extension.",
+        "expected_keep": true
+      },
+      {
+        "chunk_id": "c061",
+        "text": "Vector storage uses Pinecone instead of PostgreSQL.",
+        "expected_keep": false
+      }
+    ],
+    "expected_is_relevant": true,
+    "difficulty": "medium",
+    "description": "Vector extension query with Pinecone distractor"
+  },
+  {
+    "id": "rr_30",
+    "query": "How many team members are allowed on the Professional plan?",
+    "chunks": [
+      {
+        "chunk_id": "c062",
+        "text": "The Professional plan costs $49 per month with 10 chatbots and unlimited team members.",
+        "expected_keep": true
+      },
+      {
+        "chunk_id": "c063",
+        "text": "The Starter plan allows up to 2 team members.",
+        "expected_keep": false
+      }
+    ],
+    "expected_is_relevant": true,
+    "difficulty": "medium",
+    "description": "Professional team member limit query with Starter distractor"
   }
 ]

@@ -163,6 +163,7 @@ async def precheck_semantic_cache(state: AgentState) -> Optional[Dict[str, Any]]
     )
     if "vector" in vec_holder:
         state["original_query_vector"] = vec_holder["vector"]
+        state["query_vector"] = vec_holder["vector"]
 
     if response_text:
         semantic_cache_requests_total.labels(result="hit").inc()
@@ -225,6 +226,12 @@ async def execute_rag_pipeline(initial_state: AgentState) -> AgentState:
             timeout=timeout,
             chatbot_id=initial_state.get("chatbot_id"),
         )
+        retriever = initial_state.get("retriever")
+        if retriever and hasattr(retriever, "db") and retriever.db:
+            try:
+                await retriever.db.rollback()
+            except Exception:
+                pass
         return _build_fallback_state(initial_state)
     except Exception as e:
         logger.error(
@@ -233,4 +240,10 @@ async def execute_rag_pipeline(initial_state: AgentState) -> AgentState:
             chatbot_id=initial_state.get("chatbot_id"),
             exc_info=True,
         )
+        retriever = initial_state.get("retriever")
+        if retriever and hasattr(retriever, "db") and retriever.db:
+            try:
+                await retriever.db.rollback()
+            except Exception:
+                pass
         return _build_fallback_state(initial_state)

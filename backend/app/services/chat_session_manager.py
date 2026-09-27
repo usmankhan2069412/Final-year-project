@@ -286,23 +286,39 @@ class ChatSessionManager:
         NOTE: Must NOT be called when escalated via EscalationRouter.aescalate,
         as aescalate manages its own message recording, broadcast, and commit.
         """
-        if new_status != ctx.conversation.status:
-            ctx.conversation.status = new_status
-            db.add(ctx.conversation)
+        try:
+            if new_status != ctx.conversation.status:
+                ctx.conversation.status = new_status
+                db.add(ctx.conversation)
 
-        db.add(DBMessage(
-            conversation_id=ctx.conversation.id,
-            role=MessageRole.BOT,
-            content=response_text,
-            config_id=ctx.active_config_id
-        ))
+            db.add(DBMessage(
+                conversation_id=ctx.conversation.id,
+                role=MessageRole.BOT,
+                content=response_text,
+                config_id=ctx.active_config_id
+            ))
 
-        await db.execute(
-            update(Chatbot).where(Chatbot.id == ctx.chatbot.id).values(total_messages=Chatbot.total_messages + 1)
-        )
-        if ctx.is_new_conv:
             await db.execute(
-                update(Chatbot).where(Chatbot.id == ctx.chatbot.id).values(total_conversations=Chatbot.total_conversations + 1)
+                update(Chatbot).where(Chatbot.id == ctx.chatbot.id).values(total_messages=Chatbot.total_messages + 1)
             )
+            if ctx.is_new_conv:
+                await db.execute(
+                    update(Chatbot).where(Chatbot.id == ctx.chatbot.id).values(total_conversations=Chatbot.total_conversations + 1)
+                )
 
-        await db.commit()
+            await db.commit()
+        except Exception as e:
+            # If the transaction was invalidated by an upstream cancellation, rollback cleanly and persist the turn
+            logger.warning(f"Initial record_bot_turn failed ({e}), attempting recovery after rollback")
+            await db.rollback()
+            try:
+                db.add(DBMessage(
+                    conversation_id=ctx.conversation.id,
+                    role=MessageRole.BOT,
+                    content=response_text,
+                    config_id=ctx.active_config_id
+                ))
+                await db.commit()
+            except Exception as inner_e:
+                logger.error(f"Failed to record bot turn after rollback: {inner_e}")
+                raise e

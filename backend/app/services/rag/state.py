@@ -16,8 +16,12 @@ class AgentState(TypedDict, total=False):
     intent_confidence: Optional[float]
     intent_probabilities: Optional[Dict[str, float]]
     intent_method: Optional[str]
+    needs_rewrite: Optional[bool]
+    needs_rewrite_confidence: Optional[float]
     rewritten_query: Optional[str]
-    query_vector: List[float]
+    query_vector: Optional[List[float]]
+    original_query_vector: Optional[List[float]]
+    rewritten_query_vector: Optional[List[float]]
     sources: List[Dict[str, Any]]
     context_text: str
     is_relevant: bool
