@@ -39,7 +39,15 @@ class TextExtractor:
     @staticmethod
     def extract_docx(file_path: str) -> str:
         doc = docx.Document(file_path)
-        return "\n".join([p.text for p in doc.paragraphs])
+        paragraphs = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+        table_lines = []
+        for table in doc.tables:
+            for row in table.rows:
+                cells = [cell.text.strip().replace("\n", " ") for cell in row.cells]
+                if any(cells):
+                    table_lines.append(" | ".join(cells))
+        combined = paragraphs + table_lines
+        return "\n".join(combined)
 
     @staticmethod
     def extract_txt(file_path: str) -> str:
@@ -48,12 +56,21 @@ class TextExtractor:
 
     @staticmethod
     def extract_csv(file_path: str) -> str:
-        text = []
+        text_rows = []
         with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
             reader = csv.reader(f)
+            header = None
             for row in reader:
-                text.append(", ".join(row))
-        return "\n".join(text)
+                cleaned = [col.strip() for col in row]
+                if not any(cleaned):
+                    continue
+                if header is None:
+                    header = cleaned
+                    text_rows.append(" | ".join(header))
+                else:
+                    row_repr = "; ".join(f"{h}: {val}" for h, val in zip(header, cleaned) if val)
+                    text_rows.append(row_repr if row_repr else " | ".join(cleaned))
+        return "\n".join(text_rows)
 
     @staticmethod
     async def fast_validate_url(url: str) -> Dict[str, Any]:

@@ -1,6 +1,7 @@
 import os
 import uuid
 import logging
+import hashlib
 import ipaddress
 import socket
 from pathlib import Path
@@ -334,14 +335,22 @@ class KnowledgeService:
             cls._bump_knowledge_base_version_sync(db, source.chatbot_id)
             return
 
+        doc = source.document
+        doc_id = doc.id if doc else None
         chunk_records = []
         for i, chunk_text in enumerate(chunks):
+            chunk_hash = hashlib.sha256(chunk_text.encode("utf-8")).hexdigest()
+            approx_tokens = len(chunk_text.split())
             record = KnowledgeChunk(
                 source_id=source.id,
                 chatbot_id=source.chatbot_id,
+                document_id=doc_id,
                 chunk_text=chunk_text,
                 chunk_index=i,
-                index_status=ChunkStatus.PROCESSING
+                index_status=ChunkStatus.PROCESSING,
+                embedding_model=settings.EMBEDDING_MODEL,
+                content_hash=chunk_hash,
+                token_count=approx_tokens,
             )
             db.add(record)
             chunk_records.append(record)

@@ -35,6 +35,7 @@ class AgentState(TypedDict, total=False):
     cache_hit: bool
     cache_similarity: float
     validated_chunks_count: int
+    precheck_cache_checked: Optional[bool]
 
     # Conversation Memory
     conversation_memory: Optional[dict]

@@ -26,15 +26,10 @@ async def validate_node(state: AgentState) -> Dict[str, Any]:
 
     query = state.get("rewritten_query") or state.get("user_message", "")
 
-    # Use OpenRouter API key for Cohere reranking via OpenRouter
-    rerank_api_key = (
-        getattr(settings, "OPENROUTER_API_KEY", None)
-        or os.getenv("OPENROUTER_API_KEY")
-        or getattr(settings, "COHERE_API_KEY", None)
-        or os.getenv("COHERE_API_KEY")
-    )
+    openrouter_key = getattr(settings, "OPENROUTER_API_KEY", None) or os.getenv("OPENROUTER_API_KEY")
+    cohere_key = getattr(settings, "COHERE_API_KEY", None) or os.getenv("COHERE_API_KEY")
 
-    if not rerank_api_key:
+    if not openrouter_key and not cohere_key:
         filtered_sources = filter_hybrid_relevant_sources(query, sources)
         is_rel = bool(filtered_sources)
         ctx_text = context_from_sources(filtered_sources)
@@ -54,23 +49,38 @@ async def validate_node(state: AgentState) -> Dict[str, Any]:
 
     try:
         documents = [src["text"] for src in sources]
-        payload = {
-            "model": "cohere/rerank-v3.5",
-            "query": query,
-            "documents": documents,
-            "top_n": len(documents),
-        }
-        headers = {
-            "Authorization": f"Bearer {rerank_api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://aina.ai",
-            "X-Title": "Aina AI",
-        }
-
         client = get_async_http_client()
         rerank_timeout = getattr(settings, "RERANK_TIMEOUT_SECS", 6.0)
+
+        if openrouter_key:
+            endpoint = "https://openrouter.ai/api/v1/rerank"
+            headers = {
+                "Authorization": f"Bearer {openrouter_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://aina.ai",
+                "X-Title": "Aina AI",
+            }
+            payload = {
+                "model": "cohere/rerank-v3.5",
+                "query": query,
+                "documents": documents,
+                "top_n": len(documents),
+            }
+        else:
+            endpoint = "https://api.cohere.com/v2/rerank"
+            headers = {
+                "Authorization": f"Bearer {cohere_key}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": "rerank-v3.5",
+                "query": query,
+                "documents": documents,
+                "top_n": len(documents),
+            }
+
         response = await client.post(
-            "https://openrouter.ai/api/v1/rerank",
+            endpoint,
             json=payload,
             headers=headers,
             timeout=rerank_timeout,

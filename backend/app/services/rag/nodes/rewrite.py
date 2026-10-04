@@ -43,7 +43,7 @@ async def rewrite_node(state: AgentState) -> AgentState:
         logger.info("rewrite_jev_false_negative_overridden", extra={"query": user_msg})
 
     # For rewriting, we don't need streaming
-    llm = get_llm(state, temperature=0.0)
+    llm = get_llm(state, temperature=0.0, stream=False)
     if not llm:
         return {"rewritten_query": user_msg}
 
