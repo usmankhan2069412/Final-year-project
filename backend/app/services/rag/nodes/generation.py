@@ -10,6 +10,21 @@ from app.services.rag.state import AgentState
 logger = structlog.get_logger(__name__)
 
 
+def is_fallback_response(ans: str, fb_msg: str) -> bool:
+    """Checks if the generated response matches the fallback text or standard fallback messages."""
+    if not ans:
+        return True
+    ans_clean = ans.strip().rstrip(".").lower()
+    fb_clean = fb_msg.strip().rstrip(".").lower() if fb_msg else ""
+    if fb_clean and (ans_clean == fb_clean or fb_clean in ans_clean):
+        return True
+    for msg in LocalizationCatalog.FALLBACK_MESSAGES.values():
+        clean_m = msg.strip().rstrip(".").lower()
+        if ans_clean == clean_m or clean_m in ans_clean:
+            return True
+    return False
+
+
 async def rag_answer_node(state: AgentState) -> Dict[str, Any]:
     """
     RAG generation node:
@@ -25,7 +40,7 @@ async def rag_answer_node(state: AgentState) -> Dict[str, Any]:
     fb_msg = (getattr(persona, "fallback", None) if persona else None) or LocalizationCatalog.get_fallback_message(lang or "en")
 
     if not state.get("is_relevant") or not state.get("context_text"):
-        return {"response": fb_msg, "response_source": "fallback"}
+        return {"response": fb_msg, "response_source": "fallback", "is_relevant": False}
 
     traits = state.get("traits") or []
     llm = get_llm(state)
@@ -51,6 +66,11 @@ async def rag_answer_node(state: AgentState) -> Dict[str, Any]:
 
             ans_msg = await llm.ainvoke(messages)
             ans = ans_msg.content.strip()
+
+            # Mark reply as fallback if it matches fallback text to prevent caching and erroneous analytics
+            if is_fallback_response(ans, fb_msg):
+                return {"response": ans, "response_source": "fallback", "is_relevant": False}
+
             return {"response": ans, "response_source": "rag_generation"}
         except Exception as e:
             logger.warning(f"RAG generation failed: {e}")
@@ -60,4 +80,4 @@ async def rag_answer_node(state: AgentState) -> Dict[str, Any]:
         state.get("rewritten_query") or user_msg,
         traits,
     )
-    return {"response": ans, "response_source": "fallback"}
+    return {"response": ans, "response_source": "fallback", "is_relevant": False}

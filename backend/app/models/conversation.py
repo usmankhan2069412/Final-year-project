@@ -61,9 +61,9 @@ class Conversation(Base):
     memory = Column(JSONB, nullable=True)  # Structured conversation memory (lazy summarization)
 
     # Relationships
-    chatbot = relationship("Chatbot", lazy="selectin")
-    deployment = relationship("Deployment", lazy="selectin")
-    assigned_agent = relationship("User", foreign_keys=[assigned_agent_id], lazy="selectin")
+    chatbot = relationship("Chatbot")
+    deployment = relationship("Deployment")
+    assigned_agent = relationship("User", foreign_keys=[assigned_agent_id])
 
     __table_args__ = (
         Index("idx_conversations_active", "id", postgresql_where=(deleted_at == None)),
@@ -86,8 +86,8 @@ class Message(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
-    conversation = relationship("Conversation", lazy="selectin")
-    config = relationship("AIModelConfig", lazy="selectin")
+    conversation = relationship("Conversation")
+    config = relationship("AIModelConfig")
 
     __table_args__ = (
         Index("idx_messages_conversation_created", "conversation_id", "created_at"),

@@ -39,15 +39,29 @@ class TextExtractor:
     @staticmethod
     def extract_docx(file_path: str) -> str:
         doc = docx.Document(file_path)
-        paragraphs = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
-        table_lines = []
-        for table in doc.tables:
-            for row in table.rows:
-                cells = [cell.text.strip().replace("\n", " ") for cell in row.cells]
-                if any(cells):
-                    table_lines.append(" | ".join(cells))
-        combined = paragraphs + table_lines
-        return "\n".join(combined)
+        lines = []
+        for child in doc.element.body:
+            if child.tag.endswith("p"):
+                p = docx.text.paragraph.Paragraph(child, doc)
+                if p.text.strip():
+                    lines.append(p.text.strip())
+            elif child.tag.endswith("tbl"):
+                table = docx.table.Table(child, doc)
+                for row in table.rows:
+                    cells = [cell.text.strip().replace("\n", " ") for cell in row.cells]
+                    if any(cells):
+                        lines.append(" | ".join(cells))
+        # Fallback if body iteration produced no lines
+        if not lines:
+            paragraphs = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+            table_lines = []
+            for table in doc.tables:
+                for row in table.rows:
+                    cells = [cell.text.strip().replace("\n", " ") for cell in row.cells]
+                    if any(cells):
+                        table_lines.append(" | ".join(cells))
+            lines = paragraphs + table_lines
+        return "\n".join(lines)
 
     @staticmethod
     def extract_txt(file_path: str) -> str:

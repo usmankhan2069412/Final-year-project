@@ -149,6 +149,11 @@ async def precheck_semantic_cache(state: AgentState) -> Optional[Dict[str, Any]]
     if SemanticRouter._matches_history_transform(msg):
         return None
 
+    # 4. Multi-turn follow-ups: skip precheck because ambiguous follow-ups
+    # (e.g. "what is its fee?", "tell me more") require contextual rewriting before cache matching.
+    if state.get("history") and len(state.get("history")) > 0:
+        return None
+
     retriever: BaseRetriever = state.get("retriever") or get_default_retriever()
     state["precheck_cache_checked"] = True
     vec_holder: Dict[str, Any] = {}

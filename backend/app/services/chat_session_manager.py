@@ -226,7 +226,7 @@ class ChatSessionManager:
         # 6. Resolve AI Model configuration (Cached with 60s TTL + single query fallback)
         api_key, routing_rules_dict, active_config_id = await cls.resolve_model_config(db, org_id)
 
-        logger.info(f"[ESCALATION DEBUG] Conversation {conversation.id} status={conversation.status} → proceeding with RAG")
+        logger.info(f"[ESCALATION DEBUG] Conversation {conversation.id} status={conversation.status} → proceeding with AI pipeline")
 
         # 7. History windowing query
         start_date = conversation.started_at

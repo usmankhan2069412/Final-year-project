@@ -12,6 +12,12 @@ import numpy as np
 from pathlib import Path
 from typing import Dict, Any, List, Set, Tuple
 
+# Ensure UTF-8 output encoding on Windows consoles
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if sys.stderr and hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 # Ensure backend root is on Python path
 sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
 
@@ -111,18 +117,24 @@ def evaluate_retrieval(
     print(f"\nEvaluating {len(queries)} test queries across 3 retrieval strategies...")
     print("-" * 80)
 
+    t_ret_0 = time.perf_counter()
+    DENSE_MAX_DISTANCE = 0.55  # settings.RERANK_FALLBACK_SIMILARITY_THRESHOLD
+
     for q in queries:
         query_text = q["query"]
         ground_truth: Set[str] = set(q["relevant_chunk_ids"])
 
-        # 1. Dense search ranking
-        q_emb = embedding_service.encode([query_text])[0]
+        # 1. Dense search ranking (with production distance cutoff <= 0.55)
+        q_emb = embedding_service.encode([query_text], is_query=True)[0]
         dense_scores = [compute_cosine_similarity(q_emb, c_emb) for c_emb in corpus_embeddings]
-        dense_ranked = [corpus_ids[idx] for idx in np.argsort(dense_scores)[::-1]]
+        dense_ranked = [
+            corpus_ids[idx] for idx in np.argsort(dense_scores)[::-1]
+            if (1.0 - dense_scores[idx]) <= DENSE_MAX_DISTANCE
+        ]
 
         # 2. Sparse search ranking
         sparse_scores = [compute_sparse_score(query_text, c_text) for c_text in corpus_texts]
-        sparse_ranked = [corpus_ids[idx] for idx in np.argsort(sparse_scores)[::-1]]
+        sparse_ranked = [corpus_ids[idx] for idx in np.argsort(sparse_scores)[::-1] if sparse_scores[idx] > 0]
 
         # 3. Hybrid RRF fusion ranking
         hybrid_ranked = rrf_fusion(dense_ranked, sparse_ranked, k=60)
@@ -147,7 +159,7 @@ def evaluate_retrieval(
 
         print(
             f"Query [{q['id']}]: \"{query_text[:45]}...\" | "
-            f"Ground Truth: {list(ground_truth)} | Top 1 Hybrid: {top_hybrid[0]} | "
+            f"Ground Truth: {list(ground_truth)} | Top 1 Hybrid: {top_hybrid[0] if top_hybrid else 'NONE'} | "
             f"{('✅ HIT' if is_hit else '❌ MISS')}"
         )
 
@@ -222,11 +234,13 @@ def evaluate_retrieval(
     with open(report_file, "w", encoding="utf-8") as f:
         f.write(md_content)
 
-    print(f"\n📄 Full Markdown report saved to: {report_file}\n")
+    avg_latency_ms = ((time.perf_counter() - t_ret_0) * 1000) / len(queries) if queries else 0.0
+    print(f"\n📄 Full Markdown report saved to: {report_file} (Avg retrieval latency: {avg_latency_ms:.2f} ms)\n")
 
     return {
         "summary_table": summary_table,
-        "detailed_results": detailed_results
+        "detailed_results": detailed_results,
+        "avg_latency_ms": round(avg_latency_ms, 2)
     }
 
 

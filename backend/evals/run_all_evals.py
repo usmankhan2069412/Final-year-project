@@ -24,6 +24,7 @@ if sys.stderr and hasattr(sys.stderr, "reconfigure"):
 # Ensure backend root is on Python path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
+from app.core.config import settings
 from evals.components.eval_router import evaluate_router
 from evals.components.eval_rewriter import evaluate_rewriter
 from evals.components.eval_cache import evaluate_semantic_cache
@@ -33,6 +34,16 @@ from evals.components.eval_generator import evaluate_generator
 from evals.system.eval_e2e_pipeline import evaluate_e2e_pipeline
 
 REPORTS_DIR = Path(__file__).resolve().parent / "reports"
+
+REPORT_FILENAMES = {
+    "1. Intent Classification Router": "eval_router_report.md",
+    "2. Contextual Query Rewriter": "eval_rewriter_report.md",
+    "3. Semantic Cache & Threshold": "eval_cache_report.md",
+    "4. Hybrid Retrieval & RRF Fusion": "eval_retrieval_report.md",
+    "5. Hallucination Reranker Guardrail": "eval_reranker_report.md",
+    "6. Grounded Generator & Persona": "eval_generator_report.md",
+    "7. End-to-End System Pipeline": "eval_e2e_system_report.md",
+}
 
 
 async def main():
@@ -79,14 +90,16 @@ async def main():
 
     if args.all or args.component == "cache":
         res = evaluate_semantic_cache()
-        best_th = res["optimal_threshold"]
-        best_acc = res["sweep_stats"][str(best_th)]["accuracy"]
-        summary_cards.append(("3. Semantic Cache & Threshold", f"{best_acc:.1f}% Accuracy @ {best_th} Threshold", "< 1.0 ms"))
+        cfg_th = res.get("configured_threshold", settings.CACHE_SIMILARITY_THRESHOLD)
+        cfg_acc = res.get("configured_accuracy", 0.0)
+        cache_lat = f"{res.get('avg_latency_ms', 0.0):.2f} ms"
+        summary_cards.append(("3. Semantic Cache & Threshold", f"{cfg_acc:.1f}% Guarded Acc @ {cfg_th}", cache_lat))
 
     if args.all or args.component == "retrieval":
         res = evaluate_retrieval()
-        hybrid_stats = res["summary_table"]["Hybrid RRF (Ours)"]
-        summary_cards.append(("4. Hybrid Retrieval & RRF Fusion", f"Hit@3: {hybrid_stats['Hit Rate @ 3']} | MRR: {hybrid_stats['MRR @ 3']}", "~ 40.0 ms"))
+        dense_stats = res["summary_table"]["Dense Only"]
+        ret_lat = f"{res.get('avg_latency_ms', 0.0):.1f} ms"
+        summary_cards.append(("4. Hybrid Retrieval & RRF Fusion", f"Dense Hit@1: {dense_stats['Hit Rate @ 1']} | Recall@3: {dense_stats['Recall @ 3']}", ret_lat))
 
     if args.all or args.component == "reranker":
         res = await evaluate_reranker()
@@ -123,8 +136,8 @@ async def main():
 | :- | :--- | :--- | :--- | :--- |
 """)
         for name, perf, lat in summary_cards:
-            slug = name.split(". ")[-1].lower().replace(" ", "_").replace("&", "and")
-            f.write(f"| 🎯 | **{name}** | `{perf}` | {lat} | [View Details](eval_{slug}_report.md) |\n")
+            report_file = REPORT_FILENAMES.get(name, f"eval_{name.split('. ')[-1].lower().replace(' ', '_')}_report.md")
+            f.write(f"| 🎯 | **{name}** | `{perf}` | {lat} | [View Details]({report_file}) |\n")
 
     print(f"📄 Master Markdown summary saved to: {master_file}\n")
 

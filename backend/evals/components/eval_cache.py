@@ -60,13 +60,14 @@ def evaluate_semantic_cache(
     cached_texts = [tc["cached_query"] for tc in test_cases]
     test_texts = [tc["test_query"] for tc in test_cases]
 
-    # Batch encode queries
-    cached_vecs = embedding_service.encode(cached_texts)
-    test_vecs = embedding_service.encode(test_texts)
+    # Batch encode queries with is_query=True
+    cached_vecs = embedding_service.encode(cached_texts, is_query=True)
+    test_vecs = embedding_service.encode(test_texts, is_query=True)
 
     results = []
     similarities = []
 
+    t_lookup_0 = time.perf_counter()
     for i, tc in enumerate(test_cases):
         sim = cosine_similarity(cached_vecs[i], test_vecs[i])
         similarities.append(sim)
@@ -260,11 +261,15 @@ def evaluate_semantic_cache(
     with open(report_file, "w", encoding="utf-8") as f:
         f.write(md_content)
 
-    print(f"📄 Full Markdown report saved to: {report_file}\n")
+    avg_latency_ms = ((time.perf_counter() - t_lookup_0) * 1000) / total_cases if total_cases > 0 else 0.0
+    print(f"📄 Full Markdown report saved to: {report_file} (Avg lookup latency: {avg_latency_ms:.2f} ms)\n")
 
     return {
         "sweep_stats": sweep_stats,
         "optimal_threshold": best_thresh,
+        "configured_threshold": configured_th,
+        "configured_accuracy": sweep_stats.get(str(configured_th), {}).get("accuracy", 0.0),
+        "avg_latency_ms": round(avg_latency_ms, 2),
         "category_stats": categories,
         "results": results
     }

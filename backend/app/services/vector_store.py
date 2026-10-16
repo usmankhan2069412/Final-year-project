@@ -181,18 +181,35 @@ class VectorStoreService:
                 logger.warning("dense_retrieval_failed for chatbot %s: %s", chatbot_id, e, exc_info=True)
 
             # --- SPARSE RETRIEVAL (PostgreSQL TSVECTOR) ---
-            ts_query = func.websearch_to_tsquery('simple', query)
-            sparse_records = (
-                db.query(KnowledgeChunk.id)
-                .join(KnowledgeSource, KnowledgeSource.id == KnowledgeChunk.source_id)
-                .filter(*base_filters)
-                .filter(KnowledgeChunk.text_search_vector.op('@@')(ts_query))
-                .order_by(func.ts_rank_cd(KnowledgeChunk.text_search_vector, ts_query).desc())
-                .limit(candidate_count)
-                .all()
-            )
-            sparse_results = [str(r.id) for r in sparse_records]
-            sparse_ranks = {cid: rank for rank, cid in enumerate(sparse_results)}
+            sparse_results = []
+            sparse_ranks = {}
+            if getattr(settings, "ENABLE_HYBRID_SEARCH", False):
+                try:
+                    with db.begin_nested():
+                        import re
+                        from app.services.rag.helpers import content_terms
+                        terms = content_terms(query)
+                        safe_terms = [re.sub(r"[^\w]", "", t) for t in terms if len(t) > 1]
+                        safe_terms = [t for t in safe_terms if t]
+                        if safe_terms:
+                            ts_query_str = " | ".join(f"'{t}'" for t in safe_terms)
+                            ts_query = func.to_tsquery('simple', ts_query_str)
+                        else:
+                            ts_query = func.websearch_to_tsquery('simple', query)
+
+                        sparse_records = (
+                            db.query(KnowledgeChunk.id)
+                            .join(KnowledgeSource, KnowledgeSource.id == KnowledgeChunk.source_id)
+                            .filter(*base_filters)
+                            .filter(KnowledgeChunk.text_search_vector.op('@@')(ts_query))
+                            .order_by(func.ts_rank_cd(KnowledgeChunk.text_search_vector, ts_query).desc())
+                            .limit(candidate_count)
+                            .all()
+                        )
+                        sparse_results = [str(r.id) for r in sparse_records]
+                        sparse_ranks = {cid: rank for rank, cid in enumerate(sparse_results)}
+                except Exception as e:
+                    logger.warning("sparse_retrieval_failed for chatbot %s: %s", chatbot_id, e, exc_info=True)
 
             # --- RECIPROCAL RANK FUSION (RRF) ---
             rrf_scores = {}
@@ -370,20 +387,38 @@ class VectorStoreService:
                 logger.warning("adense_retrieval_failed for chatbot %s: %s", chatbot_id, e, exc_info=True)
 
             # --- SPARSE RETRIEVAL (PostgreSQL TSVECTOR) ---
-            ts_query = func.websearch_to_tsquery('simple', query)
-            stmt = (
-                select(KnowledgeChunk.id)
-                .join(KnowledgeSource, KnowledgeSource.id == KnowledgeChunk.source_id)
-                .filter(*base_filters)
-                .filter(KnowledgeChunk.text_search_vector.op('@@')(ts_query))
-                .order_by(func.ts_rank_cd(KnowledgeChunk.text_search_vector, ts_query).desc())
-                .limit(candidate_count)
-            )
-            result = await db.execute(stmt)
-            sparse_records = result.scalars().all()
-            
-            sparse_results = [str(r) for r in sparse_records]
-            sparse_ranks = {cid: rank for rank, cid in enumerate(sparse_results)}
+            sparse_results = []
+            sparse_ranks = {}
+            if getattr(settings, "ENABLE_HYBRID_SEARCH", False):
+                try:
+                    async with db.begin_nested():
+                        import re
+                        from app.services.rag.helpers import content_terms
+                        terms = content_terms(query)
+                        safe_terms = [re.sub(r"[^\w]", "", t) for t in terms if len(t) > 1]
+                        safe_terms = [t for t in safe_terms if t]
+                        if safe_terms:
+                            # Lexical OR query across substantive keywords
+                            ts_query_str = " | ".join(f"'{t}'" for t in safe_terms)
+                            ts_query = func.to_tsquery('simple', ts_query_str)
+                        else:
+                            ts_query = func.websearch_to_tsquery('simple', query)
+
+                        stmt = (
+                            select(KnowledgeChunk.id)
+                            .join(KnowledgeSource, KnowledgeSource.id == KnowledgeChunk.source_id)
+                            .filter(*base_filters)
+                            .filter(KnowledgeChunk.text_search_vector.op('@@')(ts_query))
+                            .order_by(func.ts_rank_cd(KnowledgeChunk.text_search_vector, ts_query).desc())
+                            .limit(candidate_count)
+                        )
+                        result = await db.execute(stmt)
+                        sparse_records = result.scalars().all()
+
+                        sparse_results = [str(r) for r in sparse_records]
+                        sparse_ranks = {cid: rank for rank, cid in enumerate(sparse_results)}
+                except Exception as e:
+                    logger.warning("asparse_retrieval_failed for chatbot %s: %s", chatbot_id, e, exc_info=True)
 
             # --- RECIPROCAL RANK FUSION (RRF) ---
             rrf_scores = {}

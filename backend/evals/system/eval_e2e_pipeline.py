@@ -392,10 +392,10 @@ async def evaluate_e2e_pipeline(
 | **End-to-End Success Rate** | **{e2e_success_rate:.1f}%** | >= 85% | {"✅ PASS" if e2e_success_rate >= 85 else "⚠️ REVIEW"} |
 | **Grounded Faithfulness** | **{avg_faithfulness:.1f}%** | >= 90% | {"✅ PASS" if avg_faithfulness >= 90 else "⚠️ REVIEW"} |
 | **Answer Relevance** | **{avg_relevance:.1f}%** | >= 90% | {"✅ PASS" if avg_relevance >= 90 else "⚠️ REVIEW"} |
-| **Cold RAG Query Latency** | **{avg_cold_lat:.1f} ms** | < 3500 ms | ✅ Optimal |
-| **Warm Cache Query Latency** | **{avg_cache_lat:.1f} ms** | < 50 ms | ⚡ Accelerated |
-| **Cache Speedup Ratio** | **{cache_speedup:.1f}x** | >= 10x | 🚀 High Efficiency |
-| **Estimated Cost / 1,000 Queries** | **${cost_per_1k_queries:.4f}** | < $0.50 | 💰 Highly Cost Effective |
+| **Cold RAG Query Latency** | **{avg_cold_lat:.1f} ms** | < 3500 ms | {"✅ Optimal" if avg_cold_lat < 3500 else "⚠️ High Latency"} |
+| **Warm Cache Query Latency** | **{avg_cache_lat:.1f} ms** | < 50 ms | {"⚡ Accelerated" if avg_cache_lat < 50 else "⚠️ Review"} |
+| **Cache Speedup Ratio** | **{cache_speedup:.1f}x** | >= 10x | {"🚀 High Efficiency" if cache_speedup >= 10 else "⚠️ Moderate"} |
+| **Estimated Cost / 1,000 Queries** | **${cost_per_1k_queries:.4f}** | < $0.50 | {"💰 Highly Cost Effective" if cost_per_1k_queries < 0.50 else "⚠️ Review"} |
 
 ## Multi-Turn Scenario Execution Logs
 """

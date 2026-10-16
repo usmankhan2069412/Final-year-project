@@ -11,9 +11,9 @@
 | **End-to-End Success Rate** | **100.0%** | >= 85% | ✅ PASS |
 | **Grounded Faithfulness** | **92.0%** | >= 90% | ✅ PASS |
 | **Answer Relevance** | **100.0%** | >= 90% | ✅ PASS |
-| **Cold RAG Query Latency** | **18188.6 ms** | < 3500 ms | ✅ Optimal |
+| **Cold RAG Query Latency** | **18188.6 ms** | < 3500 ms | ⚠️ High Latency |
 | **Warm Cache Query Latency** | **0.0 ms** | < 50 ms | ⚡ Accelerated |
-| **Cache Speedup Ratio** | **1.0x** | >= 10x | 🚀 High Efficiency |
+| **Cache Speedup Ratio** | **1.0x** | >= 10x | ⚠️ Moderate |
 | **Estimated Cost / 1,000 Queries** | **$0.0632** | < $0.50 | 💰 Highly Cost Effective |
 
 ## Multi-Turn Scenario Execution Logs

@@ -40,8 +40,8 @@ class Chatbot(Base):
     deleted_at = Column(DateTime(timezone=True), nullable=True)
 
     # Relationships
-    persona = relationship("Persona", back_populates="chatbots", lazy="selectin")
-    organization = relationship("Organization", lazy="selectin")
+    persona = relationship("Persona", back_populates="chatbots")
+    organization = relationship("Organization")
 
     __table_args__ = (
         Index("idx_chatbots_active", "id", postgresql_where=(deleted_at == None)),
